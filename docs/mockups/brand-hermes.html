@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HouseCheck — Building Health Card (Equestrian Luxury Study)</title>
+<meta name="description" content="Design study: a mobile Building Health Card for HouseCheck, styled as an equestrian-luxury homage — not an official brand product.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ivory:#FBF6EA;
+    --tissue-1:#F1E3C8;
+    --tissue-2:#E7D0A4;
+    --card-bg:#FCF8EF;
+    --orange:#C8672E;
+    --orange-deep:#A44E22;
+    --orange-soft:#E7A46B;
+    --saddle:#5B3A22;
+    --saddle-deep:#38220F;
+    --saddle-30:rgba(91,58,34,.30);
+    --saddle-40:rgba(91,58,34,.42);
+    --saddle-18:rgba(91,58,34,.18);
+    --ink:#3A2A1C;
+    --muted:#8C7457;
+    --hazard:#A23E27;
+    --warn:#BD8A34;
+    --radius:16px;
+    --serif-display:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --serif-text:'EB Garamond', Georgia, 'Times New Roman', serif;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; overflow-x:hidden; }
+
+  body{
+    min-height:100vh;
+    font-family:var(--serif-text);
+    color:var(--ink);
+    background:
+      radial-gradient(ellipse at 50% -10%, var(--tissue-1) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 110%, var(--tissue-2) 0%, transparent 55%),
+      linear-gradient(180deg, #E9DABB 0%, #DCC49A 45%, #CDA96F 100%);
+    display:flex;
+    justify-content:center;
+    padding: clamp(18px, 5vw, 40px) 12px 34px;
+  }
+
+  .stage{
+    width:100%;
+    max-width:420px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  .kicker{
+    font-family:var(--serif-text);
+    font-size:.72rem;
+    letter-spacing:.42em;
+    text-transform:uppercase;
+    color:var(--saddle-deep);
+    opacity:.72;
+    margin: 0 0 18px;
+    text-align:center;
+  }
+
+  /* ---------- gift-box presentation ---------- */
+  .box-wrap{
+    position:relative;
+    width:100%;
+    max-width:390px;
+    padding-top:34px;
+  }
+
+  .box-flap{
+    position:absolute;
+    top:0;
+    left:50%;
+    transform:translateX(-50%);
+    width:88%;
+    height:74px;
+    background:
+      linear-gradient(180deg, #6B4527 0%, var(--saddle) 55%, var(--saddle-deep) 100%);
+    border-radius:12px 12px 2px 2px;
+    box-shadow: 0 10px 22px -12px rgba(35,20,8,.55);
+    z-index:0;
+  }
+  .box-flap::before{
+    content:"";
+    position:absolute;
+    inset:9px 9px auto 9px;
+    height:1px;
+    background:repeating-linear-gradient(90deg, rgba(251,246,234,.55) 0 4px, transparent 4px 8px);
+  }
+  .box-flap::after{
+    content:"";
+    position:absolute;
+    inset:auto 9px 9px 9px;
+    height:1px;
+    background:repeating-linear-gradient(90deg, rgba(251,246,234,.35) 0 4px, transparent 4px 8px);
+  }
+
+  .ribbon{
+    position:absolute;
+    top:14px;
+    left:50%;
+    transform:translateX(-50%);
+    width:118px;
+    height:76px;
+    z-index:2;
+    filter: drop-shadow(0 6px 10px rgba(35,20,8,.35));
+  }
+
+  /* ---------- the card itself ---------- */
+  .card{
+    position:relative;
+    z-index:1;
+    margin-top:52px;
+    background-color:var(--card-bg);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.36 0 0 0 0 0.27 0 0 0 0 0.17 0 0 0 0.45 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    background-size:140px 140px;
+    background-blend-mode:multiply;
+    border:1px solid var(--saddle-30);
+    border-radius:var(--radius);
+    box-shadow:
+      0 2px 0 rgba(255,255,255,.5) inset,
+      0 26px 44px -22px rgba(35,20,8,.45),
+      0 10px 18px -12px rgba(35,20,8,.28);
+    padding: 20px 18px 18px;
+    overflow:hidden;
+  }
+  .card::before{
+    content:"";
+    position:absolute; inset:6px;
+    border:1px dashed var(--saddle-40);
+    border-radius:calc(var(--radius) - 6px);
+    pointer-events:none;
+  }
+  .card::after{
+    content:"";
+    position:absolute; inset:10px;
+    border:1px dashed rgba(91,58,34,.22);
+    border-radius:calc(var(--radius) - 10px);
+    pointer-events:none;
+  }
+  .card > *{ position:relative; z-index:1; }
+
+  /* ---------- search bar ---------- */
+  .search-bar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--ivory);
+    border:1px solid var(--saddle-30);
+    border-radius:999px;
+    padding:10px 16px;
+    margin-bottom:20px;
+  }
+  .search-bar svg{ flex:none; width:16px; height:16px; color:var(--saddle); opacity:.75; }
+  .search-bar span{
+    font-family:var(--serif-text);
+    font-size:.98rem;
+    color:var(--ink);
+    letter-spacing:.01em;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* ---------- identity ---------- */
+  .identity{ text-align:center; margin-bottom:18px; }
+  .identity h1{
+    font-family:var(--serif-display);
+    font-weight:600;
+    font-size:clamp(1.34rem, 6vw, 1.62rem);
+    margin:0 0 4px;
+    letter-spacing:.01em;
+    color:var(--saddle-deep);
+  }
+  .identity p{
+    margin:0;
+    font-size:.8rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+
+  .rule{
+    height:1px;
+    margin: 16px 2px;
+    background:repeating-linear-gradient(90deg, var(--saddle-40) 0 5px, transparent 5px 10px);
+  }
+  .stitch-divider{
+    height:9px;
+    margin: 18px 0 16px;
+    background-image: repeating-linear-gradient(115deg, transparent 0 3px, var(--saddle-30) 3px 4.4px, transparent 4.4px 9px);
+    background-position:center;
+    background-repeat:repeat-x;
+    background-size: 12px 9px;
+    opacity:.85;
+  }
+
+  /* ---------- hero gauge ---------- */
+  .score-hero{ text-align:center; margin-bottom:6px; }
+  .gauge-hero{
+    position:relative;
+    width:190px; height:190px;
+    margin:0 auto 10px;
+  }
+  .gauge-hero .bezel{
+    position:absolute; inset:0;
+    border-radius:50%;
+    background: repeating-conic-gradient(var(--saddle) 0deg 1.5deg, transparent 1.5deg 15deg);
+    opacity:.8;
+  }
+  .gauge-hero .bezel::after{
+    content:"";
+    position:absolute; inset:12px;
+    border-radius:50%;
+    background:var(--card-bg);
+    box-shadow: inset 0 0 0 1px var(--saddle-18);
+  }
+  .gauge-hero svg.ring{ position:absolute; inset:12px; transform:rotate(-90deg); }
+  .gauge-hero .track{ fill:none; stroke:var(--tissue-1); stroke-width:9; }
+  .gauge-hero .progress{ fill:none; stroke-width:9; stroke-linecap:round; stroke:url(#scoreGrad); }
+  .gauge-hero .readout{
+    position:absolute; inset:12px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .gauge-hero .num{
+    font-family:var(--serif-display);
+    font-weight:600;
+    font-size:3.05rem;
+    line-height:1;
+    color:var(--saddle-deep);
+  }
+  .gauge-hero .denom{
+    font-family:var(--serif-text);
+    font-size:.92rem;
+    color:var(--muted);
+    letter-spacing:.04em;
+    margin-top:2px;
+  }
+  .fair-pill{
+    display:inline-block;
+    margin-top:10px;
+    padding:5px 18px;
+    border:1px solid var(--saddle-40);
+    border-radius:999px;
+    font-family:var(--serif-display);
+    font-style:italic;
+    font-weight:600;
+    font-size:1rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--orange-deep);
+    background:linear-gradient(180deg, #FBF6EA, #F4E6CB);
+  }
+  .score-caption{
+    margin:10px auto 0;
+    max-width:250px;
+    font-size:.78rem;
+    color:var(--muted);
+    letter-spacing:.02em;
+  }
+
+  /* ---------- sub-score grid ---------- */
+  .subscores{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-top:4px;
+  }
+  .gauge-card{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    padding:12px 4px 10px;
+    background:var(--ivory);
+    border:1px solid var(--saddle-18);
+    border-radius:12px;
+  }
+  .gauge-sm{ position:relative; width:80px; height:80px; }
+  .gauge-sm .bezel{
+    position:absolute; inset:0; border-radius:50%;
+    background: repeating-conic-gradient(var(--saddle) 0deg 2.6deg, transparent 2.6deg 30deg);
+    opacity:.75;
+  }
+  .gauge-sm .bezel::after{
+    content:"";
+    position:absolute; inset:8px; border-radius:50%;
+    background:var(--ivory);
+    box-shadow: inset 0 0 0 1px var(--saddle-18);
+  }
+  .gauge-sm svg.ring{ position:absolute; inset:8px; transform:rotate(-90deg); }
+  .gauge-sm .track{ fill:none; stroke:#EAD9B4; stroke-width:6; }
+  .gauge-sm .progress{ fill:none; stroke-width:6; stroke-linecap:round; stroke:url(#scoreGrad); }
+  .gauge-sm .readout{
+    position:absolute; inset:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--serif-display);
+    font-weight:600;
+    font-size:1.28rem;
+    color:var(--saddle-deep);
+  }
+  .gauge-card .label{
+    font-size:.72rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    text-align:center;
+  }
+
+  /* ---------- detail sections ---------- */
+  .detail{ margin-top:2px; }
+  .detail h2{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:0 0 10px;
+    font-family:var(--serif-text);
+    font-size:.76rem;
+    font-weight:600;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--saddle-deep);
+  }
+  .detail h2 svg{ width:15px; height:15px; color:var(--orange-deep); flex:none; }
+  .detail p{ margin:0 0 6px; font-size:.92rem; line-height:1.5; }
+  .source{
+    margin-top:10px;
+    font-size:.68rem;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .source em{
+    font-style:normal;
+    border-bottom:1px dotted var(--muted);
+    padding-bottom:1px;
+  }
+
+  /* rent fairness */
+  .compare{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+  .compare-row{ display:grid; grid-template-columns:74px 1fr 58px; align-items:center; gap:8px; }
+  .compare-row .rlabel{ font-size:.72rem; letter-spacing:.03em; color:var(--muted); }
+  .compare-row .track{ display:block; height:9px; border-radius:999px; background:#EAD9B4; overflow:hidden; }
+  .compare-row .fill{ display:block; height:100%; border-radius:999px; }
+  .compare-row.subject .fill{ background:linear-gradient(90deg, var(--orange-soft), var(--orange-deep)); width:100%; }
+  .compare-row.median .fill{ background:var(--saddle); opacity:.55; width:82.8%; }
+  .compare-row .rvalue{ font-family:var(--serif-display); font-weight:600; font-size:.98rem; text-align:right; color:var(--ink); }
+  .callout{
+    font-family:var(--serif-display);
+    font-style:italic;
+    font-weight:600;
+    font-size:1.08rem;
+    color:var(--orange-deep);
+    margin:2px 0 0;
+  }
+
+  /* condition */
+  .dot-list{ list-style:none; margin:0 0 6px; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .dot-list li{ display:flex; align-items:center; gap:9px; font-size:.92rem; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; box-shadow:0 0 0 3px rgba(0,0,0,.04); }
+  .dot.hazard{ background:var(--hazard); }
+  .dot.warn{ background:var(--warn); }
+  .tag{ color:var(--hazard); font-style:italic; }
+  .meta{ font-size:.78rem; color:var(--muted); margin-top:2px; }
+
+  /* legal */
+  .check-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+  .check-list li{ display:flex; align-items:center; gap:10px; font-size:.95rem; }
+  .check-list svg{ width:19px; height:19px; flex:none; color:var(--orange-deep); }
+
+  /* accessibility */
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:6px 14px;
+    border-radius:999px;
+    background:linear-gradient(180deg,#F4E6CB,#EAD3A4);
+    border:1px solid var(--saddle-30);
+    font-size:.78rem;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--saddle-deep);
+    margin-bottom:10px;
+  }
+  .badge svg{ width:13px; height:13px; color:var(--orange-deep); }
+  .disclaimer{
+    font-style:italic;
+    font-size:.8rem;
+    color:var(--muted);
+    border-left:2px solid var(--saddle-30);
+    padding-left:10px;
+    margin:8px 0 0;
+  }
+
+  /* footer */
+  .card-footer{
+    margin-top:6px;
+    text-align:center;
+    font-size:.7rem;
+    letter-spacing:.05em;
+    color:var(--muted);
+    line-height:1.6;
+  }
+
+  .caption{
+    margin-top:22px;
+    max-width:340px;
+    text-align:center;
+    font-size:.72rem;
+    line-height:1.6;
+    color:var(--saddle-deep);
+    opacity:.6;
+    letter-spacing:.02em;
+  }
+
+  @media (max-width:360px){
+    .card{ padding:17px 14px 15px; }
+    .gauge-hero{ width:168px; height:168px; }
+    .gauge-hero .num{ font-size:2.7rem; }
+    .subscores{ gap:10px; }
+    .gauge-sm{ width:72px; height:72px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E7A46B"/>
+      <stop offset="55%" stop-color="#C8672E"/>
+      <stop offset="100%" stop-color="#A44E22"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="stage">
+  <p class="kicker">HouseCheck · Building Health Card</p>
+
+  <div class="box-wrap">
+    <div class="box-flap" aria-hidden="true"></div>
+
+    <svg class="ribbon" viewBox="0 0 140 90" aria-hidden="true">
+      <defs>
+        <linearGradient id="ribbonOrange" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#E7A46B"/>
+          <stop offset="100%" stop-color="#A44E22"/>
+        </linearGradient>
+        <linearGradient id="ribbonKnot" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#6B4527"/>
+          <stop offset="100%" stop-color="#38220F"/>
+        </linearGradient>
+      </defs>
+      <path d="M70,45 C46,8 8,16 12,44 C8,72 46,82 70,45 Z" fill="url(#ribbonOrange)" stroke="#7A3F1C" stroke-width="1"/>
+      <path d="M70,45 C94,8 132,16 128,44 C132,72 94,82 70,45 Z" fill="url(#ribbonOrange)" stroke="#7A3F1C" stroke-width="1"/>
+      <path d="M62,52 L54,86 L67,76 Z" fill="url(#ribbonKnot)"/>
+      <path d="M78,52 L86,86 L73,76 Z" fill="url(#ribbonKnot)"/>
+      <circle cx="70" cy="46" r="11" fill="url(#ribbonKnot)" stroke="#251506" stroke-width="1"/>
+    </svg>
+
+    <main class="card">
+
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>
+        <span>460 Macon St, Brooklyn</span>
+      </div>
+
+      <div class="identity">
+        <h1>460 Macon Street</h1>
+        <p>Bedford&#8209;Stuyvesant &middot; BBL 3018420001</p>
+      </div>
+
+      <section class="score-hero">
+        <div class="gauge-hero">
+          <div class="bezel"></div>
+          <svg class="ring" viewBox="0 0 166 166">
+            <circle class="track" cx="83" cy="83" r="72"/>
+            <circle class="progress" cx="83" cy="83" r="72" stroke-dasharray="452.39" stroke-dashoffset="194.53"/>
+          </svg>
+          <div class="readout">
+            <span class="num">57</span>
+            <span class="denom">out of 100</span>
+          </div>
+        </div>
+        <span class="fair-pill">Fair</span>
+        <p class="score-caption">A single measure of condition, legal standing, neighborhood context, and accessibility.</p>
+      </section>
+
+      <div class="stitch-divider" aria-hidden="true"></div>
+
+      <section class="subscores">
+        <div class="gauge-card">
+          <div class="gauge-sm">
+            <div class="bezel"></div>
+            <svg class="ring" viewBox="0 0 68 68">
+              <circle class="track" cx="34" cy="34" r="28"/>
+              <circle class="progress" cx="34" cy="34" r="28" stroke-dasharray="175.93" stroke-dashoffset="77.41"/>
+            </svg>
+            <div class="readout">56</div>
+          </div>
+          <span class="label">Condition</span>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-sm">
+            <div class="bezel"></div>
+            <svg class="ring" viewBox="0 0 68 68">
+              <circle class="track" cx="34" cy="34" r="28"/>
+              <circle class="progress" cx="34" cy="34" r="28" stroke-dasharray="175.93" stroke-dashoffset="0"/>
+            </svg>
+            <div class="readout">100</div>
+          </div>
+          <span class="label">Legal</span>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-sm">
+            <div class="bezel"></div>
+            <svg class="ring" viewBox="0 0 68 68">
+              <circle class="track" cx="34" cy="34" r="28"/>
+              <circle class="progress" cx="34" cy="34" r="28" stroke-dasharray="175.93" stroke-dashoffset="105.56"/>
+            </svg>
+            <div class="readout">40</div>
+          </div>
+          <span class="label">Neighborhood</span>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-sm">
+            <div class="bezel"></div>
+            <svg class="ring" viewBox="0 0 68 68">
+              <circle class="track" cx="34" cy="34" r="28"/>
+              <circle class="progress" cx="34" cy="34" r="28" stroke-dasharray="175.93" stroke-dashoffset="123.15"/>
+            </svg>
+            <div class="readout">30</div>
+          </div>
+          <span class="label">Accessibility</span>
+        </div>
+      </section>
+
+      <div class="stitch-divider" aria-hidden="true"></div>
+
+      <section class="detail rent">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.2c0-1.1 1.1-2 2.5-2s2.5.8 2.5 1.8c0 2.6-5 1.4-5 4 0 1 1.1 1.8 2.5 1.8s2.5-.9 2.5-2"/></svg>
+          Rent fairness
+        </h2>
+        <div class="compare">
+          <div class="compare-row subject">
+            <span class="rlabel">This unit</span>
+            <span class="track"><span class="fill"></span></span>
+            <span class="rvalue">$2,900</span>
+          </div>
+          <div class="compare-row median">
+            <span class="rlabel">Tract median</span>
+            <span class="track"><span class="fill"></span></span>
+            <span class="rvalue">$2,400</span>
+          </div>
+        </div>
+        <p class="callout">21% above the neighborhood median</p>
+        <p class="source">Source: <em>Census ACS B25064</em></p>
+      </section>
+
+      <div class="rule"></div>
+
+      <section class="detail condition">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 11 12 4l8 7"/><path d="M6 10v9h12v-9"/><path d="M10 19v-5h4v5"/></svg>
+          Building condition
+        </h2>
+        <ul class="dot-list">
+          <li><span class="dot hazard"></span> 1 open Class C <span class="tag">(hazardous)</span></li>
+          <li><span class="dot warn"></span> 1 open Class B</li>
+        </ul>
+        <p class="meta">Open since 2025</p>
+        <p class="source">Source: <em>NYC HPD</em></p>
+      </section>
+
+      <div class="rule"></div>
+
+      <section class="detail legal">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18M5 7l-3 6a3 3 0 0 0 6 0l-3-6Zm14 0l-3 6a3 3 0 0 0 6 0l-3-6ZM5 7h14M8 21h8"/></svg>
+          Legal protections
+        </h2>
+        <ul class="check-list">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><path d="M8 12.3l2.6 2.6L16.3 9"/></svg>
+            Rent stabilized
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><path d="M8 12.3l2.6 2.6L16.3 9"/></svg>
+            Good Cause covered
+          </li>
+        </ul>
+        <p class="source">Source: <em>DHCR / NY HCR</em></p>
+      </section>
+
+      <div class="rule"></div>
+
+      <section class="detail accessibility">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="4.5" r="1.6"/><path d="M12 7.5v5l-3.5 6M12 12.5l3.5 6M8 10h8"/></svg>
+          Accessibility
+        </h2>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l6-6 3 3 7-9"/></svg>
+          Step-free access: Lower
+        </span>
+        <p>No elevator on record &middot; 4-story walk-up &middot; ADA subway 640&nbsp;m away</p>
+        <p class="disclaimer">Access likelihood from public records &mdash; verify in person.</p>
+        <p class="source">Source: <em>DOB / MTA</em></p>
+      </section>
+
+      <div class="rule"></div>
+
+      <section class="detail neighborhood">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s7-6.1 7-11.3A7 7 0 0 0 5 9.7C5 14.9 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></svg>
+          Neighborhood
+        </h2>
+        <p>30 recent 311 complaints nearby</p>
+        <p>Restaurant grades mostly A</p>
+        <p class="source">Source: <em>NYC 311 / DOHMH</em></p>
+      </section>
+
+      <div class="stitch-divider" aria-hidden="true"></div>
+
+      <footer class="card-footer">
+        Every number links to a NYC or Census source<br>
+        Data from Jul 2026
+      </footer>
+
+    </main>
+  </div>
+
+  <p class="caption">Original design study in an equestrian&#8209;luxury idiom &mdash; not affiliated with, endorsed by, or a product of any fashion house.</p>
+</div>
+
+</body>
+</html>

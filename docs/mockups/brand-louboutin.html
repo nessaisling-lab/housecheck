@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HouseCheck — Building Health Card (Noir Luxury Study)</title>
+<meta name="description" content="Noir-glamour luxury design study of a mobile Building Health Card for HouseCheck. Original work, homage only — not affiliated with or endorsed by any brand; no trademarks or logos reproduced.">
+
+<!-- Google Fonts (elegant high-contrast serifs) — always paired with a system serif fallback stack below -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,500&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     HOUSECHECK — "NOIR LUXURY" THEME
+     Original student-project design study, homage only.
+     Not affiliated with or endorsed by any brand. No trademarks,
+     logos, wordmarks, or the registered red-sole mark are used —
+     the lacquer-red accent and spike motifs below are original
+     abstract shapes, not reproductions.
+     ============================================================ */
+
+  :root{
+    --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+
+    --black: #050403;
+    --black-soft: #0b0906;
+    --panel: #0e0c09;
+
+    --hairline: rgba(201,164,84,0.30);
+    --hairline-strong: rgba(201,164,84,0.55);
+    --hairline-faint: rgba(201,164,84,0.15);
+
+    --gold: #c9a45a;
+    --gold-bright: #eccd8a;
+    --gold-dim: #8c7343;
+    --gold-faint: #5b4c31;
+
+    --cream: #f4ecd9;
+    --cream-dim: #cabfa9;
+    --text-faint: #6f6656;
+
+    --red: #a90e26;
+    --red-bright: #d9203f;
+    --red-deep: #52060e;
+
+    --card-w: 390px;
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; width:100%; }
+
+  html{ background: var(--black); }
+
+  body{
+    font-family: var(--font-serif);
+    color: var(--cream-dim);
+    background:
+      radial-gradient(ellipse 900px 460px at 50% -8%, rgba(201,164,84,0.09), transparent 62%),
+      radial-gradient(ellipse 640px 220px at 50% 104%, rgba(169,14,38,0.14), transparent 70%),
+      var(--black);
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection{ background: rgba(201,164,84,0.28); color: var(--cream); }
+
+  .num{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
+  /* ---------------- abstract spike / stud motif (original shape) ---------------- */
+  .stud{
+    display:block;
+    clip-path: polygon(50% 0%, 100% 32%, 66% 100%, 34% 100%, 0% 32%);
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold-dim));
+  }
+  .diamond{
+    display:block;
+    transform: rotate(45deg);
+    background: var(--gold);
+  }
+
+  /* ---------------- page shell ---------------- */
+  .stage{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 30px 16px 56px;
+  }
+
+  .card-wrap{
+    position: relative;
+    width: 100%;
+    max-width: var(--card-w);
+  }
+
+  /* lacquer-red "sole" edge peeking beneath the card — the signature accent */
+  .sole{
+    position: absolute;
+    left: 9%;
+    right: 9%;
+    bottom: -9px;
+    height: 20px;
+    border-radius: 0 0 16px 16px;
+    background: linear-gradient(180deg, var(--red-bright) 0%, var(--red) 45%, var(--red-deep) 100%);
+    box-shadow:
+      0 16px 30px -8px rgba(169,14,38,0.55),
+      inset 0 2px 3px rgba(255,255,255,0.22);
+    z-index: 0;
+  }
+
+  .card{
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    background: var(--black-soft);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 40px 80px -24px rgba(0,0,0,0.9);
+    padding-bottom: 4px;
+  }
+
+  /* jewel-box corner ornaments */
+  .corner{
+    position: absolute;
+    width: 9px; height: 9px;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    background: linear-gradient(135deg, var(--gold-bright), var(--gold-faint));
+    filter: drop-shadow(0 0 3px rgba(201,164,84,0.45));
+    z-index: 2;
+  }
+  .corner.tl{ top: -5px; left: -5px; }
+  .corner.tr{ top: -5px; right: -5px; }
+  .corner.bl{ bottom: -5px; left: -5px; }
+  .corner.br{ bottom: -5px; right: -5px; }
+
+  /* ---------------- header ---------------- */
+  .card-header{
+    padding: 26px 22px 16px;
+    text-align: center;
+  }
+  .wordmark{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 23px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cream);
+  }
+  .wordmark .wm-spike{ width:7px; height:16px; flex:none; }
+  .wordmark em{ font-style: normal; color: var(--gold-bright); font-weight: 400; }
+  .subtitle{
+    margin-top: 8px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    color: var(--gold-dim);
+  }
+
+  .stud-trim{
+    height: 7px;
+    margin: 18px 22px 0;
+    opacity: 0.6;
+    background-image:
+      linear-gradient(135deg, var(--gold-dim) 24%, transparent 24.5%),
+      linear-gradient(225deg, var(--gold-dim) 24%, transparent 24.5%);
+    background-size: 12px 7px;
+    background-repeat: repeat-x;
+  }
+
+  /* ---------------- search bar ---------------- */
+  .search{
+    margin: 18px 22px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    padding: 11px 16px;
+  }
+  .search .go{
+    width: 15px; height: 15px;
+    flex: none;
+    color: var(--gold);
+    display: flex;
+  }
+  .search .go svg{ width:100%; height:100%; }
+  .search input{
+    all: unset;
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    color: var(--cream);
+  }
+
+  /* ---------------- building id ---------------- */
+  .building-id{
+    padding: 22px 22px 0;
+    text-align: center;
+  }
+  .building-id h1{
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: 0.01em;
+    color: var(--cream);
+  }
+  .building-meta{
+    margin: 7px 0 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    color: var(--cream-dim);
+  }
+  .building-meta .sep{ color: var(--gold-faint); margin: 0 7px; }
+
+  /* ---------------- section label ---------------- */
+  .sec-label{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 26px 22px 0;
+  }
+  .sec-label::before, .sec-label::after{
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--hairline-strong), transparent);
+  }
+  .sec-label span{
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 11.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    white-space: nowrap;
+  }
+
+  /* ---------------- score centerpiece ---------------- */
+  .score-panel{
+    margin: 14px 22px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0 4px;
+  }
+
+  .gauge{ position: relative; width: 182px; height: 182px; }
+  .gauge::before{
+    content: '';
+    position: absolute;
+    top: 9%; left: 15%;
+    width: 44%; height: 28%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.38), transparent 72%);
+    filter: blur(2px);
+    pointer-events: none;
+  }
+  .gauge svg{ width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge .rim{ stroke: var(--gold); }
+  .gauge .track{ stroke: rgba(244,236,217,0.20); }
+  .gauge .fill{
+    stroke: url(#goldArc);
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 4px rgba(236,205,138,0.55));
+  }
+  .gauge-center{
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .gauge-score{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 46px;
+    line-height: 1;
+    color: var(--cream);
+  }
+  .gauge-score .of{
+    font-size: 15px;
+    font-weight: 400;
+    color: rgba(244,236,217,0.65);
+    margin-left: 2px;
+  }
+  .gauge-of-label{
+    margin-top: 6px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(244,236,217,0.55);
+  }
+
+  .score-tag{
+    margin-top: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 20px;
+    border: 1px solid var(--gold);
+    border-radius: 999px;
+    background: rgba(201,164,84,0.07);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cream);
+  }
+  .score-tag .dot{
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red-bright);
+    box-shadow: 0 0 7px 1px rgba(217,32,63,0.75);
+  }
+
+  .score-scale{
+    position: relative;
+    width: 100%;
+    max-width: 232px;
+    height: 2px;
+    margin-top: 24px;
+    background: linear-gradient(90deg, var(--red-deep), var(--gold-dim) 48%, var(--gold-bright));
+  }
+  .score-scale .marker{
+    position: absolute;
+    top: 50%; left: 57%;
+    width: 9px; height: 9px;
+    transform: translate(-50%,-50%) rotate(45deg);
+    background: var(--cream);
+    border: 1px solid var(--red-bright);
+    box-shadow: 0 0 6px rgba(217,32,63,0.6);
+  }
+  .scale-labels{
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 232px;
+    margin-top: 9px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  /* ---------------- sub-score grid ---------------- */
+  .subscores{
+    margin: 18px 22px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--hairline-faint);
+    border-left: 1px solid var(--hairline-faint);
+  }
+  .subscore{
+    min-width: 0;
+    padding: 15px 15px 13px;
+    border-right: 1px solid var(--hairline-faint);
+    border-bottom: 1px solid var(--hairline-faint);
+  }
+  .subscore-label{
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+  }
+  .subscore-val{
+    margin-top: 5px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 25px;
+    color: var(--cream);
+  }
+  .subscore-val small{
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-faint);
+    margin-left: 2px;
+  }
+  .meter{ margin-top: 11px; height: 3px; background: rgba(244,236,217,0.10); }
+  .meter i{ display: block; height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright)); }
+  .subscore-status{
+    margin-top: 8px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    color: var(--gold-dim);
+  }
+  .subscore-status.critical{ color: var(--red-bright); }
+  .subscore-status .flag-dot{
+    display: inline-block;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--red-bright);
+    margin-right: 5px;
+    box-shadow: 0 0 5px rgba(217,32,63,0.7);
+    vertical-align: 1px;
+  }
+
+  /* ---------------- generic data panel ---------------- */
+  .panel{
+    margin: 14px 22px 0;
+    padding: 16px 17px 14px;
+    background: linear-gradient(180deg, rgba(201,164,84,0.035), transparent 45%);
+    border: 1px solid var(--hairline-faint);
+  }
+
+  .row{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-top: 1px solid var(--hairline-faint);
+  }
+  .row:first-child{ border-top: none; padding-top: 1px; }
+  .row .k{
+    font-family: var(--font-serif);
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--cream-dim);
+  }
+  .row .k .muted{ color: var(--text-faint); font-style: italic; }
+  .row .k .dot{
+    display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: 1px;
+  }
+  .row .k .dot.red{ background: var(--red-bright); box-shadow: 0 0 6px rgba(217,32,63,0.75); }
+  .row .k .dot.gold{ background: var(--gold); box-shadow: 0 0 5px rgba(201,164,84,0.6); }
+  .row .v{
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--cream);
+  }
+  .row .v.red{ color: var(--red-bright); }
+  .row .v.gold{ color: var(--gold-bright); }
+
+  /* rent comparison */
+  .rent-compare{ display: flex; align-items: stretch; gap: 12px; padding: 4px 0 14px; }
+  .rent-col{ flex: 1; text-align: center; }
+  .rent-col .lab{
+    font-family: var(--font-serif); font-style: italic; font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint);
+  }
+  .rent-col .amt{
+    margin-top: 6px; font-family: var(--font-display); font-weight: 700;
+    font-size: 23px; color: var(--cream);
+  }
+  .rent-col.you .amt{ color: var(--gold-bright); }
+  .rent-div{ width: 1px; background: var(--hairline-faint); align-self: stretch; }
+
+  .rent-flag{
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    margin: 0 0 12px; padding: 9px 12px;
+    border: 1px solid rgba(217,32,63,0.55);
+    background: rgba(169,14,38,0.10);
+    border-radius: 3px;
+  }
+  .rent-flag svg{ width: 12px; height: 12px; flex: none; color: var(--red-bright); }
+  .rent-flag span{
+    font-family: var(--font-serif); font-style: italic; font-weight: 600;
+    font-size: 12.5px; letter-spacing: 0.01em; color: var(--red-bright); text-align: center;
+  }
+
+  /* legal checklist */
+  .check-row{ display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--hairline-faint); }
+  .check-row:first-child{ border-top: none; padding-top: 1px; }
+  .check-badge{
+    width: 18px; height: 18px; flex: none;
+    transform: rotate(45deg);
+    background: rgba(201,164,84,0.10);
+    border: 1px solid var(--gold);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .check-badge svg{ width: 9px; height: 9px; color: var(--gold-bright); transform: rotate(-45deg); }
+  .check-text{ font-family: var(--font-serif); font-size: 13.5px; font-weight: 500; color: var(--cream); }
+
+  /* accessibility */
+  .a11y-badge{
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px; margin: 2px 0 12px;
+    border: 1px solid rgba(217,32,63,0.5);
+    background: rgba(169,14,38,0.08);
+    border-radius: 3px;
+    font-family: var(--font-serif); font-style: italic; font-weight: 600;
+    font-size: 12px; letter-spacing: 0.02em; color: var(--cream);
+  }
+  .a11y-badge .flag-dot{
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red-bright); box-shadow: 0 0 6px rgba(217,32,63,0.75); flex: none;
+  }
+  .a11y-list{ list-style: none; margin: 0 0 12px; padding: 0; }
+  .a11y-list li{
+    position: relative; padding: 6px 0 6px 18px;
+    font-family: var(--font-serif); font-size: 13px; color: var(--cream-dim);
+    border-top: 1px solid var(--hairline-faint);
+  }
+  .a11y-list li:first-child{ border-top: none; }
+  .a11y-list li::before{
+    content: ''; position: absolute; left: 1px; top: 12px;
+    width: 5px; height: 5px; transform: rotate(45deg);
+    background: var(--gold);
+  }
+  .disclaimer{
+    font-family: var(--font-serif); font-style: italic; font-size: 11px;
+    color: var(--text-faint); line-height: 1.6;
+    padding-top: 10px; border-top: 1px dashed var(--hairline-faint);
+  }
+
+  /* source footnote inside each panel */
+  .src{
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--hairline-faint);
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-serif); font-style: italic;
+    font-size: 10.5px; letter-spacing: 0.02em; color: var(--text-faint);
+  }
+  .src .tag{
+    flex: none;
+    font-style: normal; font-weight: 600;
+    font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gold-dim);
+    border: 1px solid var(--hairline);
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  .src b{ color: var(--cream-dim); font-weight: 500; font-style: normal; letter-spacing: 0.01em; }
+
+  /* ---------------- footer ---------------- */
+  .card-footer{
+    margin-top: 28px;
+    padding: 18px 22px 26px;
+    text-align: center;
+  }
+  .footer-rule{
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .footer-rule::before, .footer-rule::after{
+    content: ''; height: 1px; width: 34px;
+    background: linear-gradient(90deg, transparent, var(--hairline-strong));
+  }
+  .footer-rule::after{ background: linear-gradient(90deg, var(--hairline-strong), transparent); }
+  .footer-rule .diamond{ width: 6px; height: 6px; flex: none; }
+  .card-footer p{
+    margin: 0;
+    font-family: var(--font-serif); font-style: italic; font-size: 11.5px;
+    letter-spacing: 0.02em; color: var(--text-faint);
+  }
+
+  @media (max-width: 400px){
+    :root{ --card-w: 100%; }
+    .stage{ padding-left: 10px; padding-right: 10px; }
+    .gauge{ width: 152px; height: 152px; }
+    .gauge-score{ font-size: 38px; }
+    .card-header, .building-id, .search, .sec-label, .subscores, .panel, .score-panel{
+      margin-left: 14px; margin-right: 14px;
+    }
+    .card-header{ padding-left: 16px; padding-right: 16px; }
+    .stud-trim{ margin-left: 14px; margin-right: 14px; }
+  }
+
+  @media (max-width: 340px){
+    .wordmark{ font-size: 20px; letter-spacing: 0.10em; }
+    .building-id h1{ font-size: 21px; }
+    .rent-col .amt{ font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="stage">
+    <div class="card-wrap">
+      <div class="sole" aria-hidden="true"></div>
+
+      <main class="card">
+        <span class="corner tl" aria-hidden="true"></span>
+        <span class="corner tr" aria-hidden="true"></span>
+        <span class="corner bl" aria-hidden="true"></span>
+        <span class="corner br" aria-hidden="true"></span>
+
+        <header class="card-header">
+          <div class="wordmark">
+            <span class="wm-spike stud" aria-hidden="true"></span>
+            HOUSE<em>CHECK</em>
+          </div>
+          <div class="subtitle">Building Health Card</div>
+        </header>
+
+        <div class="stud-trim" aria-hidden="true"></div>
+
+        <form class="search" role="search" onsubmit="return false;">
+          <span class="go" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+          <input type="text" value="460 Macon St, Brooklyn" readonly aria-label="Building search">
+        </form>
+
+        <div class="building-id">
+          <h1>460 Macon Street</h1>
+          <p class="building-meta">Bedford-Stuyvesant<span class="sep">·</span>BBL 3018420001</p>
+        </div>
+
+        <!-- SCORE CENTERPIECE -->
+        <div class="sec-label"><span>Overall Score</span></div>
+        <div class="score-panel">
+          <div class="gauge">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <defs>
+                <radialGradient id="redGloss" cx="35%" cy="22%" r="80%">
+                  <stop offset="0%" stop-color="#ff8b9c" stop-opacity="0.9"/>
+                  <stop offset="26%" stop-color="#d9203f"/>
+                  <stop offset="64%" stop-color="#a90e26"/>
+                  <stop offset="100%" stop-color="#4a050c"/>
+                </radialGradient>
+                <linearGradient id="goldArc" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#eccd8a"/>
+                  <stop offset="100%" stop-color="#a9863f"/>
+                </linearGradient>
+              </defs>
+              <circle cx="60" cy="60" r="57" fill="url(#redGloss)"></circle>
+              <circle class="rim" cx="60" cy="60" r="57" fill="none" stroke-width="1" opacity="0.6"></circle>
+              <circle class="track" cx="60" cy="60" r="47" fill="none" stroke-width="3.6"></circle>
+              <circle class="fill" cx="60" cy="60" r="47" fill="none" stroke-width="3.6"
+                      stroke-dasharray="295.31" stroke-dashoffset="126.98"></circle>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-score num">57<span class="of">/100</span></div>
+              <div class="gauge-of-label">Composite</div>
+            </div>
+          </div>
+
+          <div class="score-tag"><span class="dot" aria-hidden="true"></span>Fair</div>
+
+          <div class="score-scale" aria-hidden="true"><span class="marker"></span></div>
+          <div class="scale-labels" aria-hidden="true"><span>Poor</span><span>Fair</span><span>Good</span></div>
+        </div>
+
+        <!-- SUB-SCORES -->
+        <div class="sec-label"><span>Component Scores</span></div>
+        <div class="subscores">
+          <div class="subscore">
+            <div class="subscore-label">Condition</div>
+            <div class="subscore-val num">56<small>/100</small></div>
+            <div class="meter"><i style="width:56%"></i></div>
+            <div class="subscore-status">Fair condition</div>
+          </div>
+          <div class="subscore">
+            <div class="subscore-label">Legal</div>
+            <div class="subscore-val num">100<small>/100</small></div>
+            <div class="meter"><i style="width:100%"></i></div>
+            <div class="subscore-status">Fully protected</div>
+          </div>
+          <div class="subscore">
+            <div class="subscore-label">Neighborhood</div>
+            <div class="subscore-val num">40<small>/100</small></div>
+            <div class="meter"><i style="width:40%"></i></div>
+            <div class="subscore-status">Elevated concern</div>
+          </div>
+          <div class="subscore">
+            <div class="subscore-label">Accessibility</div>
+            <div class="subscore-val num">30<small>/100</small></div>
+            <div class="meter"><i style="width:30%"></i></div>
+            <div class="subscore-status critical"><span class="flag-dot"></span>Limited</div>
+          </div>
+        </div>
+
+        <!-- RENT FAIRNESS -->
+        <div class="sec-label"><span>Rent Fairness</span></div>
+        <div class="panel">
+          <div class="rent-compare">
+            <div class="rent-col you">
+              <div class="lab">Your Rent</div>
+              <div class="amt num">$2,900</div>
+            </div>
+            <div class="rent-div" aria-hidden="true"></div>
+            <div class="rent-col">
+              <div class="lab">Tract Median</div>
+              <div class="amt num">$2,400</div>
+            </div>
+          </div>
+          <div class="rent-flag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7-7 7 7"></path></svg>
+            <span class="num">21% above the neighborhood median</span>
+          </div>
+          <div class="src"><span class="tag">Src</span><b>Census ACS B25064</b></div>
+        </div>
+
+        <!-- BUILDING CONDITION -->
+        <div class="sec-label"><span>Building Condition</span></div>
+        <div class="panel">
+          <div class="row">
+            <div class="k"><span class="dot red" aria-hidden="true"></span>1 open Class C <span class="muted">(hazardous)</span></div>
+            <div class="v red">C</div>
+          </div>
+          <div class="row">
+            <div class="k"><span class="dot gold" aria-hidden="true"></span>1 open Class B</div>
+            <div class="v gold">B</div>
+          </div>
+          <div class="row">
+            <div class="k">Open since 2025</div>
+            <div class="v num">—</div>
+          </div>
+          <div class="src"><span class="tag">Src</span><b>NYC HPD</b></div>
+        </div>
+
+        <!-- LEGAL PROTECTIONS -->
+        <div class="sec-label"><span>Legal Protections</span></div>
+        <div class="panel">
+          <div class="check-row">
+            <span class="check-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            <span class="check-text">Rent stabilized</span>
+          </div>
+          <div class="check-row">
+            <span class="check-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            <span class="check-text">Good Cause covered</span>
+          </div>
+          <div class="src"><span class="tag">Src</span><b>DHCR / NY HCR</b></div>
+        </div>
+
+        <!-- ACCESSIBILITY -->
+        <div class="sec-label"><span>Accessibility</span></div>
+        <div class="panel">
+          <div class="a11y-badge"><span class="flag-dot" aria-hidden="true"></span>Step-free access: Lower</div>
+          <ul class="a11y-list">
+            <li>No elevator on record</li>
+            <li>4-story walk-up</li>
+            <li>ADA subway 640 m away</li>
+          </ul>
+          <div class="disclaimer">Access likelihood from public records — verify in person.</div>
+          <div class="src"><span class="tag">Src</span><b>DOB / MTA</b></div>
+        </div>
+
+        <!-- NEIGHBORHOOD -->
+        <div class="sec-label"><span>Neighborhood</span></div>
+        <div class="panel">
+          <div class="row">
+            <div class="k">30 recent 311 complaints nearby</div>
+            <div class="v num">30</div>
+          </div>
+          <div class="row">
+            <div class="k">Restaurant grades mostly A</div>
+            <div class="v gold">A</div>
+          </div>
+          <div class="src"><span class="tag">Src</span><b>NYC 311 / DOHMH</b></div>
+        </div>
+
+        <footer class="card-footer">
+          <div class="footer-rule" aria-hidden="true"><span class="diamond stud"></span></div>
+          <p>Every number links to a NYC or Census source · data from Jul 2026</p>
+        </footer>
+
+      </main>
+    </div>
+  </div>
+
+</body>
+</html>

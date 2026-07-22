@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HouseCheck — Building Health Card, "Industrial" Study</title>
+<meta name="description" content="Streetwear / industrial-workwear themed Building Health Card mockup for HouseCheck. Original design study, not an official brand product.">
+
+<!-- Google Fonts (heavy grotesque) — always paired with a system sans fallback stack below -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Archivo+Black&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     HOUSECHECK — "INDUSTRIAL / STREETWEAR" THEME
+     Design-study homage to industrial workwear graphic language:
+     black + off-white paper + one caution-yellow, wide-tracked
+     grotesque type, hazard striping, spec-sheet captions, coordinate
+     ticks. No trademarked logo, wordmark, or logotype reproduced.
+     Original student-project design. Not an official brand product.
+     ============================================================ */
+
+  :root{
+    --font: 'Archivo', 'Archivo Black', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+    --black:  #121110;
+    --ink:    #1b1a17;
+    --off:    #f3efe2;   /* paper / off-white */
+    --off-2:  #eae3cf;   /* deeper panel paper */
+    --off-3:  #ded5b8;   /* line / hairline on paper */
+    --paper-edge: #d8cfb2;
+    --yellow: #ffd100;   /* single caution yellow */
+    --yellow-deep: #e0ae00;
+
+    --card-w: 390px;
+    --radius: 0px; /* sharp industrial corners */
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+
+  html{ background: var(--off); }
+
+  body{
+    font-family: var(--font);
+    color: var(--black);
+    background:
+      repeating-linear-gradient(0deg, rgba(18,17,16,0.045) 0px, rgba(18,17,16,0.045) 1px, transparent 1px, transparent 22px),
+      repeating-linear-gradient(90deg, rgba(18,17,16,0.045) 0px, rgba(18,17,16,0.045) 1px, transparent 1px, transparent 22px),
+      var(--off);
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection{ background: var(--yellow); color: var(--black); }
+
+  .num{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+  .upx{ text-transform: uppercase; letter-spacing: 0.14em; }
+
+  /* ---------------- quotation-mark typographic device ---------------- */
+  .q{ position: relative; white-space: nowrap; }
+  .q::before, .q::after{
+    color: var(--yellow-deep);
+    -webkit-text-stroke: 0.6px var(--black);
+    font-weight: 900;
+    font-size: 1.05em;
+  }
+  .q::before{ content: '\201C'; margin-right: 0.06em; }
+  .q::after{  content: '\201D'; margin-left: 0.06em; }
+
+  /* ---------------- hazard / caution striping ---------------- */
+  .tape{
+    height: 13px;
+    width: 100%;
+    background: repeating-linear-gradient(45deg,
+      var(--black) 0px, var(--black) 11px,
+      var(--yellow) 11px, var(--yellow) 22px);
+    flex: none;
+  }
+  .hazard-fill{
+    background: repeating-linear-gradient(45deg,
+      var(--black) 0px, var(--black) 5px,
+      var(--yellow) 5px, var(--yellow) 10px);
+  }
+
+  /* ---------------- page shell / stage ---------------- */
+  .stage{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 22px 12px 40px;
+  }
+
+  .card{
+    position: relative;
+    width: 100%;
+    max-width: var(--card-w);
+    background: var(--off);
+    border: 2px solid var(--black);
+    box-shadow: 8px 8px 0 0 var(--black);
+  }
+
+  /* print-registration style crosshairs at the four corners */
+  .xmark{
+    position: absolute;
+    width: 15px; height: 15px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .xmark::before, .xmark::after{
+    content:''; position:absolute; background: var(--black);
+  }
+  .xmark::before{ left:50%; top:0; width:1px; height:100%; transform: translateX(-50%); }
+  .xmark::after{ top:50%; left:0; height:1px; width:100%; transform: translateY(-50%); }
+  .xmark.tl{ top:-7px; left:-7px; }
+  .xmark.tr{ top:-7px; right:-7px; }
+  .xmark.bl{ bottom:-7px; left:-7px; }
+  .xmark.br{ bottom:-7px; right:-7px; }
+
+  /* ---------------- header ---------------- */
+  .card-header{
+    padding: 20px 18px 12px;
+    border-bottom: 2px solid var(--black);
+  }
+  .brandrow{
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .wordmark{
+    font-family: 'Archivo Black', var(--font);
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    color: var(--black);
+  }
+  .wordmark .bar{
+    display:inline-block;
+    width: 100%;
+    height: 5px;
+    margin-top: 6px;
+    background: repeating-linear-gradient(90deg,
+      var(--black) 0 8px, var(--yellow) 8px 16px);
+  }
+  .dial{
+    flex: none;
+    width: 34px; height: 34px;
+    color: var(--black);
+    opacity: 0.85;
+  }
+
+  .tagline{
+    margin-top: 10px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--black);
+  }
+  .tagline .y{ color: var(--yellow-deep); -webkit-text-stroke: 0.4px var(--black); }
+
+  .coordline{
+    margin-top: 8px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    opacity: 0.72;
+  }
+  .coordline b{ font-weight: 700; }
+
+  /* ---------------- ruler / scale bar ---------------- */
+  .ruler{ padding: 10px 18px 0; }
+  .ruler svg{ width:100%; height: 18px; display:block; }
+  .ruler-cap{
+    display:flex; justify-content: space-between;
+    padding: 3px 18px 0;
+    font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink); opacity: 0.55;
+  }
+
+  /* ---------------- search bar ---------------- */
+  .search{
+    margin: 14px 18px 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background: var(--off);
+    border: 2px solid var(--black);
+    padding: 11px 12px;
+    position: relative;
+  }
+  .search-tab{
+    position:absolute;
+    top: -9px; left: 10px;
+    background: var(--yellow);
+    border: 1.5px solid var(--black);
+    color: var(--black);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+  }
+  .search svg{ width:16px; height:16px; flex:none; color: var(--black); }
+  .search input{
+    all: unset;
+    flex: 1;
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: var(--black);
+    text-transform: uppercase;
+  }
+
+  /* ---------------- building id ---------------- */
+  .building-id{ padding: 20px 18px 4px; }
+  .building-id h1{
+    margin: 0;
+    font-family: 'Archivo Black', var(--font);
+    font-size: 21px;
+    line-height: 1.12;
+    letter-spacing: 0.005em;
+    text-transform: uppercase;
+    color: var(--black);
+  }
+  .building-meta{
+    margin-top: 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .building-meta .sep{ color: var(--yellow-deep); margin: 0 7px; -webkit-text-stroke: 0.5px var(--black); }
+
+  /* ---------------- spec-sheet section label ---------------- */
+  .sec-label{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 0 18px;
+    margin-top: 22px;
+  }
+  .sec-label .name{
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--black);
+  }
+  .sec-label .code{
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--black);
+    background: var(--off-2);
+    border: 1.5px solid var(--black);
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  /* ---------------- score centerpiece ---------------- */
+  .score-panel{
+    margin: 10px 18px 0;
+    border: 2px solid var(--black);
+    background: var(--off-2);
+    padding: 22px 14px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .score-panel .corner-tag{
+    position:absolute; top:0; right:0;
+    background: var(--black); color: var(--off);
+    font-size: 8px; font-weight: 800; letter-spacing: 0.14em;
+    padding: 3px 8px 3px 10px;
+  }
+
+  .gauge{ position: relative; width: 176px; height: 176px; margin-top: 6px; }
+  .gauge svg{ width:100%; height:100%; transform: rotate(-90deg); }
+  .gauge .track{ stroke: var(--off-3); fill:none; }
+  .gauge .ticks{ stroke: var(--black); fill:none; opacity: 0.55; }
+  .gauge .fill{ stroke: var(--yellow); fill:none; stroke-linecap: butt; }
+  .gauge .fill-edge{ stroke: var(--black); fill:none; stroke-linecap: butt; opacity:0.9; }
+
+  .gauge-deg{
+    position:absolute;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--ink); opacity: 0.5;
+  }
+  .gauge-deg.d0{ top: -2px; left: 50%; transform: translateX(-50%); }
+  .gauge-deg.d90{ top: 50%; right: -14px; transform: translateY(-50%); }
+  .gauge-deg.d180{ bottom: -2px; left: 50%; transform: translateX(-50%); }
+  .gauge-deg.d270{ top: 50%; left: -18px; transform: translateY(-50%); }
+
+  .gauge-center{
+    position:absolute; inset:0;
+    display:flex; flex-direction: column;
+    align-items:center; justify-content:center;
+  }
+  .gauge-score{
+    font-family: 'Archivo Black', var(--font);
+    font-size: 48px;
+    line-height: 1;
+    color: var(--black);
+  }
+  .gauge-score sup{
+    font-size: 15px; font-weight: 700; color: var(--ink);
+    margin-left: 3px; opacity: 0.6;
+  }
+  .gauge-of{
+    margin-top: 4px;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ink); opacity: 0.6;
+  }
+
+  .score-tag{
+    margin-top: 16px;
+    display:inline-flex; align-items:center; gap: 4px;
+    padding: 6px 4px;
+    font-family: 'Archivo Black', var(--font);
+    font-size: 17px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--black);
+    border-bottom: 5px solid var(--yellow);
+  }
+
+  .score-scale{ margin-top: 16px; display:flex; width: 100%; max-width: 270px; height: 8px; border: 1.5px solid var(--black); }
+  .score-scale i{ flex:1; background: var(--off); border-right: 1.5px solid var(--black); }
+  .score-scale i:last-child{ border-right:none; }
+  .score-scale i.on{ background: var(--yellow); }
+  .score-scale-labels{
+    display:flex; justify-content: space-between; width:100%; max-width: 270px;
+    margin-top: 5px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink); opacity: 0.6;
+  }
+
+  /* ---------------- sub-score grid ---------------- */
+  .subscores{
+    margin: 14px 18px 0;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    border: 2px solid var(--black);
+    border-bottom: none; border-right: none;
+  }
+  .subscore{
+    min-width: 0;
+    padding: 12px 11px 11px;
+    border-right: 2px solid var(--black);
+    border-bottom: 2px solid var(--black);
+    background: var(--off);
+  }
+  .subscore-top{
+    display:flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; row-gap: 2px; column-gap: 6px;
+  }
+  .subscore-label{
+    min-width: 0; font-size: 9.5px; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--black);
+  }
+  .subscore-val{
+    flex: 0 0 auto; margin-left: auto;
+    font-family: 'Archivo Black', var(--font);
+    font-size: 19px; color: var(--black);
+  }
+  .subscore-val small{ font-size: 10px; font-weight: 700; color: var(--ink); opacity: 0.55; margin-left:1px; }
+
+  .meter{ margin-top: 9px; height: 8px; background: var(--off-2); border: 1.5px solid var(--black); position: relative; overflow: hidden; }
+  .meter i{ display:block; height: 100%; }
+  .meter.solid i{ background: var(--black); }
+  .meter.hazard i{ background: repeating-linear-gradient(45deg, var(--black) 0 4px, var(--yellow) 4px 8px); }
+
+  .subscore-status{
+    margin-top: 7px; display:flex; align-items:center; gap:5px;
+    font-size: 8.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--black);
+  }
+  .subscore-status svg{ width:10px; height:10px; flex:none; }
+
+  /* ---------------- generic data panel ---------------- */
+  .panel{ margin: 0 18px; border: 2px solid var(--black); border-top: none; background: var(--off); padding: 13px 14px 13px; }
+  .panel-first{ border-top: 2px solid var(--black); }
+
+  .row{
+    display:flex; align-items:flex-start; justify-content: space-between; gap: 10px;
+    padding: 8px 0; border-top: 1.5px dashed var(--off-3);
+  }
+  .row:first-child{ border-top: none; padding-top: 2px; }
+  .row .k{ font-size: 11.5px; font-weight: 600; color: var(--ink); line-height: 1.5; display:flex; align-items:flex-start; gap:8px; }
+  .row .k svg{ width:14px; height:14px; flex:none; margin-top: 1px; color: var(--black); }
+  .row .v{ font-family: 'Archivo Black', var(--font); font-size: 13px; color: var(--black); text-align: right; white-space: nowrap; flex:none; }
+  .chip{
+    display:inline-block; background: var(--yellow); border: 1.5px solid var(--black);
+    padding: 1px 7px; font-weight: 800; font-size: 12px;
+  }
+
+  .linked{ text-decoration: underline dotted var(--ink); text-underline-offset: 3px; cursor: help; }
+
+  /* rent comparison */
+  .rent-compare{ display:flex; align-items:stretch; gap: 10px; padding: 6px 0 12px; }
+  .rent-col{ flex:1; }
+  .rent-col .lab{ font-size: 8.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); opacity: 0.65; }
+  .rent-col .amt{ margin-top: 5px; font-family: 'Archivo Black', var(--font); font-size: 23px; color: var(--black); }
+  .rent-col.you .amt{ text-decoration: underline solid var(--yellow); text-decoration-thickness: 6px; text-underline-offset: -3px; }
+  .rent-div{ width:2px; background: var(--black); align-self: stretch; }
+  .rent-flag{
+    display:flex; align-items:center; justify-content: center; gap: 8px;
+    margin: 0 0 11px; padding: 9px 10px;
+    border: 2px solid var(--black);
+    background: repeating-linear-gradient(45deg, var(--yellow) 0 9px, var(--off) 9px 18px);
+    color: var(--black); font-size: 11px; font-weight: 800; letter-spacing: 0.02em; text-align: center;
+    text-transform: uppercase;
+  }
+  .rent-flag svg{ width:14px; height:14px; flex: none; }
+
+  /* legal checklist */
+  .check-row{ display:flex; align-items:center; gap: 10px; padding: 8px 0; border-top: 1.5px dashed var(--off-3); }
+  .check-row:first-child{ border-top:none; padding-top:2px; }
+  .check-ico{
+    width: 18px; height:18px; flex: none; display:flex; align-items:center; justify-content:center;
+    border: 2px solid var(--black); color: var(--off); background: var(--black);
+  }
+  .check-ico svg{ width:11px; height:11px; }
+  .check-text{ font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--black); }
+
+  /* accessibility */
+  .a11y-badge{
+    position: relative;
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 8px 12px 8px 18px;
+    border: 2px solid var(--black);
+    background: var(--black);
+    color: var(--yellow);
+    font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    margin: 2px 0 11px;
+    overflow: hidden;
+  }
+  .a11y-badge::before{
+    content: '';
+    position: absolute; left:0; top:0; bottom:0; width: 10px;
+    background: repeating-linear-gradient(45deg, var(--black) 0 4px, var(--yellow) 4px 8px);
+    border-right: 1.5px solid var(--yellow);
+  }
+  .a11y-list{ list-style: none; margin: 0 0 11px; padding: 0; }
+  .a11y-list li{
+    position: relative; padding: 6px 0 6px 17px; font-size: 11.5px; font-weight: 600;
+    color: var(--ink); border-top: 1.5px dashed var(--off-3);
+  }
+  .a11y-list li:first-child{ border-top: none; }
+  .a11y-list li::before{ content: '»'; position: absolute; left: 0; font-weight: 800; color: var(--black); }
+  .disclaimer{
+    font-size: 10px; font-style: italic; font-weight: 600; color: var(--ink);
+    line-height: 1.55; padding: 9px 10px; border: 1.5px dashed var(--black); background: var(--off-2);
+    position: relative;
+  }
+  .disclaimer .note-tag{
+    position:absolute; top:-8px; left: 8px; background: var(--off); padding: 0 5px;
+    font-size: 8px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-style: normal;
+    color: var(--black);
+  }
+
+  /* grade stamp */
+  .stamp{
+    display:inline-flex; align-items:center; justify-content:center;
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--black);
+    font-family: 'Archivo Black', var(--font);
+    font-size: 13px; color: var(--black);
+    transform: rotate(-8deg);
+    flex: none;
+  }
+
+  /* source footnote inside each panel */
+  .src{
+    margin-top: 11px; padding-top: 9px; border-top: 2px solid var(--black);
+    display:flex; align-items:center; gap: 7px;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
+  }
+  .src::before{
+    content: 'SRC'; color: var(--black); background: var(--yellow);
+    border: 1.5px solid var(--black); padding: 1px 5px; font-size: 8px; font-weight: 800;
+  }
+  .src b{ color: var(--black); font-weight: 800; letter-spacing: 0.04em; }
+
+  /* footer */
+  .card-footer{ margin: 22px 0 0; }
+  .card-footer .inner{
+    padding: 16px 18px 16px; border-top: 2px solid var(--black); text-align: center; background: var(--off-2);
+  }
+  .card-footer p{ margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; color: var(--black); text-transform: uppercase; }
+  .card-footer .rule{
+    display:flex; align-items:center; justify-content:center; gap: 10px; margin-bottom: 12px;
+    color: var(--ink); font-size: 9px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.6;
+  }
+  .card-footer .rule::before, .card-footer .rule::after{ content:''; height:1.5px; width: 24px; background: var(--black); }
+  .card-footer .credit{
+    margin-top: 10px; font-size: 8px; font-weight: 500; letter-spacing: 0.04em;
+    color: var(--ink); opacity: 0.55; text-transform: none; font-style: italic;
+  }
+  .card-footer .refno{
+    margin-top: 12px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em;
+    color: var(--ink); opacity: 0.55;
+  }
+
+  @media (max-width: 400px){
+    :root{ --card-w: 100%; }
+    .stage{ padding-left: 8px; padding-right: 8px; }
+    .gauge{ width: 148px; height: 148px; }
+    .gauge-score{ font-size: 40px; }
+    .wordmark{ font-size: 21px; }
+    .building-id h1{ font-size: 18px; }
+  }
+
+  @media (max-width: 340px){
+    .card-header, .building-id{ padding-left: 14px; padding-right: 14px; }
+    .search, .subscores{ margin-left: 14px; margin-right: 14px; }
+    .panel, .sec-label{ margin-left: 14px; margin-right: 14px; padding-left: 11px; padding-right: 11px; }
+    .sec-label{ padding-left: 14px; padding-right: 14px; margin-left:0; margin-right:0; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="stage">
+    <main class="card">
+      <span class="xmark tl" aria-hidden="true"></span>
+      <span class="xmark tr" aria-hidden="true"></span>
+      <span class="xmark bl" aria-hidden="true"></span>
+      <span class="xmark br" aria-hidden="true"></span>
+
+      <div class="tape" aria-hidden="true"></div>
+
+      <!-- HEADER -->
+      <header class="card-header">
+        <div class="brandrow">
+          <div>
+            <div class="wordmark">HOUSECHECK</div>
+            <span class="bar" aria-hidden="true"></span>
+          </div>
+          <svg class="dial" viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor">
+            <circle cx="20" cy="20" r="17" stroke-width="1.4"></circle>
+            <circle cx="20" cy="20" r="1.6" fill="currentColor" stroke="none"></circle>
+            <line x1="20" y1="2" x2="20" y2="7" stroke-width="1.4"></line>
+            <line x1="20" y1="33" x2="20" y2="38" stroke-width="1"></line>
+            <line x1="2" y1="20" x2="7" y2="20" stroke-width="1"></line>
+            <line x1="33" y1="20" x2="38" y2="20" stroke-width="1"></line>
+            <text x="20" y="7.5" text-anchor="middle" font-size="4.5" font-weight="800" fill="currentColor" stroke="none">N</text>
+          </svg>
+        </div>
+        <div class="tagline">Building Health Card <span class="y">/</span> <span class="q">public record</span> edition</div>
+        <div class="coordline">
+          <span><b>LAT/LON</b> 40.688°N · 73.940°W</span>
+          <span><b>REV.</b> A</span>
+        </div>
+      </header>
+
+      <!-- SCALE RULER -->
+      <div class="ruler" aria-hidden="true">
+        <svg viewBox="0 0 300 18" preserveAspectRatio="none">
+          <line x1="0" y1="1" x2="300" y2="1" stroke="var(--black)" stroke-width="1.2"></line>
+          <!-- minor ticks every 10 units -->
+          <g stroke="var(--black)" stroke-width="1">
+            <line x1="0" y1="1" x2="0" y2="6"></line><line x1="10" y1="1" x2="10" y2="4"></line>
+            <line x1="20" y1="1" x2="20" y2="4"></line><line x1="30" y1="1" x2="30" y2="9"></line>
+            <line x1="40" y1="1" x2="40" y2="4"></line><line x1="50" y1="1" x2="50" y2="4"></line>
+            <line x1="60" y1="1" x2="60" y2="9"></line><line x1="70" y1="1" x2="70" y2="4"></line>
+            <line x1="80" y1="1" x2="80" y2="4"></line><line x1="90" y1="1" x2="90" y2="9"></line>
+            <line x1="100" y1="1" x2="100" y2="4"></line><line x1="110" y1="1" x2="110" y2="4"></line>
+            <line x1="120" y1="1" x2="120" y2="9"></line><line x1="130" y1="1" x2="130" y2="4"></line>
+            <line x1="140" y1="1" x2="140" y2="4"></line><line x1="150" y1="1" x2="150" y2="9"></line>
+            <line x1="160" y1="1" x2="160" y2="4"></line><line x1="170" y1="1" x2="170" y2="4"></line>
+            <line x1="180" y1="1" x2="180" y2="9"></line><line x1="190" y1="1" x2="190" y2="4"></line>
+            <line x1="200" y1="1" x2="200" y2="4"></line><line x1="210" y1="1" x2="210" y2="9"></line>
+            <line x1="220" y1="1" x2="220" y2="4"></line><line x1="230" y1="1" x2="230" y2="4"></line>
+            <line x1="240" y1="1" x2="240" y2="9"></line><line x1="250" y1="1" x2="250" y2="4"></line>
+            <line x1="260" y1="1" x2="260" y2="4"></line><line x1="270" y1="1" x2="270" y2="9"></line>
+            <line x1="280" y1="1" x2="280" y2="4"></line><line x1="290" y1="1" x2="290" y2="4"></line>
+            <line x1="300" y1="1" x2="300" y2="6"></line>
+          </g>
+        </svg>
+      </div>
+      <div class="ruler-cap">
+        <span>0 mm</span><span>SCALE N.T.S.</span><span>390 mm</span>
+      </div>
+
+      <!-- SEARCH -->
+      <form class="search" role="search" onsubmit="return false;">
+        <span class="search-tab">Search</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" value="460 Macon St, Brooklyn" readonly aria-label="Building search">
+      </form>
+
+      <!-- BUILDING ID -->
+      <div class="building-id">
+        <h1>460 Macon Street</h1>
+        <div class="building-meta">Bedford-Stuyvesant<span class="sep">/</span>BBL 3018420001</div>
+      </div>
+
+      <!-- SCORE CENTERPIECE -->
+      <div class="sec-label">
+        <span class="name">Overall Health Score</span>
+        <span class="code">FIG. 01</span>
+      </div>
+      <div class="score-panel">
+        <span class="corner-tag">Composite Index</span>
+        <div class="gauge">
+          <span class="gauge-deg d0">0°</span>
+          <span class="gauge-deg d90">90°</span>
+          <span class="gauge-deg d180">180°</span>
+          <span class="gauge-deg d270">270°</span>
+          <svg viewBox="0 0 120 120">
+            <circle class="ticks" cx="60" cy="60" r="58" stroke-width="1" stroke-dasharray="1 8.6"></circle>
+            <circle class="track" cx="60" cy="60" r="50" stroke-width="10"></circle>
+            <circle class="fill" cx="60" cy="60" r="50" stroke-width="10"
+                    stroke-dasharray="314.16" stroke-dashoffset="135.09"></circle>
+            <circle class="fill-edge" cx="60" cy="60" r="50" stroke-width="10" fill="none"
+                    stroke-dasharray="1.4 312.76" stroke-dashoffset="135.09"></circle>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-score num">57<sup>/100</sup></div>
+            <div class="gauge-of">Composite Score</div>
+          </div>
+        </div>
+
+        <div class="score-tag"><span class="q">Fair</span></div>
+
+        <div class="score-scale" aria-hidden="true"><i></i><i class="on"></i><i></i></div>
+        <div class="score-scale-labels" aria-hidden="true"><span>Poor</span><span>Fair</span><span>Good</span></div>
+      </div>
+
+      <!-- SUB-SCORES -->
+      <div class="sec-label">
+        <span class="name">Component Breakdown</span>
+        <span class="code">FIG. 02 / 4 SEG</span>
+      </div>
+      <div class="subscores">
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Condition</span>
+            <span class="subscore-val num">56<small>/100</small></span>
+          </div>
+          <div class="meter hazard"><i style="width:56%"></i></div>
+          <div class="subscore-status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3 L22 20 H2 Z"></path><line x1="12" y1="9" x2="12" y2="14"></line></svg>
+            Caution
+          </div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Legal</span>
+            <span class="subscore-val num">100<small>/100</small></span>
+          </div>
+          <div class="meter solid"><i style="width:100%"></i></div>
+          <div class="subscore-status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Protected
+          </div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Neighborhood</span>
+            <span class="subscore-val num">40<small>/100</small></span>
+          </div>
+          <div class="meter hazard"><i style="width:40%"></i></div>
+          <div class="subscore-status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3 L22 20 H2 Z"></path><line x1="12" y1="9" x2="12" y2="14"></line></svg>
+            Caution
+          </div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Accessibility</span>
+            <span class="subscore-val num">30<small>/100</small></span>
+          </div>
+          <div class="meter hazard"><i style="width:30%"></i></div>
+          <div class="subscore-status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3 L22 20 H2 Z"></path><line x1="12" y1="9" x2="12" y2="14"></line></svg>
+            Limited
+          </div>
+        </div>
+      </div>
+
+      <!-- RENT FAIRNESS -->
+      <div class="sec-label">
+        <span class="name">Rent Fairness</span>
+        <span class="code">FIG. 03</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="rent-compare">
+          <div class="rent-col you">
+            <div class="lab">Your Rent</div>
+            <div class="amt num">$2,900</div>
+          </div>
+          <div class="rent-div" aria-hidden="true"></div>
+          <div class="rent-col">
+            <div class="lab">Tract Median</div>
+            <div class="amt num">$2,400</div>
+          </div>
+        </div>
+        <div class="rent-flag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+          <span class="num">21% above the neighborhood median</span>
+        </div>
+        <div class="src"><b>Census ACS B25064</b></div>
+      </div>
+
+      <!-- BUILDING CONDITION -->
+      <div class="sec-label">
+        <span class="name">Building Condition</span>
+        <span class="code">FIG. 04</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="row">
+          <div class="k">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3 L22 20 H2 Z"></path><line x1="12" y1="9" x2="12" y2="14"></line></svg>
+            1 open Class C <span class="q">hazardous</span>
+          </div>
+          <div class="v"><span class="chip">C</span></div>
+        </div>
+        <div class="row">
+          <div class="k">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="4" width="16" height="16"></rect></svg>
+            1 open Class B
+          </div>
+          <div class="v">B</div>
+        </div>
+        <div class="row">
+          <div class="k">Open since 2025</div>
+          <div class="v">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+          </div>
+        </div>
+        <div class="src"><b>NYC HPD</b></div>
+      </div>
+
+      <!-- LEGAL PROTECTIONS -->
+      <div class="sec-label">
+        <span class="name">Legal Protections</span>
+        <span class="code">FIG. 05</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="check-row">
+          <span class="check-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span class="check-text">Rent stabilized</span>
+        </div>
+        <div class="check-row">
+          <span class="check-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span class="check-text">Good Cause covered</span>
+        </div>
+        <div class="src"><b>DHCR / NY HCR</b></div>
+      </div>
+
+      <!-- ACCESSIBILITY -->
+      <div class="sec-label">
+        <span class="name">Accessibility</span>
+        <span class="code">FIG. 06</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="a11y-badge">Step-free access: Lower</div>
+        <ul class="a11y-list">
+          <li>No elevator on record</li>
+          <li>4-story walk-up</li>
+          <li>ADA subway 640 m away</li>
+        </ul>
+        <div class="disclaimer">
+          <span class="note-tag">Note</span>
+          Access likelihood from public records — verify in person.
+        </div>
+        <div class="src"><b>DOB / MTA</b></div>
+      </div>
+
+      <!-- NEIGHBORHOOD -->
+      <div class="sec-label">
+        <span class="name">Neighborhood</span>
+        <span class="code">FIG. 07</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="row">
+          <div class="k">Recent 311 complaints nearby</div>
+          <div class="v"><span class="chip">30</span></div>
+        </div>
+        <div class="row">
+          <div class="k">Restaurant grades mostly <span class="q">A</span></div>
+          <div class="v"><span class="stamp">A</span></div>
+        </div>
+        <div class="src"><b>NYC 311 / DOHMH</b></div>
+      </div>
+
+      <!-- FOOTER -->
+      <footer class="card-footer">
+        <div class="tape" aria-hidden="true"></div>
+        <div class="inner">
+          <div class="rule">End of Spec Sheet</div>
+          <p>Every number links to a NYC or Census source · data from Jul 2026</p>
+          <div class="refno">REF NO. 3018420001&thinsp;—&thinsp;001 / A</div>
+          <div class="credit">Independent design study in an industrial-workwear graphic language. Not an official product of, affiliated with, or endorsed by any brand.</div>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+
+</body>
+</html>

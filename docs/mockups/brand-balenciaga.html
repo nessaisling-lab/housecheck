@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>HouseCheck — Building Health Card (Brutalist Maison Study)</title>
+<meta name="description" content="Brutalist high-fashion themed design study of the HouseCheck building health card. Original homage — not an official brand product.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#050505;
+    --near-black:#111111;
+    --white:#f7f7f5;
+    --off:#eeeeec;
+    --grey:#8f8f8c;
+    --grey-line:#cfcfcb;
+    --grey-dark:#3a3a38;
+    --font-display:'Anton','Arial Narrow',Impact,sans-serif;
+    --font-head:'Archivo Narrow','Arial Narrow',Arial,sans-serif;
+    --font-mono:'JetBrains Mono','Courier New',monospace;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; border-radius:0 !important; }
+
+  html{ -webkit-text-size-adjust:100%; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    width:100%;
+    overflow-x:hidden;
+    background:var(--black);
+    color:var(--black);
+    font-family:var(--font-head);
+    display:flex;
+    justify-content:center;
+    padding:clamp(0px,4vw,40px) 0;
+  }
+
+  img,svg{ display:block; }
+
+  .stage{
+    width:100%;
+    max-width:430px;
+  }
+
+  .card{
+    position:relative;
+    width:100%;
+    background:var(--white);
+    border:1.5px solid var(--black);
+  }
+
+  /* ---------- shared type utilities ---------- */
+  .mono{
+    font-family:var(--font-mono);
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+  }
+  .label{
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--grey);
+  }
+  .label.on-black{ color:#bdbdbb; }
+  .idx{
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.1em;
+    color:var(--grey);
+  }
+  .idx.on-black{ color:#8a8a88; }
+
+  .block{
+    padding:20px clamp(16px,5vw,24px);
+    border-bottom:1.5px solid var(--black);
+  }
+  .block:last-of-type{ border-bottom:none; }
+
+  .row-between{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+
+  /* ---------- top strip ---------- */
+  .topstrip{
+    background:var(--black);
+    color:var(--white);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 16px;
+  }
+  .topstrip .mark{
+    font-family:var(--font-mono);
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+  }
+  .topstrip .tag{
+    font-family:var(--font-mono);
+    font-size:9px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:#a8a8a6;
+  }
+
+  /* ---------- search ---------- */
+  .searchblock{ padding:16px clamp(16px,5vw,24px); border-bottom:1.5px solid var(--black); }
+  .searchbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border:1.5px solid var(--black);
+    padding:12px 14px;
+    background:var(--white);
+  }
+  .searchbar svg{ flex:none; width:16px; height:16px; }
+  .searchbar span{
+    font-family:var(--font-head);
+    font-weight:500;
+    font-size:15px;
+    letter-spacing:0.01em;
+    color:var(--black);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  /* ---------- building identity ---------- */
+  .buildingblock{ padding-top:22px; padding-bottom:22px; }
+  .building-name{
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:clamp(26px,7.6vw,36px);
+    line-height:0.98;
+    letter-spacing:-0.01em;
+    text-transform:uppercase;
+    margin-top:8px;
+    overflow-wrap:break-word;
+  }
+  .building-sub{
+    margin-top:10px;
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.06em;
+    color:var(--grey-dark);
+    overflow-wrap:break-word;
+  }
+
+  /* ---------- score hero ---------- */
+  .hero{
+    background:var(--black);
+    color:var(--white);
+    padding:26px clamp(16px,5vw,24px) 24px;
+    border-bottom:1.5px solid var(--black);
+  }
+  .hero-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+  }
+  .score-figure{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin-top:6px;
+  }
+  .score-num{
+    font-family:var(--font-display);
+    font-size:clamp(104px,32vw,168px);
+    line-height:0.82;
+    letter-spacing:-0.01em;
+  }
+  .score-den{
+    font-family:var(--font-mono);
+    font-size:clamp(16px,4.4vw,20px);
+    color:#b7b7b5;
+    letter-spacing:0.05em;
+    transform:translateY(-6px);
+  }
+  .score-label{
+    margin-top:2px;
+    font-family:var(--font-display);
+    font-size:clamp(22px,6.4vw,30px);
+    letter-spacing:0.02em;
+    text-transform:uppercase;
+  }
+  .meter{
+    margin-top:20px;
+  }
+  .meter-track{
+    position:relative;
+    width:100%;
+    height:9px;
+    background:var(--grey-dark);
+  }
+  .meter-fill{
+    position:absolute;
+    top:0; left:0; bottom:0;
+    background:var(--white);
+    width:57%;
+  }
+  .meter-mark{
+    position:absolute;
+    top:-4px;
+    left:57%;
+    width:2px;
+    height:17px;
+    background:var(--white);
+    transform:translateX(-1px);
+  }
+  .meter-ticks{
+    display:flex;
+    justify-content:space-between;
+    margin-top:8px;
+    font-family:var(--font-mono);
+    font-size:9px;
+    color:#8a8a88;
+    letter-spacing:0.04em;
+  }
+
+  /* ---------- sub-score grid ---------- */
+  .gridwrap{ border-bottom:1.5px solid var(--black); }
+  .subgrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1.5px;
+    background:var(--black);
+  }
+  .subcell{
+    background:var(--white);
+    padding:18px clamp(14px,4.4vw,20px) 20px;
+  }
+  .subcell .label{ margin-bottom:10px; }
+  .subnum-row{
+    display:flex;
+    align-items:baseline;
+    gap:4px;
+  }
+  .subnum{
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:clamp(38px,10.4vw,50px);
+    line-height:1;
+    letter-spacing:-0.01em;
+  }
+  .subden{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--grey);
+  }
+  .subrule{
+    margin-top:10px;
+    height:3px;
+    width:100%;
+    background:var(--grey-line);
+  }
+  .subrule i{
+    display:block;
+    height:100%;
+    background:var(--black);
+  }
+
+  /* ---------- generic content ---------- */
+  .stat-lead{
+    margin-top:10px;
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:clamp(18px,5.2vw,22px);
+    line-height:1.2;
+    text-transform:uppercase;
+    letter-spacing:0.005em;
+  }
+  .stat-lead .lo{
+    font-family:var(--font-mono);
+    font-weight:400;
+    font-size:11px;
+    color:var(--grey);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+  .stat-compare{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    margin-top:10px;
+    flex-wrap:wrap;
+  }
+  .stat-compare .big{
+    font-family:var(--font-display);
+    font-size:clamp(30px,8.4vw,38px);
+  }
+  .stat-compare .small{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--grey);
+    letter-spacing:0.04em;
+  }
+  .callout{
+    margin-top:14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:clamp(17px,4.8vw,20px);
+    text-transform:uppercase;
+    letter-spacing:0.01em;
+  }
+  .callout svg{ flex:none; width:14px; height:14px; }
+
+  .tag-inline{
+    display:inline-block;
+    background:var(--black);
+    color:var(--white);
+    font-family:var(--font-mono);
+    font-weight:700;
+    font-size:11px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    padding:6px 10px;
+    margin-top:12px;
+  }
+  .plainline{
+    margin-top:10px;
+    font-family:var(--font-head);
+    font-size:15px;
+    color:var(--near-black);
+  }
+  .plainline + .plainline{ margin-top:6px; }
+  .plainline b{ font-weight:700; }
+
+  .source{
+    margin-top:16px;
+    padding-top:12px;
+    border-top:1px solid var(--grey-line);
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--grey);
+  }
+
+  /* ---------- legal protections ---------- */
+  .checkrow{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 0;
+    border-top:1px solid var(--grey-line);
+  }
+  .checkrow:first-of-type{ border-top:none; margin-top:8px; }
+  .checkbox{
+    flex:none;
+    width:24px;
+    height:24px;
+    background:var(--black);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .checkbox svg{ width:14px; height:14px; }
+  .checkrow-text{
+    font-family:var(--font-head);
+    font-weight:600;
+    font-size:16px;
+    text-transform:uppercase;
+    letter-spacing:0.01em;
+  }
+
+  /* ---------- accessibility ---------- */
+  .badge{
+    display:inline-block;
+    background:var(--black);
+    color:var(--white);
+    font-family:var(--font-mono);
+    font-weight:700;
+    font-size:11px;
+    letter-spacing:0.09em;
+    text-transform:uppercase;
+    padding:8px 12px;
+    margin-top:10px;
+  }
+  .a11y-detail{
+    margin-top:14px;
+    font-family:var(--font-head);
+    font-size:14.5px;
+    line-height:1.5;
+    color:var(--near-black);
+  }
+  .a11y-disclaimer{
+    margin-top:10px;
+    font-family:var(--font-head);
+    font-style:italic;
+    font-size:12.5px;
+    color:var(--grey);
+    line-height:1.4;
+  }
+
+  /* ---------- footer ---------- */
+  .foot{
+    background:var(--black);
+    color:#cfcfcd;
+    padding:18px clamp(16px,5vw,24px) 20px;
+    text-align:center;
+  }
+  .foot-main{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    line-height:1.6;
+  }
+  .foot-disclaimer{
+    margin-top:10px;
+    font-family:var(--font-mono);
+    font-size:9px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:#7c7c7a;
+    line-height:1.5;
+  }
+  .foot-rule{
+    width:32px;
+    height:1.5px;
+    background:#4a4a48;
+    margin:0 auto 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="card">
+
+    <!-- top strip -->
+    <div class="topstrip">
+      <span class="mark">HouseCheck</span>
+      <span class="tag">Building&nbsp;Health&nbsp;Card</span>
+    </div>
+
+    <!-- search -->
+    <div class="searchblock">
+      <div class="label" style="margin-bottom:8px;">Search</div>
+      <div class="searchbar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#050505" stroke-width="2.4">
+          <circle cx="10.5" cy="10.5" r="6.5"></circle>
+          <line x1="20" y1="20" x2="15.3" y2="15.3"></line>
+        </svg>
+        <span>460 Macon St, Brooklyn</span>
+      </div>
+    </div>
+
+    <!-- building identity -->
+    <div class="block buildingblock">
+      <div class="row-between">
+        <div class="label">Subject&nbsp;Property</div>
+        <div class="idx">N&#176;&nbsp;01</div>
+      </div>
+      <div class="building-name">460 Macon Street</div>
+      <div class="building-sub">Bedford-Stuyvesant&nbsp;&middot;&nbsp;BBL 3018420001</div>
+    </div>
+
+    <!-- score hero -->
+    <div class="hero">
+      <div class="hero-top">
+        <div class="label on-black">Overall&nbsp;Score</div>
+        <div class="idx on-black">N&#176;&nbsp;02</div>
+      </div>
+      <div class="score-figure">
+        <div class="score-num">57</div>
+        <div class="score-den">/&nbsp;100</div>
+      </div>
+      <div class="score-label">Fair</div>
+      <div class="meter">
+        <div class="meter-track">
+          <div class="meter-fill"></div>
+          <div class="meter-mark"></div>
+        </div>
+        <div class="meter-ticks">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- sub-score grid -->
+    <div class="gridwrap">
+      <div class="subgrid">
+        <div class="subcell">
+          <div class="label">Condition</div>
+          <div class="subnum-row"><span class="subnum">56</span><span class="subden">/100</span></div>
+          <div class="subrule"><i style="width:56%;"></i></div>
+        </div>
+        <div class="subcell">
+          <div class="label">Legal</div>
+          <div class="subnum-row"><span class="subnum">100</span><span class="subden">/100</span></div>
+          <div class="subrule"><i style="width:100%;"></i></div>
+        </div>
+        <div class="subcell">
+          <div class="label">Neighborhood</div>
+          <div class="subnum-row"><span class="subnum">40</span><span class="subden">/100</span></div>
+          <div class="subrule"><i style="width:40%;"></i></div>
+        </div>
+        <div class="subcell">
+          <div class="label">Accessibility</div>
+          <div class="subnum-row"><span class="subnum">30</span><span class="subden">/100</span></div>
+          <div class="subrule"><i style="width:30%;"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- rent fairness -->
+    <div class="block">
+      <div class="row-between">
+        <div class="label">Rent&nbsp;Fairness</div>
+        <div class="idx">N&#176;&nbsp;03</div>
+      </div>
+      <div class="stat-compare">
+        <span class="big">$2,900</span>
+        <span class="small">vs $2,400 tract median</span>
+      </div>
+      <div class="callout">
+        <svg viewBox="0 0 24 24" fill="#050505"><polygon points="12,3 22,20 2,20"></polygon></svg>
+        <span>21% above the neighborhood median</span>
+      </div>
+      <div class="source">Source &mdash; Census ACS B25064</div>
+    </div>
+
+    <!-- building condition -->
+    <div class="block">
+      <div class="row-between">
+        <div class="label">Building&nbsp;Condition</div>
+        <div class="idx">N&#176;&nbsp;04</div>
+      </div>
+      <div class="tag-inline">1 open Class C &mdash; hazardous</div>
+      <div class="plainline" style="margin-top:14px;">1 open Class B</div>
+      <div class="plainline">Open since 2025</div>
+      <div class="source">Source &mdash; NYC HPD</div>
+    </div>
+
+    <!-- legal protections -->
+    <div class="block">
+      <div class="row-between">
+        <div class="label">Legal&nbsp;Protections</div>
+        <div class="idx">N&#176;&nbsp;05</div>
+      </div>
+      <div class="checkrow">
+        <div class="checkbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f7f7f5" stroke-width="3" stroke-linecap="square">
+            <polyline points="4,13 9,18 20,5"></polyline>
+          </svg>
+        </div>
+        <div class="checkrow-text">Rent stabilized</div>
+      </div>
+      <div class="checkrow">
+        <div class="checkbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f7f7f5" stroke-width="3" stroke-linecap="square">
+            <polyline points="4,13 9,18 20,5"></polyline>
+          </svg>
+        </div>
+        <div class="checkrow-text">Good Cause covered</div>
+      </div>
+      <div class="source">Source &mdash; DHCR / NY HCR</div>
+    </div>
+
+    <!-- accessibility -->
+    <div class="block">
+      <div class="row-between">
+        <div class="label">Accessibility</div>
+        <div class="idx">N&#176;&nbsp;06</div>
+      </div>
+      <div class="badge">Step-free access: Lower</div>
+      <div class="a11y-detail">No elevator on record &middot; 4-story walk-up &middot; ADA subway 640 m away</div>
+      <div class="a11y-disclaimer">Access likelihood from public records &mdash; verify in person.</div>
+      <div class="source">Source &mdash; DOB / MTA</div>
+    </div>
+
+    <!-- neighborhood -->
+    <div class="block">
+      <div class="row-between">
+        <div class="label">Neighborhood</div>
+        <div class="idx">N&#176;&nbsp;07</div>
+      </div>
+      <div class="plainline" style="margin-top:12px; font-weight:600;">30 recent 311 complaints nearby</div>
+      <div class="plainline">Restaurant grades mostly A</div>
+      <div class="source">Source &mdash; NYC 311 / DOHMH</div>
+    </div>
+
+    <!-- footer -->
+    <div class="foot">
+      <div class="foot-rule"></div>
+      <div class="foot-main">Every number links to a NYC or Census source<br>&middot; data from Jul 2026 &middot;</div>
+      <div class="foot-disclaimer">Independent design study &mdash; brutalist high-fashion homage.<br>Not an official brand product. No trademarks reproduced.</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

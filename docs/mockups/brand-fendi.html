@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HouseCheck — Building Health Card (Roman Luxury Study)</title>
+<meta name="description" content="Original design study of a HouseCheck Building Health Card in a Roman-modernist luxury aesthetic — homage only, not affiliated with or endorsed by any fashion house. No real trademarks, logos, or wordmarks are reproduced.">
+
+<!-- Google Fonts: modern serif (display/editorial) + clean grotesque sans (labels/UI), always paired with system fallbacks below -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     HOUSECHECK — "ROMAN LUXURY" THEME (design study, homage only)
+     Palette: camel / tan / warm brown + black + cream.
+     Pattern: original interlocking-arch motif invented for this
+     study — NOT any real house's monogram, logo, or wordmark.
+     ============================================================ */
+
+  :root{
+    --font-serif: 'Cormorant Garamond', 'Times New Roman', Georgia, 'Iowan Old Style', serif;
+    --font-sans: 'Archivo', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+    /* black + cream + camel/tan/brown */
+    --black: #16110c;
+    --black-soft: #1f1811;
+    --cream: #f7efe2;
+    --cream-2: #efe3cc;
+    --cream-3: #e7d8b9;
+
+    --camel: #b98a4f;      /* decorative: lines, icons, large glyphs */
+    --camel-deep: #7c5730;  /* text-safe: labels, rules, borders */
+    --brown: #4a3018;       /* headings on cream */
+    --ink: #241a10;         /* primary body text on cream */
+    --gold: #a4772f;        /* accent numerals / pill borders */
+
+    --good: #4b5e40;    /* muted olive — legal / protected */
+    --fair: #8a5a20;    /* deep ochre — caution */
+    --poor: #7a3226;    /* muted brick — limited / hazard */
+
+    --card-w: 390px;
+    --hair: 1px solid var(--camel-deep);
+    --hair-soft: 1px solid rgba(124,87,48,0.28);
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+
+  html{ background: var(--black); }
+
+  body{
+    position: relative;
+    font-family: var(--font-sans);
+    color: var(--ink);
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(ellipse 900px 480px at 50% -8%, rgba(185,138,79,0.14), transparent 62%),
+      radial-gradient(ellipse 700px 500px at 50% 108%, rgba(185,138,79,0.08), transparent 60%),
+      var(--black);
+  }
+
+  /* fine suede-grain overlay across the whole page */
+  body::before{
+    content:'';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: .5;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  ::selection{ background: var(--camel); color: var(--cream); }
+
+  .num{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
+  /* hidden defs: the original interlocking-arch pattern used throughout */
+  .defs-holder{ position:absolute; width:0; height:0; overflow:hidden; }
+
+  /* full-page tiled motif, very low opacity — reads as woven canvas, not a symbol */
+  .motif-bg{
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    color: var(--camel);
+    opacity: .07;
+  }
+
+  .stage{
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 30px 16px 52px;
+  }
+
+  .card{
+    width: 100%;
+    max-width: var(--card-w);
+    background: var(--cream);
+    position: relative;
+    box-shadow:
+      0 0 0 1px var(--camel-deep),
+      0 0 0 6px var(--cream),
+      0 0 0 7px var(--camel-deep),
+      0 30px 70px -24px rgba(10,7,4,0.65),
+      0 8px 24px -12px rgba(10,7,4,0.45);
+    animation: rise .6s ease-out both;
+  }
+  @keyframes rise{
+    from{ opacity: 0; transform: translateY(10px); }
+    to{ opacity: 1; transform: translateY(0); }
+  }
+
+  /* fine suede grain on the card face itself */
+  .card::after{
+    content:'';
+    position:absolute; inset:0;
+    pointer-events:none;
+    opacity:.6;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n2'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0.29  0 0 0 0 0.21  0 0 0 0 0.12  0 0 0 0.045 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n2)'/></svg>");
+  }
+
+  /* decorative trim strip — the invented arch motif, worn like a textile border */
+  .trim{
+    position: relative;
+    height: 20px;
+    border-bottom: var(--hair);
+    overflow: hidden;
+    background: var(--cream-2);
+  }
+  .trim svg{ width:100%; height:100%; display:block; color: var(--camel-deep); opacity:.6; }
+
+  /* ---------------- header ---------------- */
+  .card-header{
+    padding: 22px 20px 14px;
+    text-align: center;
+  }
+  .wordmark-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 10px;
+  }
+  .wordmark-row .tick{ width:14px; height:1px; background: var(--camel-deep); flex:none; }
+  .wordmark{
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    color: var(--brown);
+    text-transform: uppercase;
+  }
+  .tagline{
+    margin-top: 8px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    color: var(--camel-deep);
+  }
+
+  /* search bar */
+  .search{
+    margin: 16px 20px 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background: #fbf6ea;
+    border: var(--hair);
+    padding: 12px 14px;
+  }
+  .search .go{
+    color: var(--camel-deep);
+    width: 15px; height: 15px;
+    flex: none;
+    display:flex;
+  }
+  .search .go svg{ width:100%; height:100%; }
+  .search input{
+    all: unset;
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 15px;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+  }
+
+  /* building id */
+  .building-id{
+    padding: 18px 20px 2px;
+    text-align: center;
+  }
+  .building-id h1{
+    margin: 0;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 27px;
+    letter-spacing: 0.01em;
+    color: var(--brown);
+  }
+  .building-meta{
+    margin-top: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--camel-deep);
+  }
+  .building-meta .sep{ color: var(--camel); margin: 0 8px; }
+
+  /* section label: roman numeral + tracked name + trailing rule */
+  .sec-label{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    padding: 0 20px;
+    margin-top: 26px;
+  }
+  .sec-label .numeral{
+    flex: none;
+    width: 20px; height: 20px;
+    border: 1px solid var(--camel-deep);
+    border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 11px;
+    color: var(--camel-deep);
+  }
+  .sec-label .name{
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brown);
+    white-space: nowrap;
+  }
+  .sec-label .rule{
+    flex: 1;
+    height: 1px;
+    background: repeating-linear-gradient(90deg, var(--camel-deep) 0 3px, transparent 3px 6px);
+    opacity: .55;
+  }
+
+  /* ---------------- score centerpiece ---------------- */
+  .score-panel{
+    margin: 12px 20px 0;
+    border: var(--hair);
+    background: var(--cream-2);
+    padding: 26px 16px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .gauge{
+    position: relative;
+    width: 188px;
+    height: 188px;
+  }
+  .gauge svg{ width:100%; height:100%; }
+  .motif-disc{ color: var(--camel); opacity:.16; }
+  .gauge .track{ stroke: var(--cream-3); fill:none; }
+  .gauge .ticks{ stroke: var(--camel-deep); fill:none; opacity:.4; }
+  .gauge .fill{
+    stroke: var(--gold);
+    fill:none;
+    stroke-linecap: round;
+  }
+  .gauge-center{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction: column;
+    align-items:center;
+    justify-content:center;
+  }
+  .gauge-score{
+    font-family: var(--font-serif);
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--brown);
+  }
+  .gauge-score sup{
+    font-size: 16px;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--camel-deep);
+    margin-left: 3px;
+    top: -1.6em;
+  }
+  .gauge-of{
+    margin-top: 6px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--camel-deep);
+  }
+
+  .score-tag{
+    margin-top: 16px;
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 6px 18px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 15px;
+    color: var(--brown);
+    border: 1px solid var(--camel-deep);
+    background: var(--cream);
+  }
+  .score-tag .diamond{
+    width:6px; height:6px;
+    background: var(--gold);
+    transform: rotate(45deg);
+  }
+
+  .score-scale{
+    margin-top: 16px;
+    display:flex;
+    align-items:center;
+    gap: 3px;
+    width: 100%;
+    max-width: 250px;
+  }
+  .score-scale i{ flex:1; height:2px; background: var(--poor); }
+  .score-scale i:nth-child(2){ background: var(--fair); }
+  .score-scale i:nth-child(3){ background: var(--good); }
+  .score-scale-labels{
+    display:flex;
+    justify-content: space-between;
+    width:100%;
+    max-width: 250px;
+    margin-top: 6px;
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--camel-deep);
+  }
+
+  /* ---------------- sub-score grid ---------------- */
+  .subscores{
+    margin: 16px 20px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: var(--hair);
+    border-left: var(--hair);
+  }
+  .subscore{
+    min-width: 0;
+    padding: 15px 14px 14px;
+    border-right: var(--hair);
+    border-bottom: var(--hair);
+    background: var(--cream);
+  }
+  .subscore-label{
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--camel-deep);
+  }
+  .subscore-val{
+    margin-top: 4px;
+    font-family: var(--font-serif);
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--brown);
+    line-height: 1;
+  }
+  .subscore-val small{
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--camel-deep);
+    margin-left: 2px;
+  }
+  .meter{
+    margin-top: 10px;
+    height: 2px;
+    background: var(--cream-3);
+    position: relative;
+  }
+  .meter i{ display:block; height: 100%; }
+  .meter.good i{ background: var(--good); }
+  .meter.fair i{ background: var(--fair); }
+  .meter.poor i{ background: var(--poor); }
+  .subscore-status{
+    margin-top: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .status-good{ color: var(--good); }
+  .status-fair{ color: var(--fair); }
+  .status-poor{ color: var(--poor); }
+
+  /* ---------------- generic data panel ---------------- */
+  .panel{
+    margin: 0 20px;
+    border: var(--hair);
+    border-top: none;
+    background: var(--cream);
+    padding: 16px 16px 14px;
+  }
+  .panel-first{ border-top: var(--hair); }
+
+  .row{
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-top: var(--hair-soft);
+  }
+  .row:first-child{ border-top: none; padding-top: 1px; }
+  .row .k{
+    font-size: 12.5px;
+    color: var(--ink);
+    line-height: 1.5;
+    display:flex;
+    align-items:flex-start;
+    gap: 8px;
+  }
+  .row .k .muted{ color: var(--camel-deep); }
+  .marker{
+    flex: none;
+    width: 6px; height: 6px;
+    margin-top: 5px;
+    transform: rotate(45deg);
+  }
+  .marker.poor{ background: var(--poor); }
+  .marker.fair{ background: var(--fair); }
+  .marker.good{ background: var(--good); }
+  .row .v{
+    flex: none;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 15px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .row .v.poor{ color: var(--poor); }
+  .row .v.fair{ color: var(--fair); }
+  .row .v.good{ color: var(--good); }
+
+  /* rent comparison */
+  .rent-compare{
+    display:flex;
+    align-items:stretch;
+    gap: 14px;
+    padding: 4px 0 14px;
+  }
+  .rent-col{ flex:1; min-width:0; }
+  .rent-col .lab{
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--camel-deep);
+  }
+  .rent-col .amt{
+    margin-top: 6px;
+    font-family: var(--font-serif);
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--brown);
+  }
+  .rent-col.you .amt{ color: var(--fair); }
+  .rent-div{ width:1px; background: var(--camel-deep); opacity:.3; align-self: stretch; }
+
+  .rent-flag{
+    display:flex;
+    align-items:center;
+    justify-content: center;
+    gap: 9px;
+    margin: 0 0 14px;
+    padding: 11px 12px;
+    border: 1px solid var(--camel-deep);
+    background: var(--cream-2);
+    color: var(--fair);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 14px;
+    text-align: center;
+  }
+  .rent-flag svg{ width:13px; height:13px; flex: none; }
+
+  /* legal checklist */
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: var(--hair-soft);
+  }
+  .check-row:first-child{ border-top:none; padding-top:1px; }
+  .check-ico{
+    width: 20px; height:20px;
+    flex: none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border: 1px solid var(--camel-deep);
+    border-radius: 50%;
+    color: var(--good);
+  }
+  .check-ico svg{ width:10px; height:10px; }
+  .check-text{
+    font-family: var(--font-serif);
+    font-size: 15.5px;
+    color: var(--ink);
+  }
+
+  /* accessibility */
+  .a11y-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 14px;
+    border: 1px solid var(--camel-deep);
+    color: var(--poor);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin: 2px 0 12px;
+  }
+  .a11y-list{
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+  }
+  .a11y-list li{
+    position: relative;
+    padding: 7px 0 7px 20px;
+    font-size: 12.5px;
+    color: var(--ink);
+    border-top: var(--hair-soft);
+  }
+  .a11y-list li:first-child{ border-top: none; }
+  .a11y-list li .arch{
+    position:absolute; left:0; top: 9px;
+    width: 11px; height: 9px;
+    color: var(--camel-deep);
+  }
+  .a11y-list li .arch svg{ width:100%; height:100%; }
+
+  .disclaimer{
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 12px;
+    color: var(--camel-deep);
+    line-height: 1.55;
+    padding-top: 10px;
+    border-top: 1px dashed var(--camel-deep);
+  }
+
+  /* source footnote inside each panel */
+  .src{
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: var(--hair-soft);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--camel-deep);
+  }
+  .src span{ opacity: .55; margin-right: 4px; }
+
+  /* footer */
+  .card-footer{
+    margin: 28px 0 0;
+    padding: 18px 20px 24px;
+    border-top: var(--hair);
+    text-align: center;
+    background: var(--cream-2);
+  }
+  .card-footer .rule{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .card-footer .rule .diamond{
+    width:5px; height:5px;
+    background: var(--gold);
+    transform: rotate(45deg);
+    flex: none;
+  }
+  .card-footer .rule .line{
+    height:1px;
+    width: 34px;
+    background: var(--camel-deep);
+    opacity: .5;
+  }
+  .card-footer p{
+    margin: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--brown);
+    line-height: 1.6;
+  }
+
+  @media (max-width: 400px){
+    :root{ --card-w: 100%; }
+    .stage{ padding-left: 10px; padding-right: 10px; }
+    .gauge{ width: 158px; height: 158px; }
+    .gauge-score{ font-size: 46px; }
+    .building-id h1{ font-size: 23px; }
+    .subscore-val{ font-size: 25px; }
+  }
+
+  @media (max-width: 340px){
+    .sec-label, .panel, .score-panel, .subscores, .building-id, .search, .card-header, .card-footer{
+      margin-left: 0; margin-right: 0;
+    }
+    .sec-label{ padding-left: 14px; padding-right: 14px; }
+    .panel{ margin: 0 14px; padding-left: 12px; padding-right: 12px; }
+    .score-panel{ margin-left: 14px; margin-right: 14px; padding-left: 10px; padding-right: 10px; }
+    .subscores{ margin-left: 14px; margin-right: 14px; }
+    .building-id, .search, .card-header{ padding-left: 14px; padding-right: 14px; }
+    .card-footer{ padding-left: 14px; padding-right: 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .card{ animation: none; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Shared original pattern: an interlocking-arch tile invented for this study.
+       Reads as a woven canvas texture; it is not a real house's monogram, logo, or wordmark. -->
+  <svg class="defs-holder" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="archMotif" viewBox="0 0 40 40" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M3 35 V17 A7 7 0 0 1 17 17 V35" fill="none" stroke="currentColor" stroke-width="1.1"/>
+        <path d="M23 5 V23 A7 7 0 0 0 37 23 V5" fill="none" stroke="currentColor" stroke-width="1.1"/>
+        <circle cx="10" cy="10.2" r="1" fill="currentColor"/>
+        <circle cx="30" cy="29.8" r="1" fill="currentColor"/>
+      </pattern>
+    </defs>
+  </svg>
+
+  <svg class="motif-bg" aria-hidden="true" focusable="false"><rect width="100%" height="100%" fill="url(#archMotif)"></rect></svg>
+
+  <div class="stage">
+    <main class="card">
+
+      <div class="trim" aria-hidden="true">
+        <svg viewBox="0 0 400 20" preserveAspectRatio="none"><rect width="400" height="20" fill="url(#archMotif)"></rect></svg>
+      </div>
+
+      <header class="card-header">
+        <div class="wordmark-row">
+          <span class="tick" aria-hidden="true"></span>
+          <span class="wordmark">HouseCheck</span>
+          <span class="tick" aria-hidden="true"></span>
+        </div>
+        <div class="tagline">Building Health Card</div>
+      </header>
+
+      <form class="search" role="search" onsubmit="return false;">
+        <span class="go" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </span>
+        <input type="text" value="460 Macon St, Brooklyn" readonly aria-label="Building search">
+      </form>
+
+      <div class="building-id">
+        <h1>460 Macon Street</h1>
+        <div class="building-meta">Bedford-Stuyvesant<span class="sep">·</span>BBL 3018420001</div>
+      </div>
+
+      <!-- I. SCORE CENTERPIECE -->
+      <div class="sec-label">
+        <span class="numeral">I</span>
+        <span class="name">Overall Score</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="score-panel">
+        <div class="gauge">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <clipPath id="discClip"><circle cx="60" cy="60" r="59"></circle></clipPath>
+            </defs>
+            <circle class="motif-disc" cx="60" cy="60" r="59" fill="url(#archMotif)" clip-path="url(#discClip)"></circle>
+            <circle class="ticks" cx="60" cy="60" r="58" stroke-width="1" stroke-dasharray="1 8.6"></circle>
+            <circle class="track" cx="60" cy="60" r="50" stroke-width="7" transform="rotate(-90 60 60)"></circle>
+            <circle class="fill" cx="60" cy="60" r="50" stroke-width="7" transform="rotate(-90 60 60)"
+                    stroke-dasharray="314.16" stroke-dashoffset="135.09"></circle>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-score num">57<sup>/100</sup></div>
+            <div class="gauge-of">Composite Score</div>
+          </div>
+        </div>
+
+        <div class="score-tag"><span class="diamond" aria-hidden="true"></span>Fair</div>
+
+        <div class="score-scale" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="score-scale-labels" aria-hidden="true"><span>Poor</span><span>Fair</span><span>Good</span></div>
+      </div>
+
+      <!-- II. SUB-SCORES -->
+      <div class="sec-label">
+        <span class="numeral">II</span>
+        <span class="name">Component Scores</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="subscores">
+        <div class="subscore">
+          <div class="subscore-label">Condition</div>
+          <div class="subscore-val num">56<small>/100</small></div>
+          <div class="meter fair"><i style="width:56%"></i></div>
+          <div class="subscore-status status-fair">Caution</div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-label">Legal</div>
+          <div class="subscore-val num">100<small>/100</small></div>
+          <div class="meter good"><i style="width:100%"></i></div>
+          <div class="subscore-status status-good">Protected</div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-label">Neighborhood</div>
+          <div class="subscore-val num">40<small>/100</small></div>
+          <div class="meter fair"><i style="width:40%"></i></div>
+          <div class="subscore-status status-fair">Caution</div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-label">Accessibility</div>
+          <div class="subscore-val num">30<small>/100</small></div>
+          <div class="meter poor"><i style="width:30%"></i></div>
+          <div class="subscore-status status-poor">Limited</div>
+        </div>
+      </div>
+
+      <!-- III. RENT FAIRNESS -->
+      <div class="sec-label">
+        <span class="numeral">III</span>
+        <span class="name">Rent Fairness</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="panel panel-first">
+        <div class="rent-compare">
+          <div class="rent-col you">
+            <div class="lab">Your Rent</div>
+            <div class="amt num">$2,900</div>
+          </div>
+          <div class="rent-div" aria-hidden="true"></div>
+          <div class="rent-col">
+            <div class="lab">Tract Median</div>
+            <div class="amt num">$2,400</div>
+          </div>
+        </div>
+        <div class="rent-flag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7-7 7 7"></path></svg>
+          <span class="num">21% above the neighborhood median</span>
+        </div>
+        <div class="src"><span>Source</span>Census ACS B25064</div>
+      </div>
+
+      <!-- IV. BUILDING CONDITION -->
+      <div class="sec-label">
+        <span class="numeral">IV</span>
+        <span class="name">Building Condition</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="panel panel-first">
+        <div class="row">
+          <div class="k"><span class="marker poor" aria-hidden="true"></span>1 open Class C <span class="muted">(hazardous)</span></div>
+          <div class="v poor">C</div>
+        </div>
+        <div class="row">
+          <div class="k"><span class="marker fair" aria-hidden="true"></span>1 open Class B</div>
+          <div class="v fair">B</div>
+        </div>
+        <div class="row">
+          <div class="k"><span class="marker fair" aria-hidden="true"></span>Open since 2025</div>
+        </div>
+        <div class="src"><span>Source</span>NYC HPD</div>
+      </div>
+
+      <!-- V. LEGAL PROTECTIONS -->
+      <div class="sec-label">
+        <span class="numeral">V</span>
+        <span class="name">Legal Protections</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="panel panel-first">
+        <div class="check-row">
+          <span class="check-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span class="check-text">Rent stabilized</span>
+        </div>
+        <div class="check-row">
+          <span class="check-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span class="check-text">Good Cause covered</span>
+        </div>
+        <div class="src"><span>Source</span>DHCR / NY HCR</div>
+      </div>
+
+      <!-- VI. ACCESSIBILITY -->
+      <div class="sec-label">
+        <span class="numeral">VI</span>
+        <span class="name">Accessibility</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="panel panel-first">
+        <div class="a11y-badge">Step-free access: Lower</div>
+        <ul class="a11y-list">
+          <li><span class="arch" aria-hidden="true"><svg viewBox="0 0 11 9" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 9V5A4.5 4.5 0 0 1 10 5V9"></path></svg></span>No elevator on record</li>
+          <li><span class="arch" aria-hidden="true"><svg viewBox="0 0 11 9" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 9V5A4.5 4.5 0 0 1 10 5V9"></path></svg></span>4-story walk-up</li>
+          <li><span class="arch" aria-hidden="true"><svg viewBox="0 0 11 9" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 9V5A4.5 4.5 0 0 1 10 5V9"></path></svg></span>ADA subway 640 m away</li>
+        </ul>
+        <div class="disclaimer">Access likelihood from public records — verify in person.</div>
+        <div class="src"><span>Source</span>DOB / MTA</div>
+      </div>
+
+      <!-- VII. NEIGHBORHOOD -->
+      <div class="sec-label">
+        <span class="numeral">VII</span>
+        <span class="name">Neighborhood</span>
+        <span class="rule" aria-hidden="true"></span>
+      </div>
+      <div class="panel panel-first">
+        <div class="row">
+          <div class="k">30 recent 311 complaints nearby</div>
+          <div class="v fair">30</div>
+        </div>
+        <div class="row">
+          <div class="k">Restaurant grades mostly A</div>
+          <div class="v good">A</div>
+        </div>
+        <div class="src"><span>Source</span>NYC 311 / DOHMH</div>
+      </div>
+
+      <footer class="card-footer">
+        <div class="rule" aria-hidden="true"><span class="line"></span><span class="diamond"></span><span class="line"></span></div>
+        <p>Every number links to a NYC or Census source · data from Jul 2026</p>
+      </footer>
+
+    </main>
+  </div>
+
+</body>
+</html>

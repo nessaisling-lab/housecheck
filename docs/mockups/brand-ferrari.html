@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HouseCheck — Building Health Dossier (Motorsport Livery Study)</title>
+<meta name="description" content="Luxury motorsport-inspired Building Health Card mockup for HouseCheck. Original design study — an homage to racing-livery instrument clusters, not an official product of, or affiliated with, any automotive brand.">
+
+<!-- Google Fonts — technical display + condensed racing headline + monospace telemetry, each paired with system fallbacks below -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     HOUSECHECK — "LUXURY MOTORSPORT LIVERY" THEME
+     Original design study / homage to racing-instrument aesthetics.
+     No logos, shields, wordmarks or trademarks of any car brand
+     are reproduced. Rosso + carbon black + giallo accent + brushed
+     metal, built entirely from CSS gradients and inline SVG.
+     ============================================================ */
+
+  :root{
+    --font-display: 'Orbitron', 'Eurostile', 'Arial Narrow', sans-serif;
+    --font-head: 'Rajdhani', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+    --font-mono: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+
+    --black-0: #050505;
+    --black-1: #0a0a0a;
+    --black-2: #121212;
+    --black-3: #191919;
+    --carbon-hi: #242424;
+
+    --red: #E10600;
+    --red-dark: #7a0300;
+    --red-glow: rgba(225,6,0,.55);
+
+    --yellow: #FFD400;
+    --yellow-dim: #7a6600;
+
+    --amber: #FF8C1A;
+    --amber-dim: #3a2405;
+
+    --green: #21C767;
+    --green-dim: #0e3320;
+
+    --red-dim: #3a0705;
+
+    --metal-hi: #e2e3e4;
+    --metal-mid: #9a9c9e;
+    --metal-lo: #45464a;
+
+    --text-hi: #f4f2ec;
+    --text-mid: #aeafb1;
+    --text-dim: #75767a;
+    --text-faint: #47484c;
+
+    --line: #262628;
+    --line-strong: #38393c;
+    --line-hair: #1c1c1e;
+
+    --card-w: 390px;
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+  html{ background: var(--black-0); }
+
+  body{
+    font-family: var(--font-head);
+    color: var(--text-hi);
+    background:
+      radial-gradient(ellipse 900px 460px at 50% -8%, rgba(225,6,0,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 400px at 100% 110%, rgba(255,212,0,0.05), transparent 60%),
+      var(--black-0);
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection{ background: var(--red-dark); color: var(--text-hi); }
+
+  .num{ font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+  .mono{ font-family: var(--font-mono); }
+
+  /* ---------------- top pinstripe (diagonal racing livery) ---------------- */
+  .pinstripe{
+    width: 100%;
+    height: 6px;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--red) 0 16px,
+      var(--black-0) 16px 20px,
+      var(--yellow) 20px 24px,
+      var(--black-0) 24px 28px
+    );
+    flex: none;
+  }
+
+  /* ---------------- telemetry ticker ---------------- */
+  .ticker-wrap{
+    width: 100%;
+    overflow: hidden;
+    background: #000;
+    border-bottom: 1px solid var(--line-strong);
+    white-space: nowrap;
+    flex: none;
+  }
+  .ticker-track{
+    display: inline-flex;
+    gap: 2.4rem;
+    padding: 6px 0;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.07em;
+    color: var(--text-dim);
+    animation: ticker 24s linear infinite;
+    will-change: transform;
+  }
+  .ticker-track span{ display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .ticker-track b{ color: var(--text-mid); font-weight: 600; }
+  .tk-red{ color: var(--red); }
+  .tk-amber{ color: var(--amber); }
+  .tk-green{ color: var(--green); }
+  .tk-yellow{ color: var(--yellow); }
+  @keyframes ticker{ from{ transform: translateX(0); } to{ transform: translateX(-50%); } }
+
+  /* ---------------- page shell ---------------- */
+  .stage{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 20px 12px 40px;
+  }
+
+  /* brushed-metal bezel frame */
+  .bezel{
+    position: relative;
+    width: 100%;
+    max-width: var(--card-w);
+    padding: 7px;
+    border-radius: 14px;
+    background:
+      repeating-linear-gradient(102deg, var(--metal-lo) 0px, var(--metal-mid) 2px, var(--metal-hi) 3px, var(--metal-mid) 4px, var(--metal-lo) 6px);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.7),
+      0 30px 70px -20px rgba(0,0,0,0.9),
+      0 0 46px -12px var(--red-glow);
+  }
+  .rivet{
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #e9e9e9, #6b6b6b 60%, #2a2a2a 100%);
+    box-shadow: 0 1px 1px rgba(0,0,0,.6);
+  }
+  .rivet.tl{ top: 6px; left: 6px; }
+  .rivet.tr{ top: 6px; right: 6px; }
+  .rivet.bl{ bottom: 6px; left: 6px; }
+  .rivet.br{ bottom: 6px; right: 6px; }
+
+  /* carbon-fiber instrument body */
+  .card{
+    position: relative;
+    border-radius: 9px;
+    overflow: hidden;
+    background-color: var(--black-1);
+    background-image:
+      linear-gradient(27deg, var(--black-3) 5px, transparent 5px),
+      linear-gradient(207deg, var(--black-3) 5px, transparent 5px),
+      linear-gradient(27deg, var(--carbon-hi) 5px, transparent 5px),
+      linear-gradient(207deg, var(--carbon-hi) 5px, transparent 5px),
+      linear-gradient(90deg, var(--black-2) 10px, transparent 10px),
+      linear-gradient(var(--black-2) 25%, var(--black-1) 25%, var(--black-1) 50%, var(--black-2) 50%, var(--black-2) 75%, var(--black-1) 75%);
+    background-repeat: repeat;
+    background-position: 0 5px, 10px 0px, 0px 10px, 10px 5px, 0 0, 0 0;
+    background-size: 20px 20px;
+  }
+
+  /* instrument bezel strip */
+  .cluster-top{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    background: linear-gradient(180deg, #000 0%, #050505 100%);
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .tellies{ display:flex; gap:6px; }
+  .tellies i{
+    width:7px; height:7px; display:block; border-radius: 1px;
+  }
+  .tellies i:nth-child(1){ background: var(--red); box-shadow: 0 0 5px var(--red-glow); }
+  .tellies i:nth-child(2){ background: var(--amber); opacity:.9; }
+  .tellies i:nth-child(3){ background: var(--green); opacity:.9; }
+  .cluster-id{
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+  }
+  .cluster-live{
+    display:flex; align-items:center; gap:6px;
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing:.12em; color: var(--text-dim); text-transform: uppercase;
+  }
+  .live-dot{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--yellow);
+    box-shadow: 0 0 7px 1px rgba(255,212,0,0.8);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  @keyframes blink{ 0%,100%{ opacity:1; } 50%{ opacity:.2; } }
+
+  /* header / wordmark */
+  .card-header{
+    position: relative;
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .card-header::before{
+    content:'';
+    position:absolute;
+    top:0; bottom:0; left: -20%;
+    width: 60%;
+    background: linear-gradient(100deg, transparent 40%, rgba(225,6,0,0.18) 55%, rgba(255,212,0,0.14) 62%, transparent 78%);
+    transform: skewX(-18deg);
+    pointer-events: none;
+  }
+  .wordmark{
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 800;
+    font-style: italic;
+    letter-spacing: 0.01em;
+    color: var(--text-hi);
+    display:flex;
+    align-items:baseline;
+    transform: skewX(-6deg);
+  }
+  .wordmark .accent{ color: var(--red); }
+  .wordmark .slash{ color: var(--yellow); margin: 0 2px; font-size: 18px; }
+  .subtitle{
+    position: relative;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .subtitle b{ color: var(--yellow); font-weight: 600; }
+
+  /* search bar */
+  .search{
+    margin: 14px 18px 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background: #000;
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--red);
+    padding: 10px 12px;
+    border-radius: 3px;
+  }
+  .search .prompt{ color: var(--red); font-size: 13px; flex:none; }
+  .search .prompt svg{ width:14px; height:14px; display:block; }
+  .search input{
+    all: unset;
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-hi);
+    letter-spacing: 0.01em;
+    min-width: 0;
+  }
+  .search .go{ color: var(--yellow); font-family: var(--font-mono); font-size: 10px; letter-spacing:.1em; flex:none; }
+
+  /* building id block */
+  .building-id{ padding: 16px 18px 4px; }
+  .building-id h1{
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 19px;
+    font-weight: 700;
+    font-style: italic;
+    letter-spacing: 0.01em;
+    color: var(--text-hi);
+  }
+  .building-meta{
+    margin-top: 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-mid);
+    letter-spacing: 0.02em;
+  }
+  .building-meta .sep{ color: var(--text-faint); margin: 0 6px; }
+
+  /* section label row */
+  .sec-label{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 0 18px;
+    margin-top: 22px;
+  }
+  .sec-label .name{
+    font-family: var(--font-head);
+    font-size: 11px;
+    font-weight: 700;
+    font-style: italic;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+  }
+  .sec-label .code{
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--red);
+    border: 1px solid var(--red-dark);
+    background: var(--red-dim);
+    padding: 1px 6px;
+    border-radius: 2px;
+  }
+
+  /* ---------------- score centerpiece (tachometer) ---------------- */
+  .score-panel{
+    margin: 10px 18px 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: radial-gradient(circle at 50% 15%, rgba(225,6,0,0.10), transparent 62%), var(--black-2);
+    padding: 22px 14px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .gauge-wrap{
+    position: relative;
+    width: 220px;
+    height: 220px;
+    flex: none;
+  }
+  .gauge-track, .gauge-ring{
+    position:absolute; inset:0; border-radius:50%;
+  }
+  .gauge-track{
+    background: conic-gradient(from 225deg, var(--line-strong) 0%, var(--line-strong) 75%, transparent 75% 100%);
+    -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67% 84%, transparent 85% 100%);
+            mask: radial-gradient(circle, transparent 0 66%, #000 67% 84%, transparent 85% 100%);
+  }
+  .gauge-ring{
+    background: conic-gradient(from 225deg,
+      var(--red) 0%, var(--red) 30%,
+      var(--amber) 30%, var(--amber) 52.5%,
+      var(--green) 52.5%, var(--green) 75%,
+      transparent 75%, transparent 100%);
+    -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67% 84%, transparent 85% 100%);
+            mask: radial-gradient(circle, transparent 0 66%, #000 67% 84%, transparent 85% 100%);
+    filter: drop-shadow(0 0 8px rgba(0,0,0,.5));
+  }
+  .gauge-ring::after{
+    /* redline pulse called out on the low (danger) end of the sweep */
+    content:'';
+    position:absolute; inset:0; border-radius:50%;
+    background: conic-gradient(from 225deg, rgba(225,6,0,.9) 0%, rgba(225,6,0,.9) 30%, transparent 30% 100%);
+    -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67% 84%, transparent 85% 100%);
+            mask: radial-gradient(circle, transparent 0 66%, #000 67% 84%, transparent 85% 100%);
+    animation: redline-pulse 2.4s ease-in-out infinite;
+    filter: drop-shadow(0 0 10px var(--red-glow));
+  }
+  @keyframes redline-pulse{ 0%,100%{ opacity:.35; } 50%{ opacity:.9; } }
+
+  .tick{
+    position:absolute; left:50%; top:50%;
+    width:2px; height:8px;
+    background: var(--metal-mid);
+    /* transform-origin stays at the tick's own center (default) so the
+       translate(-50%,-50%) rotate(θ) translateY(-R) idiom below places
+       each tick radially around the gauge center */
+  }
+  .tick.major{ height:11px; width:2.5px; background: var(--metal-hi); }
+
+  .tick-label{
+    position:absolute; left:50%; top:50%;
+    transform: translate(-50%,-50%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-faint);
+  }
+
+  .gauge-needle{
+    position:absolute; left:50%; top:50%;
+    width:5px; height:97px;
+    background: linear-gradient(180deg, var(--yellow) 0%, var(--metal-hi) 88%);
+    border-radius: 3px 3px 1px 1px;
+    transform: translate(-50%,-100%) rotate(225deg);
+    transform-origin: 50% 100%;
+    box-shadow: 0 0 9px rgba(255,212,0,.8);
+    transition: transform 1.5s cubic-bezier(.18,1.02,.32,1) .25s;
+    /* no z-index: relies on DOM order (needle, then hub, then the
+       digital readout) so the readout always reads on top of the
+       pivot hardware, matching a real instrument cluster */
+  }
+  .gauge-needle.swept{ transform: translate(-50%,-100%) rotate(378.9deg); }
+  .gauge-hub{
+    position:absolute; left:50%; top:50%; transform: translate(-50%,-50%);
+    width: 34px; height:34px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, var(--metal-hi), var(--metal-mid) 55%, var(--metal-lo) 100%);
+    box-shadow: 0 0 0 3px #000, 0 2px 6px rgba(0,0,0,.6);
+  }
+
+  .gauge-center{
+    position:absolute; inset:0;
+    display:flex; flex-direction: column;
+    align-items:center; justify-content:center;
+    pointer-events: none;
+  }
+  .gauge-digits{
+    font-family: var(--font-display);
+    font-size: 46px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-hi);
+    text-shadow: 0 0 18px rgba(225,6,0,.35);
+  }
+  .gauge-digits .unit{
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-left: 3px;
+    font-family: var(--font-mono);
+  }
+  .gauge-caption{
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .score-tag{
+    margin-top: 16px;
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 6px 16px;
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 700;
+    font-style: italic;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    background: var(--amber-dim);
+    border-radius: 3px;
+  }
+  .score-tag .dot{ width:6px; height:6px; border-radius:50%; background: var(--amber); box-shadow: 0 0 6px 1px rgba(255,140,26,0.7); }
+
+  .score-scale{
+    margin-top: 14px;
+    display:flex;
+    width: 100%;
+    max-width: 250px;
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .score-scale i{ flex:1; background: var(--red); }
+  .score-scale i:nth-child(2){ background: var(--amber); }
+  .score-scale i:nth-child(3){ background: var(--green); }
+  .score-scale-labels{
+    display:flex; justify-content: space-between;
+    width:100%; max-width: 250px; margin-top: 5px;
+    font-family: var(--font-mono);
+    font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  /* ---------------- sub-score dials ---------------- */
+  .subscores{
+    margin: 14px 18px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .subscore{
+    min-width: 0;
+    padding: 16px 8px 14px;
+    display:flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--black-2);
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .subscore:nth-child(2n){ border-right: none; }
+  .subscore:nth-child(n+3){ border-bottom: none; }
+
+  .mini-gauge{ position:relative; width:78px; height:78px; flex:none; }
+  .mini-track, .mini-ring{ position:absolute; inset:0; border-radius:50%; }
+  .mini-track{
+    background: conic-gradient(from 225deg, var(--line-strong) 0%, var(--line-strong) 75%, transparent 75% 100%);
+    -webkit-mask: radial-gradient(circle, transparent 0 58%, #000 59% 88%, transparent 89% 100%);
+            mask: radial-gradient(circle, transparent 0 58%, #000 59% 88%, transparent 89% 100%);
+  }
+  .mini-ring{
+    -webkit-mask: radial-gradient(circle, transparent 0 58%, #000 59% 88%, transparent 89% 100%);
+            mask: radial-gradient(circle, transparent 0 58%, #000 59% 88%, transparent 89% 100%);
+  }
+  .mini-ring.red{ background: conic-gradient(from 225deg, var(--red) 0%, var(--red) var(--pct), transparent var(--pct) 100%); filter: drop-shadow(0 0 5px var(--red-glow)); }
+  .mini-ring.amber{ background: conic-gradient(from 225deg, var(--amber) 0%, var(--amber) var(--pct), transparent var(--pct) 100%); filter: drop-shadow(0 0 5px rgba(255,140,26,.5)); }
+  .mini-ring.green{ background: conic-gradient(from 225deg, var(--green) 0%, var(--green) var(--pct), transparent var(--pct) 100%); filter: drop-shadow(0 0 5px rgba(33,199,103,.5)); }
+
+  .mini-center{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .mini-num{
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text-hi);
+    line-height:1;
+  }
+  .mini-of{ font-family: var(--font-mono); font-size: 7.5px; color: var(--text-faint); margin-top:2px; }
+
+  .subscore-label{
+    margin-top: 9px;
+    font-family: var(--font-head);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+    text-align:center;
+  }
+  .subscore-status{
+    margin-top: 3px;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .status-green{ color: var(--green); }
+  .status-amber{ color: var(--amber); }
+  .status-red{ color: var(--red); }
+
+  /* ---------------- generic data panel ---------------- */
+  .panel{
+    margin: 0 18px;
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    background: var(--black-2);
+    padding: 13px 14px 13px;
+  }
+  .panel-first{ border-top: 1px solid var(--line); border-radius: 6px; }
+
+  .row{
+    display:flex; align-items:flex-start; justify-content: space-between;
+    gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-hair);
+  }
+  .row:first-child{ border-top: none; padding-top: 2px; }
+  .row .k{ font-size: 11.5px; color: var(--text-mid); line-height: 1.45; }
+  .row .k .flag{ display:inline-block; width: 7px; height: 7px; margin-right: 8px; vertical-align: 1px; border-radius:1px; }
+  .flag.red{ background: var(--red); box-shadow: 0 0 5px var(--red-glow); }
+  .flag.amber{ background: var(--amber); box-shadow: 0 0 5px rgba(255,140,26,.7); }
+  .flag.green{ background: var(--green); box-shadow: 0 0 5px rgba(33,199,103,.7); }
+  .row .v{ font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--text-hi); text-align: right; white-space: nowrap; }
+  .row .v.red{ color: var(--red); }
+  .row .v.amber{ color: var(--amber); }
+  .row .v.green{ color: var(--green); }
+  .linked{ text-decoration: underline dotted var(--text-faint); text-underline-offset: 3px; cursor: help; }
+
+  /* rent comparison — pressure-gauge style readout */
+  .rent-compare{ display:flex; align-items:stretch; gap: 10px; padding: 4px 0 12px; }
+  .rent-col{ flex:1; }
+  .rent-col .lab{ font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+  .rent-col .amt{ margin-top: 5px; font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text-hi); }
+  .rent-col.you .amt{ color: var(--yellow); text-shadow: 0 0 10px rgba(255,212,0,.35); }
+  .rent-div{ width:1px; background: linear-gradient(var(--line), var(--line-strong), var(--line)); align-self: stretch; }
+  .rent-flag{
+    display:flex; align-items:center; justify-content: center; gap: 8px;
+    margin: 0 0 10px; padding: 9px 10px;
+    border: 1px solid var(--red); border-left: 3px solid var(--red);
+    background: var(--red-dim); color: #ffb3ad;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-align: center;
+    border-radius: 3px;
+  }
+  .rent-flag svg{ width:13px; height:13px; flex: none; color: var(--red); }
+
+  /* legal checklist — systems-check style */
+  .check-row{ display:flex; align-items:center; gap: 9px; padding: 7px 0; border-top: 1px solid var(--line-hair); }
+  .check-row:first-child{ border-top:none; padding-top:2px; }
+  .check-ico{
+    width: 18px; height:18px; flex: none; display:flex; align-items:center; justify-content:center;
+    border: 1px solid var(--green); color: var(--green); background: var(--green-dim); border-radius: 3px;
+  }
+  .check-ico svg{ width:11px; height:11px; }
+  .check-text{ font-size: 11.5px; color: var(--text-hi); font-weight: 500; }
+
+  /* accessibility — hazard-tab badge */
+  .a11y-badge{
+    position: relative;
+    display:inline-flex; align-items:center;
+    padding: 8px 12px 8px 18px;
+    border: 1px solid var(--yellow);
+    background: var(--black-1); color: var(--yellow);
+    font-family: var(--font-head);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    margin: 4px 0 11px;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .a11y-badge::before{
+    content:''; position:absolute; left:0; top:0; bottom:0; width:8px;
+    background: repeating-linear-gradient(45deg, var(--yellow) 0 4px, #101010 4px 8px);
+  }
+  .a11y-list{ list-style: none; margin: 0 0 11px; padding: 0; }
+  .a11y-list li{ position: relative; padding: 5px 0 5px 17px; font-size: 11.5px; color: var(--text-mid); border-top: 1px solid var(--line-hair); }
+  .a11y-list li:first-child{ border-top: none; }
+  .a11y-list li::before{ content: '▸'; position: absolute; left: 0; color: var(--red); }
+  .disclaimer{
+    font-family: var(--font-head);
+    font-size: 11px; font-style: italic; color: var(--text-dim); line-height: 1.5;
+    padding-top: 9px; border-top: 1px dashed var(--line);
+  }
+
+  /* source footnote inside each panel */
+  .src{
+    margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line-hair);
+    display:flex; align-items:center; gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint);
+  }
+  .src::before{
+    content: 'SRC'; border: 1px solid var(--red-dark); color: var(--red);
+    padding: 1px 5px; font-size: 8px; border-radius: 2px;
+  }
+  .src b{ color: var(--text-dim); font-weight: 500; letter-spacing: 0.04em; }
+
+  /* footer */
+  .checker-strip{
+    margin-top: 22px;
+    height: 8px;
+    background-image: conic-gradient(#3a3a3a 90deg, transparent 90deg 180deg, #3a3a3a 180deg 270deg, transparent 270deg);
+    background-size: 8px 8px;
+    opacity: .8;
+  }
+  .card-footer{
+    padding: 16px 18px 20px;
+    text-align: center;
+    background: #000;
+  }
+  .card-footer .rule{
+    display:flex; align-items:center; justify-content:center; gap: 8px;
+    margin-bottom: 11px; color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .card-footer .rule::before, .card-footer .rule::after{ content:''; height:1px; width: 24px; background: var(--line-strong); }
+  .card-footer p{ margin: 0; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--text-dim); }
+  .card-footer .fine{ margin-top: 10px; font-size: 8.5px; letter-spacing: 0.03em; color: var(--text-faint); font-style: italic; font-family: var(--font-head); }
+
+  @media (max-width: 400px){
+    :root{ --card-w: 100%; }
+    .stage{ padding-left: 8px; padding-right: 8px; }
+  }
+
+  @media (max-width: 340px){
+    /* Gauge stays at its base 220px size all the way down to 320px viewports —
+       the tick marks and number labels below are positioned with fixed pixel
+       offsets tuned to that size, so shrinking gauge-wrap here would pull
+       them away from the ring. .card's overflow:hidden safely clips the
+       sub-2px margin at the very narrowest supported width. */
+    .wordmark{ font-size: 18px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .ticker-track, .live-dot, .gauge-ring::after, .gauge-needle{ animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="pinstripe" aria-hidden="true"></div>
+
+  <div class="ticker-wrap" aria-hidden="true">
+    <div class="ticker-track">
+      <span>BBL <b>3018420001</b></span>
+      <span class="tk-red">HPD OPEN VIOL <b>2</b> ▲</span>
+      <span class="tk-yellow">RENT VS MEDIAN <b>+21%</b> ▲</span>
+      <span class="tk-red">ACCESS SCORE <b>30</b> ▼</span>
+      <span class="tk-green">LEGAL SCORE <b>100</b> ▲</span>
+      <span>311 (90D) <b>30</b></span>
+      <span class="tk-amber">COND SCORE <b>56</b> ●</span>
+      <span>DOHMH GRADES <b>MOSTLY A</b></span>
+      <!-- duplicate for seamless loop -->
+      <span>BBL <b>3018420001</b></span>
+      <span class="tk-red">HPD OPEN VIOL <b>2</b> ▲</span>
+      <span class="tk-yellow">RENT VS MEDIAN <b>+21%</b> ▲</span>
+      <span class="tk-red">ACCESS SCORE <b>30</b> ▼</span>
+      <span class="tk-green">LEGAL SCORE <b>100</b> ▲</span>
+      <span>311 (90D) <b>30</b></span>
+      <span class="tk-amber">COND SCORE <b>56</b> ●</span>
+      <span>DOHMH GRADES <b>MOSTLY A</b></span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="bezel">
+      <span class="rivet tl" aria-hidden="true"></span>
+      <span class="rivet tr" aria-hidden="true"></span>
+      <span class="rivet bl" aria-hidden="true"></span>
+      <span class="rivet br" aria-hidden="true"></span>
+
+      <main class="card">
+
+        <div class="cluster-top">
+          <div class="tellies" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="cluster-id">HC · BLDG-HEALTH</div>
+          <div class="cluster-live"><span class="live-dot" aria-hidden="true"></span>LIVE</div>
+        </div>
+
+        <header class="card-header">
+          <div class="wordmark">HOUSE<span class="slash">//</span><span class="accent">CHECK</span></div>
+          <div class="subtitle">Building Health Dossier · <b>Livery Edition</b></div>
+        </header>
+
+        <form class="search" role="search" onsubmit="return false;">
+          <span class="prompt" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+          <input type="text" value="460 Macon St, Brooklyn" readonly aria-label="Building search">
+          <span class="go" aria-hidden="true">GO</span>
+        </form>
+
+        <div class="building-id">
+          <h1>460 Macon Street</h1>
+          <div class="building-meta">Bedford-Stuyvesant<span class="sep">·</span>BBL 3018420001</div>
+        </div>
+
+        <!-- SCORE CENTERPIECE -->
+        <div class="sec-label">
+          <span class="name">Overall Health Score</span>
+          <span class="code">IDX</span>
+        </div>
+        <div class="score-panel">
+          <div class="gauge-wrap">
+            <div class="gauge-track" aria-hidden="true"></div>
+            <div class="gauge-ring" aria-hidden="true"></div>
+
+            <!-- major tick labels -->
+            <span class="tick-label" style="left:calc(50% - 69px); top:calc(50% + 69px);">0</span>
+            <span class="tick-label" style="left:calc(50% - 97px); top:calc(50% - 15px);">20</span>
+            <span class="tick-label" style="left:calc(50% - 45px); top:calc(50% - 87px);">40</span>
+            <span class="tick-label" style="left:calc(50% + 45px); top:calc(50% - 87px);">60</span>
+            <span class="tick-label" style="left:calc(50% + 97px); top:calc(50% - 15px);">80</span>
+            <span class="tick-label" style="left:calc(50% + 69px); top:calc(50% + 69px);">100</span>
+
+            <!-- minor + major radial ticks, every 10 units across the 270° sweep -->
+            <span class="tick major" style="transform: translate(-50%,-50%) rotate(225deg) translateY(-98px);"></span>
+            <span class="tick"       style="transform: translate(-50%,-50%) rotate(252deg) translateY(-98px);"></span>
+            <span class="tick major" style="transform: translate(-50%,-50%) rotate(279deg) translateY(-98px);"></span>
+            <span class="tick"       style="transform: translate(-50%,-50%) rotate(306deg) translateY(-98px);"></span>
+            <span class="tick major" style="transform: translate(-50%,-50%) rotate(333deg) translateY(-98px);"></span>
+            <span class="tick"       style="transform: translate(-50%,-50%) rotate(0deg)   translateY(-98px);"></span>
+            <span class="tick major" style="transform: translate(-50%,-50%) rotate(27deg)  translateY(-98px);"></span>
+            <span class="tick"       style="transform: translate(-50%,-50%) rotate(54deg)  translateY(-98px);"></span>
+            <span class="tick major" style="transform: translate(-50%,-50%) rotate(81deg)  translateY(-98px);"></span>
+            <span class="tick"       style="transform: translate(-50%,-50%) rotate(108deg) translateY(-98px);"></span>
+            <span class="tick major" style="transform: translate(-50%,-50%) rotate(135deg) translateY(-98px);"></span>
+
+            <div class="gauge-needle" aria-hidden="true"></div>
+            <div class="gauge-hub" aria-hidden="true"></div>
+
+            <div class="gauge-center">
+              <div class="gauge-digits"><span data-count="57">0</span><span class="unit">/100</span></div>
+              <div class="gauge-caption">Building Health Index</div>
+            </div>
+          </div>
+
+          <div class="score-tag"><span class="dot" aria-hidden="true"></span>Fair</div>
+
+          <div class="score-scale" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="score-scale-labels" aria-hidden="true"><span>Poor</span><span>Fair</span><span>Good</span></div>
+        </div>
+
+        <!-- SUB-SCORES -->
+        <div class="sec-label">
+          <span class="name">Component Dials</span>
+          <span class="code">4 SEG</span>
+        </div>
+        <div class="subscores">
+          <div class="subscore">
+            <div class="mini-gauge">
+              <div class="mini-track" aria-hidden="true"></div>
+              <div class="mini-ring amber" style="--pct:42%;" aria-hidden="true"></div>
+              <div class="mini-center">
+                <div class="mini-num"><span data-count="56">0</span></div>
+                <div class="mini-of">/ 100</div>
+              </div>
+            </div>
+            <div class="subscore-label">Condition</div>
+            <div class="subscore-status status-amber">Caution</div>
+          </div>
+          <div class="subscore">
+            <div class="mini-gauge">
+              <div class="mini-track" aria-hidden="true"></div>
+              <div class="mini-ring green" style="--pct:75%;" aria-hidden="true"></div>
+              <div class="mini-center">
+                <div class="mini-num"><span data-count="100">0</span></div>
+                <div class="mini-of">/ 100</div>
+              </div>
+            </div>
+            <div class="subscore-label">Legal</div>
+            <div class="subscore-status status-green">Protected</div>
+          </div>
+          <div class="subscore">
+            <div class="mini-gauge">
+              <div class="mini-track" aria-hidden="true"></div>
+              <div class="mini-ring amber" style="--pct:30%;" aria-hidden="true"></div>
+              <div class="mini-center">
+                <div class="mini-num"><span data-count="40">0</span></div>
+                <div class="mini-of">/ 100</div>
+              </div>
+            </div>
+            <div class="subscore-label">Neighborhood</div>
+            <div class="subscore-status status-amber">Caution</div>
+          </div>
+          <div class="subscore">
+            <div class="mini-gauge">
+              <div class="mini-track" aria-hidden="true"></div>
+              <div class="mini-ring red" style="--pct:22.5%;" aria-hidden="true"></div>
+              <div class="mini-center">
+                <div class="mini-num"><span data-count="30">0</span></div>
+                <div class="mini-of">/ 100</div>
+              </div>
+            </div>
+            <div class="subscore-label">Accessibility</div>
+            <div class="subscore-status status-red">Limited</div>
+          </div>
+        </div>
+
+        <!-- RENT FAIRNESS -->
+        <div class="sec-label">
+          <span class="name">Rent Fairness</span>
+          <span class="code">RENT</span>
+        </div>
+        <div class="panel panel-first">
+          <div class="rent-compare">
+            <div class="rent-col you">
+              <div class="lab">Your Rent</div>
+              <div class="amt num">$2,900</div>
+            </div>
+            <div class="rent-div" aria-hidden="true"></div>
+            <div class="rent-col">
+              <div class="lab">Tract Median</div>
+              <div class="amt num">$2,400</div>
+            </div>
+          </div>
+          <div class="rent-flag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7-7 7 7"></path></svg>
+            <span class="linked num">21% above the neighborhood median</span>
+          </div>
+          <div class="src"><b>Census ACS B25064</b></div>
+        </div>
+
+        <!-- BUILDING CONDITION -->
+        <div class="sec-label">
+          <span class="name">Building Condition</span>
+          <span class="code">COND</span>
+        </div>
+        <div class="panel panel-first">
+          <div class="row">
+            <div class="k"><span class="flag red" aria-hidden="true"></span>1 open Class C <span style="color:var(--text-faint)">(hazardous)</span></div>
+            <div class="v red linked">C</div>
+          </div>
+          <div class="row">
+            <div class="k"><span class="flag amber" aria-hidden="true"></span>1 open Class B</div>
+            <div class="v amber linked">B</div>
+          </div>
+          <div class="row">
+            <div class="k">Violations open since 2025</div>
+            <div class="v">▲</div>
+          </div>
+          <div class="src"><b>NYC HPD</b></div>
+        </div>
+
+        <!-- LEGAL PROTECTIONS -->
+        <div class="sec-label">
+          <span class="name">Legal Protections</span>
+          <span class="code">LGL</span>
+        </div>
+        <div class="panel panel-first">
+          <div class="check-row">
+            <span class="check-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            <span class="check-text">Rent stabilized</span>
+          </div>
+          <div class="check-row">
+            <span class="check-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            <span class="check-text">Good Cause covered</span>
+          </div>
+          <div class="src"><b>DHCR / NY HCR</b></div>
+        </div>
+
+        <!-- ACCESSIBILITY -->
+        <div class="sec-label">
+          <span class="name">Accessibility</span>
+          <span class="code">ACCS</span>
+        </div>
+        <div class="panel panel-first">
+          <div class="a11y-badge">Step-free access: Lower</div>
+          <ul class="a11y-list">
+            <li>No elevator on record</li>
+            <li>4-story walk-up</li>
+            <li>ADA subway 640 m away</li>
+          </ul>
+          <div class="disclaimer">Access likelihood from public records — verify in person.</div>
+          <div class="src"><b>DOB / MTA</b></div>
+        </div>
+
+        <!-- NEIGHBORHOOD -->
+        <div class="sec-label">
+          <span class="name">Neighborhood</span>
+          <span class="code">NBHD</span>
+        </div>
+        <div class="panel panel-first">
+          <div class="row">
+            <div class="k">Recent 311 complaints nearby</div>
+            <div class="v amber linked">30</div>
+          </div>
+          <div class="row">
+            <div class="k">Restaurant grades</div>
+            <div class="v green">Mostly A</div>
+          </div>
+          <div class="src"><b>NYC 311 / DOHMH</b></div>
+        </div>
+
+        <div class="checker-strip" aria-hidden="true"></div>
+        <footer class="card-footer">
+          <div class="rule">End of Report</div>
+          <p>Every number links to a NYC or Census source · data from Jul 2026</p>
+          <div class="fine">Motorsport-inspired design study — unaffiliated homage, not an official product of any automotive brand.</div>
+        </footer>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      function animateCount(el, target, dur){
+        var start = null;
+        function step(ts){
+          if(!start) start = ts;
+          var p = Math.min((ts - start) / dur, 1);
+          var eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = Math.round(target * eased);
+          if(p < 1){ requestAnimationFrame(step); }
+          else { el.textContent = target; }
+        }
+        requestAnimationFrame(step);
+      }
+
+      document.addEventListener('DOMContentLoaded', function(){
+        document.querySelectorAll('[data-count]').forEach(function(el){
+          var target = parseInt(el.getAttribute('data-count'), 10);
+          animateCount(el, target, 1300);
+        });
+
+        var needle = document.querySelector('.gauge-needle');
+        if(needle){
+          window.setTimeout(function(){ needle.classList.add('swept'); }, 60);
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>

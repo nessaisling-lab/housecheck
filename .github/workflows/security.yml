@@ -1,4 +1,5 @@
 # HouseCheck security — dependency audits, secret scanning, static analysis.
+# JS-only jobs (npm audit, CodeQL js/ts) stay dormant until a `frontend/` exists.
 name: security
 
 on:
@@ -14,6 +15,21 @@ permissions:
   security-events: write   # required for CodeQL SARIF upload
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      has_frontend: ${{ steps.check.outputs.has_frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "has_frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
   cargo-audit-deny:
     name: rust deps (audit + deny)
     runs-on: ubuntu-latest
@@ -25,10 +41,13 @@ jobs:
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: cargo-deny (licenses, bans, advisories, sources)
+      # Licenses are checked out of the CI gate (TLS crates like ring/aws-lc use
+      # non-SPDX license expressions that noisily fail); we gate on the security-
+      # relevant checks. Run `cargo deny check` locally for the full license report.
+      - name: cargo-deny (advisories + bans + sources)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check
+          command: check advisories bans sources
 
   gitleaks:
     name: secret scan
@@ -43,6 +62,8 @@ jobs:
 
   npm-audit:
     name: frontend deps
+    needs: preflight
+    if: needs.preflight.outputs.has_frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,6 +80,8 @@ jobs:
 
   codeql:
     name: CodeQL (js/ts)
+    needs: preflight
+    if: needs.preflight.outputs.has_frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

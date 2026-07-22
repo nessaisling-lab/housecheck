@@ -1,5 +1,6 @@
 # HouseCheck CI — build + test across Linux, macOS, Windows.
-# Activates once the Cargo workspace + frontend/ exist (see docs/TASKS.md BE-1, FE-1).
+# The `frontend` job stays dormant until a `frontend/` app exists (see docs/TASKS.md FE-1),
+# so the backend-only foundation lands green; the frontend teammate's first push turns it on.
 name: ci
 
 on:
@@ -17,6 +18,21 @@ env:
   RUSTFLAGS: "-D warnings"   # warnings fail the build
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      has_frontend: ${{ steps.check.outputs.has_frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "has_frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
   rust:
     name: rust (${{ matrix.os }})
     strategy:
@@ -37,7 +53,7 @@ jobs:
 
       # Serving DB is plain bundled SQLite (rusqlite `bundled` feature) — no native
       # libs, so the build is identical on Linux/macOS/Windows. Geospatial joins run
-      # at ingest time (DuckDB), not at runtime. This is the cross-platform guarantee.
+      # at ingest time, not at runtime. This is the cross-platform guarantee.
       - name: Format check
         run: cargo fmt --all --check
 
@@ -52,6 +68,8 @@ jobs:
 
   frontend:
     name: frontend (${{ matrix.os }})
+    needs: preflight
+    if: needs.preflight.outputs.has_frontend == 'true'
     strategy:
       fail-fast: false
       matrix:

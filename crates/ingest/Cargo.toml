@@ -5,4 +5,8 @@ edition.workspace = true
 
 [dependencies]
 store = { path = "../store" }
+model = { path = "../model" }
 anyhow.workspace = true
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }

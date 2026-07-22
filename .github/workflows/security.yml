@@ -1,0 +1,70 @@
+# HouseCheck security — dependency audits, secret scanning, static analysis.
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly Monday 06:00 UTC — catch newly-disclosed CVEs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # required for CodeQL SARIF upload
+
+jobs:
+  cargo-audit-deny:
+    name: rust deps (audit + deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo-audit (RUSTSEC advisories)
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cargo-deny (licenses, bans, advisories, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  gitleaks:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so leaks in old commits are caught
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  npm-audit:
+    name: frontend deps
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+  codeql:
+    name: CodeQL (js/ts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

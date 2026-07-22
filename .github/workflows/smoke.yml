@@ -1,0 +1,101 @@
+# HouseCheck smoke + stability — boot the API on a fixture DB and prove it answers,
+# then repeat to catch flakiness. Cross-checked on Linux + Windows.
+# Activates once crates/api and a fixture DB build exist (docs/TASKS.md BE-6, QA-1).
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  HOUSECHECK_DB: data/housecheck.test.db
+  API_PORT: "8787"
+  # A BBL known to exist in the curated Brooklyn fixture (set to a real one in DATA-1).
+  KNOWN_BBL: "3000010001"
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build API
+        run: cargo build -p api --locked
+
+      - name: Build fixture DB
+        run: cargo run -p ingest --locked -- --fixture --out "$HOUSECHECK_DB"
+        shell: bash
+
+      - name: Start API (background)
+        run: cargo run -p api --locked &
+        shell: bash
+
+      - name: Wait for /health
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${API_PORT}/health" >/dev/null; then
+              echo "API up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "API never became healthy"; exit 1
+
+      - name: Smoke — building card returns 200 + score in [0,100]
+        shell: bash
+        run: |
+          body=$(curl -fsS "http://127.0.0.1:${API_PORT}/building/${KNOWN_BBL}")
+          echo "$body"
+          score=$(echo "$body" | python -c "import sys,json;print(json.load(sys.stdin)['score']['total'])")
+          if [ "$score" -lt 0 ] || [ "$score" -gt 100 ]; then
+            echo "score $score out of range"; exit 1
+          fi
+          echo "score=$score OK"
+
+      - name: Smoke — rent-fairness returns a percentage
+        shell: bash
+        run: |
+          curl -fsS -X POST "http://127.0.0.1:${API_PORT}/rent-fairness" \
+            -H "content-type: application/json" \
+            -d "{\"bbl\":\"${KNOWN_BBL}\",\"monthly_rent\":3000}" | tee out.json
+          python -c "import json;d=json.load(open('out.json'));assert 'pct_vs_median' in d, d"
+
+  stability:
+    name: stability (repeat, no flake)
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build + fixture
+        shell: bash
+        run: |
+          cargo build -p api --locked
+          cargo run -p ingest --locked -- --fixture --out "$HOUSECHECK_DB"
+      - name: Start API
+        run: cargo run -p api --locked &
+        shell: bash
+      - name: Wait for health
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do curl -fsS "http://127.0.0.1:${API_PORT}/health" >/dev/null && break || sleep 1; done
+      - name: Hammer endpoint 50× — every response 200 + in-range
+        shell: bash
+        run: |
+          fail=0
+          for i in $(seq 1 50); do
+            code=$(curl -s -o /tmp/r.json -w "%{http_code}" "http://127.0.0.1:${API_PORT}/building/${KNOWN_BBL}")
+            if [ "$code" != "200" ]; then echo "iter $i -> HTTP $code"; fail=1; fi
+          done
+          [ "$fail" -eq 0 ] && echo "50/50 stable" || { echo "instability detected"; exit 1; }

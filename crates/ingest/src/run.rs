@@ -4,10 +4,11 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 use crate::config::Config;
-use crate::geo::{nearest_ada_m, Station};
+use crate::geo::{count_within_m, nearest_ada_m, Station};
 use crate::sources::{
-    bbl_block, bbl_in_query, census_url, hpd_bbl, hpd_block_query, parse_census_medians,
-    parse_dob_has_elevator, parse_hpd_violation, parse_pluto, pluto_coords, pluto_query,
+    bbl_block, bbl_in_query, census_url, complaints_311_query, hpd_bbl, hpd_block_query,
+    parse_311_point, parse_census_medians, parse_dob_has_elevator, parse_hpd_violation,
+    parse_pluto, pluto_coords, pluto_query,
 };
 
 /// Blocking HTTP client with a UA (Socrata throttles anonymous no-UA traffic harder) and a
@@ -158,6 +159,31 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         })
         .collect();
 
+    // 5b. 311 complaints for the nearby-context density (count within 150 m of each building).
+    //     Bound the pull to the curated set's lat/long bbox and to recent complaints so a single
+    //     request with a tens-of-thousands `$limit` covers the slice. No geocoded buildings
+    //     (empty coords) → skip the call rather than fetch all of Brooklyn.
+    let points_311: Vec<(f64, f64)> = if coords.is_empty() {
+        Vec::new()
+    } else {
+        let (min_lat, max_lat) = coords
+            .values()
+            .map(|(lat, _)| *lat)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+                (lo.min(x), hi.max(x))
+            });
+        let (min_lon, max_lon) = coords
+            .values()
+            .map(|(_, lon)| *lon)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+                (lo.min(x), hi.max(x))
+            });
+        let (base, params) = complaints_311_query(min_lat, min_lon, max_lat, max_lon, 50_000);
+        let rows = get_json_query(&c, &base, &params)?;
+        arr(&rows).iter().filter_map(parse_311_point).collect()
+    };
+    println!("311: {} complaint points loaded", points_311.len());
+
     // 6. Enrich each building and write everything through the tested `store` inserts.
     let _ = std::fs::remove_file(&cfg.out);
     let conn = store::open_db(&cfg.out)?;
@@ -174,8 +200,8 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         b.has_elevator = has_elevator.get(&b.bbl).copied().unwrap_or(false);
         if let Some((lat, lon)) = coords.get(&b.bbl) {
             b.near_ada_subway_m = nearest_ada_m(*lat, *lon, &stations).map(|d| d as i32);
+            b.complaints_311 = count_within_m(*lat, *lon, &points_311, 150.0) as i32;
         }
-        // complaints_311 stays at PLUTO's default of 0 — 311 radius counts are Task 6.
         store::upsert_building(&conn, b)?;
         for v in violations.remove(&b.bbl).unwrap_or_default() {
             store::insert_violation(&conn, &b.bbl, &v)?;

@@ -18,6 +18,21 @@ pub fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     2.0 * r * a.sqrt().asin()
 }
 
+/// How many of `points` lie within `radius_m` metres of (lat, lon). A cheap lat/long
+/// bounding-box pre-filter skips the exact haversine for far-away points, keeping the
+/// O(buildings × points) sweep over a large 311 pull fast. The box is widened past the raw
+/// radius (longitude by 1/cos(lat)) so it never clips a true in-radius point — the haversine
+/// is the exact gate.
+pub fn count_within_m(lat: f64, lon: f64, points: &[(f64, f64)], radius_m: f64) -> usize {
+    let lat_deg = radius_m / 111_320.0 + 1e-4;
+    let lon_deg = radius_m / (111_320.0 * lat.to_radians().cos().abs().max(1e-6)) + 1e-4;
+    points
+        .iter()
+        .filter(|(plat, plon)| (plat - lat).abs() <= lat_deg && (plon - lon).abs() <= lon_deg)
+        .filter(|(plat, plon)| haversine_m(lat, lon, *plat, *plon) <= radius_m)
+        .count()
+}
+
 /// Metres to the nearest fully/partially ADA-accessible station (ada != 0), or None.
 pub fn nearest_ada_m(lat: f64, lon: f64, stations: &[Station]) -> Option<f64> {
     stations
@@ -68,5 +83,19 @@ mod tests {
             ada: 0,
         }];
         assert!(nearest_ada_m(40.68, -73.95, &stations).is_none());
+    }
+
+    #[test]
+    fn count_within_m_counts_only_points_inside_radius() {
+        let (lat, lon) = (40.6829, -73.9251);
+        let points = vec![
+            (40.6829, -73.9251), // 0 m — the building itself
+            (40.6835, -73.9251), // ~67 m north (0.0006 deg lat)
+            (40.6829, -73.9245), // ~51 m east
+            (40.70, -73.95),     // ~1.9 km away — outside
+        ];
+        assert_eq!(count_within_m(lat, lon, &points, 150.0), 3);
+        assert_eq!(count_within_m(lat, lon, &points, 60.0), 2); // drops the 67 m point
+        assert_eq!(count_within_m(lat, lon, &[], 150.0), 0);
     }
 }

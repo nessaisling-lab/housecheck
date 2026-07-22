@@ -12,21 +12,31 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use model::{HealthCard, ScoreBreakdown, ViolationCounts};
-use store::{get_building, get_open_violations, get_tract_median};
+use store::{get_building, get_open_violations, get_snapshot_year, get_tract_median};
 
-/// Shared app state: a single SQLite connection behind a mutex.
+/// Default scoring year for a DB with no `meta` snapshot row (e.g. the fixture DB).
+const DEFAULT_SNAPSHOT_YEAR: i32 = 2026;
+
+/// Shared app state: a single SQLite connection behind a mutex, plus the snapshot year the
+/// DB was built for.
 /// (Read-mostly reference data + a curated set → a single connection is fine for the MVP.)
 #[derive(Clone)]
 pub struct AppState {
     conn: Arc<Mutex<rusqlite::Connection>>,
+    /// Year used for recency in scoring, read from the DB's `meta` at startup (not the wall
+    /// clock) so serving matches the snapshot the ingest recorded. Fixture DBs have no `meta`
+    /// row → `DEFAULT_SNAPSHOT_YEAR`.
+    snapshot_year: i32,
 }
 
 impl AppState {
     pub fn from_path(path: &str) -> anyhow::Result<Self> {
         let conn = store::open_db(path)?;
         store::migrate(&conn)?;
+        let snapshot_year = get_snapshot_year(&conn)?.unwrap_or(DEFAULT_SNAPSHOT_YEAR);
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            snapshot_year,
         })
     }
 
@@ -35,14 +45,14 @@ impl AppState {
         let conn = store::open_db(":memory:")?;
         store::migrate(&conn)?;
         store::insert_fixture(&conn)?;
+        // The fixture DB writes no `meta` snapshot row, so this falls back to the default.
+        let snapshot_year = get_snapshot_year(&conn)?.unwrap_or(DEFAULT_SNAPSHOT_YEAR);
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            snapshot_year,
         })
     }
 }
-
-/// Year used for recency in scoring. Centralized so it's the single place to bump.
-const SCORING_YEAR: i32 = 2026;
 
 pub fn app_with_state(state: AppState) -> Router {
     Router::new()
@@ -71,6 +81,7 @@ async fn building_handler(
     State(state): State<AppState>,
     Path(bbl): Path<String>,
 ) -> impl IntoResponse {
+    let snapshot_year = state.snapshot_year;
     // Recover from a poisoned mutex instead of panicking: one prior panic-with-lock-held
     // would otherwise brick every subsequent request on a public server.
     let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
@@ -85,7 +96,7 @@ async fn building_handler(
         Err(e) => return internal_error("database query failed", e),
     };
 
-    let condition = scoring::condition_score(&violations, SCORING_YEAR);
+    let condition = scoring::condition_score(&violations, snapshot_year);
     let legal = scoring::legal_score(&building);
     let neighborhood = scoring::neighborhood_score(building.complaints_311);
     let (accessibility, access_likelihood) = scoring::access_likelihood(&building);
@@ -189,6 +200,21 @@ mod tests {
         // walk-up with open C+B violations -> some open violations present
         assert!(card.open_violations.c >= 1);
         assert_eq!(card.access_likelihood, "Lower"); // 1930 walk-up, 4 floors, pre-FHA
+    }
+
+    #[tokio::test]
+    async fn fixture_snapshot_year_defaults_and_scores() {
+        // The fixture DB has no `meta` snapshot row, so the server must fall back to 2026 and
+        // still score a card (regression guard for the removed hardcoded SCORING_YEAR const).
+        let state = AppState::in_memory_fixture().unwrap();
+        assert_eq!(state.snapshot_year, DEFAULT_SNAPSHOT_YEAR);
+        let server = TestServer::new(app_with_state(state)).unwrap();
+        let res = server.get("/building/3000020002").await;
+        res.assert_status_ok();
+        let card: HealthCard = res.json();
+        // 3000020002 has an open C (2026) + open B (2025); at snapshot 2026 both are "recent"
+        // (<=2 yrs) → penalty 15*2 + 7*2 = 44 → condition 56. A wrong year would shift this.
+        assert_eq!(card.score.condition, 56);
     }
 
     #[tokio::test]

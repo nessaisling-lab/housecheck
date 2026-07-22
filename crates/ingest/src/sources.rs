@@ -30,6 +30,15 @@ fn num(v: &Value, k: &str) -> i32 {
         .map(|f| f as i32)
         .unwrap_or(0)
 }
+/// Parse a numeric field that Socrata may ship as either a JSON string or a JSON number
+/// (311's `latitude`/`longitude` come back as numbers in some slices, strings in others).
+fn fnum(v: &Value, k: &str) -> Option<f64> {
+    match v.get(k) {
+        Some(Value::String(s)) => s.trim().parse().ok(),
+        Some(Value::Number(n)) => n.as_f64(),
+        _ => None,
+    }
+}
 
 /// Normalize a BBL to its canonical 10-digit form. PLUTO ships it as a float string
 /// ("3015990007.00000000"); DOB/our own records use the clean integer. Both round-trip
@@ -207,6 +216,38 @@ pub fn parse_census_medians(v: &Value) -> std::collections::HashMap<String, i32>
     out
 }
 
+/// 311 service requests (erm2-nwe9) inside a lat/long bounding box and since a recent cutoff.
+/// Bounding to the curated set's box + recent complaints keeps a single request (with a
+/// tens-of-thousands `$limit`) enough to cover the slice. `$where` carries spaces and `>`, so
+/// it goes through `reqwest`'s `.query()` for encoding, same as the other Socrata builders.
+pub fn complaints_311_query(
+    min_lat: f64,
+    min_lon: f64,
+    max_lat: f64,
+    max_lon: f64,
+    limit: u32,
+) -> Query {
+    let base = format!("{SODA}/erm2-nwe9.json");
+    let params = vec![
+        ("$select".to_string(), "latitude,longitude".to_string()),
+        (
+            "$where".to_string(),
+            format!(
+                "created_date > '2024-01-01' \
+                 AND latitude >= {min_lat} AND latitude <= {max_lat} \
+                 AND longitude >= {min_lon} AND longitude <= {max_lon}"
+            ),
+        ),
+        ("$limit".to_string(), limit.to_string()),
+    ];
+    (base, params)
+}
+
+/// (latitude, longitude) of a 311 record, or None if either coordinate is missing/unparseable.
+pub fn parse_311_point(v: &Value) -> Option<(f64, f64)> {
+    Some((fnum(v, "latitude")?, fnum(v, "longitude")?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -355,5 +396,31 @@ mod tests {
         let map = parse_census_medians(&v);
         assert_eq!(map.get("36047025300"), Some(&1850));
         assert_eq!(map.get("36047025400"), None); // sentinel dropped
+    }
+
+    #[test]
+    fn complaints_311_query_bounds_bbox_and_recent_date() {
+        let (base, params) = complaints_311_query(40.68, -74.0, 40.70, -73.90, 50000);
+        assert!(base.ends_with("/erm2-nwe9.json"), "base was {base}");
+        let where_clause = param(&params, "$where");
+        assert!(where_clause.contains("created_date > '2024-01-01'"));
+        assert!(where_clause.contains("latitude >= 40.68"));
+        assert!(where_clause.contains("latitude <= 40.7"));
+        assert!(where_clause.contains("longitude >= -74"));
+        assert!(where_clause.contains("longitude <= -73.9"));
+        assert_eq!(param(&params, "$select"), "latitude,longitude");
+        assert_eq!(param(&params, "$limit"), "50000");
+    }
+
+    #[test]
+    fn parses_311_point_from_string_or_number() {
+        // Socrata returns the coords as strings in some slices, JSON numbers in others.
+        let (lat, lon) =
+            parse_311_point(&json!({"latitude": "40.6829", "longitude": "-73.9251"})).unwrap();
+        assert!((lat - 40.6829).abs() < 1e-6);
+        assert!((lon + 73.9251).abs() < 1e-6);
+        assert!(parse_311_point(&json!({"latitude": 40.6829, "longitude": -73.9251})).is_some());
+        // A record missing a coordinate is dropped, not defaulted to (0,0).
+        assert!(parse_311_point(&json!({"latitude": "40.6829"})).is_none());
     }
 }

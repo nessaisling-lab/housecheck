@@ -1,9 +1,6 @@
-// This module is a pure library of geo helpers consumed by the live orchestration in
-// `run::run_real` (Plan 2 Task 5, out of scope here — see crates/ingest/src/run.rs, which
-// is currently a stub). Everything here is exercised by the unit tests below but stays
-// unreachable from `main` until Task 5 lands, so silence dead_code at the module level
-// rather than deleting tested, spec'd logic.
-#![allow(dead_code)]
+// Pure geo helpers consumed by the live orchestration in `run::run_real` (Plan 2 Task 5):
+// great-circle distance and nearest ADA-accessible subway station. Exercised both by the
+// unit tests below and by the real ingest path.
 
 pub struct Station {
     pub lat: f64,

@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/model", "crates/scoring", "crates/store", "crates/ingest", "crates/api"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+axum-test = "17"
+anyhow = "1"

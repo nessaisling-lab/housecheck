@@ -2,7 +2,16 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 /// Open a bundled-SQLite connection (":memory:" or a file path).
+/// Creates the parent directory for a file path if it doesn't exist — SQLite
+/// error 14 ("unable to open the database file") otherwise on a fresh checkout.
 pub fn open_db(path: &str) -> Result<Connection> {
+    if path != ":memory:" {
+        if let Some(parent) = std::path::Path::new(path).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+    }
     let conn = Connection::open(path)?;
     Ok(conn)
 }

@@ -1,0 +1,9 @@
+[package]
+name = "store"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+model = { path = "../model" }
+rusqlite.workspace = true
+anyhow.workspace = true

@@ -44,7 +44,7 @@ jobs:
 
           body=$(curl -fsS "http://127.0.0.1:${API_PORT}/building/${KNOWN_BBL}")
           echo "$body"
-          score=$(echo "$body" | python -c "import sys,json;print(json.load(sys.stdin)['score']['total'])")
+          score=$(echo "$body" | jq '.score.total')
           if [ "$score" -lt 0 ] || [ "$score" -gt 100 ]; then
             echo "score $score out of range"; kill "$SERVER_PID" 2>/dev/null || true; exit 1
           fi
@@ -52,7 +52,7 @@ jobs:
           curl -fsS -X POST "http://127.0.0.1:${API_PORT}/rent-fairness" \
             -H "content-type: application/json" \
             -d "{\"bbl\":\"${KNOWN_BBL}\",\"monthly_rent\":3000}" | tee out.json
-          python -c "import json;d=json.load(open('out.json'));assert 'pct_vs_median' in d, d"
+          jq -e 'has("pct_vs_median")' out.json
 
           kill "$SERVER_PID" 2>/dev/null || true
           echo "smoke OK (score=$score)"

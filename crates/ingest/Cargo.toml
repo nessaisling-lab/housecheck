@@ -1,0 +1,8 @@
+[package]
+name = "ingest"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+store = { path = "../store" }
+anyhow.workspace = true

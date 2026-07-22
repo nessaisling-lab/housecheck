@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HouseCheck — Building Health Terminal</title>
+<meta name="description" content="NYC Finance / Bloomberg-terminal themed Building Health Card mockup for HouseCheck.">
+
+<!-- Google Fonts (monospace) — always paired with a system-monospace fallback stack below -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     HOUSECHECK — "NYC FINANCE / TERMINAL" THEME
+     Original student-project design. No real company marks used.
+     ============================================================ */
+
+  :root{
+    --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+
+    --bg-0: #05070a;
+    --bg-1: #070b0f;
+    --panel: #0a0f14;
+    --panel-alt: #0d1319;
+    --line: #1c2733;
+    --line-strong: #2a3846;
+    --line-hair: #141c25;
+
+    --text-hi: #eaf3f6;
+    --text-mid: #9fb2c0;
+    --text-dim: #5c6f7e;
+    --text-faint: #3a4855;
+
+    --cyan: #4fd8e8;
+    --cyan-dim: #1f5a63;
+
+    --green: #2be6a0;
+    --green-dim: #123829;
+    --amber: #ffb020;
+    --amber-dim: #3a2a0c;
+    --red: #ff5c5c;
+    --red-dim: #3a1616;
+
+    --radius: 0px; /* sharp corners per brief */
+    --card-w: 390px;
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+
+  html{
+    background: var(--bg-0);
+  }
+
+  body{
+    font-family: var(--font-mono);
+    color: var(--text-hi);
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(79,216,232,0.06), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 24px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 24px),
+      var(--bg-0);
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection{ background: var(--cyan-dim); color: var(--text-hi); }
+
+  .num, .tabular{
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  a{ color: var(--cyan); }
+
+  /* ---------------- top ticker strip ---------------- */
+  .ticker-wrap{
+    width: 100%;
+    overflow: hidden;
+    background: #000;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .ticker-track{
+    display: inline-flex;
+    gap: 2.5rem;
+    padding: 6px 0;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    animation: ticker 26s linear infinite;
+    will-change: transform;
+  }
+  .ticker-track span{ display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .ticker-track b{ color: var(--text-mid); font-weight: 600; }
+  .up{ color: var(--green); }
+  .dn{ color: var(--red); }
+  .fl{ color: var(--amber); }
+
+  @keyframes ticker{
+    from{ transform: translateX(0); }
+    to{ transform: translateX(-50%); }
+  }
+
+  /* ---------------- page shell / card ---------------- */
+  .stage{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 20px 14px 44px;
+  }
+
+  .card{
+    width: 100%;
+    max-width: var(--card-w);
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.6),
+      0 30px 70px -20px rgba(0,0,0,0.85),
+      0 0 40px -10px rgba(79,216,232,0.08);
+  }
+
+  /* window chrome */
+  .chrome{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #000;
+    border-bottom: 1px solid var(--line);
+  }
+  .chrome-dots{ display:flex; gap:6px; }
+  .chrome-dots i{
+    width:7px; height:7px; display:block;
+    background: var(--line-strong);
+  }
+  .chrome-dots i:nth-child(1){ background: var(--red); opacity:.85; }
+  .chrome-dots i:nth-child(2){ background: var(--amber); opacity:.85; }
+  .chrome-dots i:nth-child(3){ background: var(--green); opacity:.85; }
+  .chrome-id{
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+  }
+  .chrome-live{
+    display:flex; align-items:center; gap:6px;
+    font-size: 9px; letter-spacing:.12em; color: var(--text-dim); text-transform: uppercase;
+  }
+  .live-dot{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--green);
+    box-shadow: 0 0 6px 1px rgba(43,230,160,0.7);
+    animation: blink 1.6s ease-in-out infinite;
+  }
+  @keyframes blink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+
+  /* header / wordmark */
+  .card-header{
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .wordmark{
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-hi);
+    display:flex;
+    align-items:baseline;
+    gap: 2px;
+  }
+  .wordmark .dim{ color: var(--cyan); }
+  .cursor{
+    display:inline-block;
+    width: 9px; height: 16px;
+    background: var(--cyan);
+    margin-left: 4px;
+    animation: caret 1.1s steps(1) infinite;
+    vertical-align: -2px;
+  }
+  @keyframes caret{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
+
+  .subtitle{
+    margin-top: 4px;
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  /* search bar */
+  .search{
+    margin: 14px 18px 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background: #000;
+    border: 1px solid var(--line-strong);
+    padding: 10px 12px;
+  }
+  .search .prompt{ color: var(--cyan); font-size: 13px; }
+  .search input{
+    all: unset;
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-hi);
+    letter-spacing: 0.01em;
+  }
+  .search .go{
+    color: var(--text-dim);
+    width: 15px; height: 15px;
+    flex: none;
+    display:flex;
+  }
+  .search .go svg{ width:100%; height:100%; }
+
+  /* building id block */
+  .building-id{
+    padding: 16px 18px 4px;
+  }
+  .building-id h1{
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-hi);
+  }
+  .building-meta{
+    margin-top: 5px;
+    font-size: 11px;
+    color: var(--text-mid);
+    letter-spacing: 0.02em;
+  }
+  .building-meta .sep{ color: var(--text-faint); margin: 0 6px; }
+
+  /* section label row, used across all data panels */
+  .sec-label{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 0 18px;
+    margin-top: 20px;
+  }
+  .sec-label .name{
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+  }
+  .sec-label .code{
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+  }
+
+  /* ---------------- score centerpiece ---------------- */
+  .score-panel{
+    margin: 10px 18px 0;
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(circle at 50% 20%, rgba(255,176,32,0.07), transparent 60%),
+      var(--panel-alt);
+    padding: 20px 14px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .gauge{
+    position: relative;
+    width: 182px;
+    height: 182px;
+  }
+  .gauge svg{ width:100%; height:100%; transform: rotate(-90deg); }
+  .gauge .track{ stroke: var(--line-strong); fill:none; }
+  .gauge .ticks{ stroke: var(--line); fill:none; }
+  .gauge .fill{
+    stroke: var(--amber);
+    fill:none;
+    stroke-linecap: butt;
+    filter: drop-shadow(0 0 6px rgba(255,176,32,0.55));
+  }
+  .gauge-center{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction: column;
+    align-items:center;
+    justify-content:center;
+  }
+  .gauge-score{
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text-hi);
+  }
+  .gauge-score sup{
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-dim);
+    margin-left: 2px;
+  }
+  .gauge-of{
+    margin-top: 3px;
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .score-tag{
+    margin-top: 14px;
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    background: var(--amber-dim);
+  }
+  .score-tag .dot{ width:6px; height:6px; background: var(--amber); box-shadow: 0 0 6px 1px rgba(255,176,32,0.7); }
+
+  .score-scale{
+    margin-top: 12px;
+    display:flex;
+    width: 100%;
+    max-width: 260px;
+    height: 4px;
+  }
+  .score-scale i{ flex:1; background: var(--red); }
+  .score-scale i:nth-child(2){ background: var(--amber); }
+  .score-scale i:nth-child(3){ background: var(--green); }
+  .score-scale-labels{
+    display:flex;
+    justify-content: space-between;
+    width:100%;
+    max-width: 260px;
+    margin-top: 4px;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  /* ---------------- sub-score grid ---------------- */
+  .subscores{
+    margin: 14px 18px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-right: none;
+  }
+  .subscore{
+    min-width: 0;
+    padding: 12px 10px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-alt);
+  }
+  .subscore-top{
+    display:flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    column-gap: 6px;
+  }
+  .subscore-label{
+    min-width: 0;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+  }
+  .subscore-val{
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-hi);
+  }
+  .subscore-val small{ font-size: 10px; color: var(--text-faint); font-weight:500; margin-left:1px; }
+
+  .meter{
+    margin-top: 9px;
+    height: 6px;
+    background: var(--line-hair);
+    position: relative;
+    overflow: hidden;
+  }
+  .meter i{
+    display:block;
+    height: 100%;
+    -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 5px);
+            mask-image: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 5px);
+  }
+  .meter.green i{ background: var(--green); box-shadow: 0 0 6px rgba(43,230,160,.5); }
+  .meter.amber i{ background: var(--amber); box-shadow: 0 0 6px rgba(255,176,32,.5); }
+  .meter.red i{ background: var(--red); box-shadow: 0 0 6px rgba(255,92,92,.5); }
+
+  .subscore-status{
+    margin-top: 6px;
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .status-green{ color: var(--green); }
+  .status-amber{ color: var(--amber); }
+  .status-red{ color: var(--red); }
+
+  /* ---------------- generic data panel ---------------- */
+  .panel{
+    margin: 0 18px;
+    border: 1px solid var(--line);
+    border-top: none;
+    background: var(--panel);
+    padding: 12px 14px 12px;
+  }
+  .panel-first{ border-top: 1px solid var(--line); }
+
+  .row{
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-top: 1px solid var(--line-hair);
+  }
+  .row:first-child{ border-top: none; padding-top: 2px; }
+
+  .row .k{
+    font-size: 11.5px;
+    color: var(--text-mid);
+    line-height: 1.45;
+  }
+  .row .k .flag{
+    display:inline-block;
+    width: 7px; height: 7px;
+    margin-right: 7px;
+    vertical-align: 1px;
+  }
+  .flag.red{ background: var(--red); box-shadow: 0 0 5px rgba(255,92,92,.7); }
+  .flag.amber{ background: var(--amber); box-shadow: 0 0 5px rgba(255,176,32,.7); }
+  .flag.green{ background: var(--green); box-shadow: 0 0 5px rgba(43,230,160,.7); }
+
+  .row .v{
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-hi);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .row .v.red{ color: var(--red); }
+  .row .v.amber{ color: var(--amber); }
+  .row .v.green{ color: var(--green); }
+
+  .linked{
+    text-decoration: underline dotted var(--text-faint);
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+
+  /* rent comparison */
+  .rent-compare{
+    display:flex;
+    align-items:stretch;
+    gap: 10px;
+    padding: 6px 0 10px;
+  }
+  .rent-col{ flex:1; }
+  .rent-col .lab{
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .rent-col .amt{
+    margin-top: 4px;
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--text-hi);
+  }
+  .rent-col.you .amt{ color: var(--amber); }
+  .rent-div{
+    width:1px;
+    background: var(--line);
+    align-self: stretch;
+  }
+  .rent-flag{
+    display:flex;
+    align-items:center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--amber);
+    background: var(--amber-dim);
+    color: var(--amber);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+  .rent-flag svg{ width:13px; height:13px; flex: none; }
+
+  /* legal checklist */
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap: 9px;
+    padding: 7px 0;
+    border-top: 1px solid var(--line-hair);
+  }
+  .check-row:first-child{ border-top:none; padding-top:2px; }
+  .check-ico{
+    width: 16px; height:16px;
+    flex: none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border: 1px solid var(--green);
+    color: var(--green);
+    background: var(--green-dim);
+  }
+  .check-ico svg{ width:10px; height:10px; }
+  .check-text{ font-size: 11.5px; color: var(--text-hi); font-weight: 500; }
+
+  /* accessibility */
+  .a11y-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 6px 11px;
+    border: 1px solid var(--red);
+    background: var(--red-dim);
+    color: var(--red);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 4px 0 10px;
+  }
+  .a11y-list{
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+  }
+  .a11y-list li{
+    position: relative;
+    padding: 5px 0 5px 16px;
+    font-size: 11.5px;
+    color: var(--text-mid);
+    border-top: 1px solid var(--line-hair);
+  }
+  .a11y-list li:first-child{ border-top: none; }
+  .a11y-list li::before{
+    content: '»';
+    position: absolute;
+    left: 0;
+    color: var(--text-faint);
+  }
+  .disclaimer{
+    font-size: 10px;
+    font-style: italic;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line);
+  }
+
+  /* source footnote inside each panel */
+  .src{
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line-hair);
+    display:flex;
+    align-items:center;
+    gap: 6px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .src::before{
+    content: 'SRC';
+    color: var(--cyan-dim);
+    border: 1px solid var(--line-strong);
+    padding: 1px 4px;
+    color: var(--cyan);
+    font-size: 8px;
+  }
+  .src b{ color: var(--text-dim); font-weight: 500; letter-spacing: 0.04em; }
+
+  /* footer */
+  .card-footer{
+    margin: 20px 0 0;
+    padding: 14px 18px 18px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+    background: #000;
+  }
+  .card-footer p{
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+  }
+  .card-footer .rule{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: var(--text-faint);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .card-footer .rule::before,
+  .card-footer .rule::after{
+    content:'';
+    height:1px;
+    width: 26px;
+    background: var(--line-strong);
+  }
+
+  @media (max-width: 400px){
+    :root{ --card-w: 100%; }
+    .stage{ padding-left: 8px; padding-right: 8px; }
+    .gauge{ width: 148px; height: 148px; }
+    .gauge-score{ font-size: 38px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .ticker-track, .cursor, .live-dot{ animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="ticker-wrap" aria-hidden="true">
+    <div class="ticker-track">
+      <span>BBL <b>3018420001</b></span>
+      <span class="up">HPD OPEN VIOL <b>2</b> ▲</span>
+      <span class="fl">RENT VS MEDIAN <b>+21%</b> ▲</span>
+      <span class="dn">ACCESS SCORE <b>30</b> ▼</span>
+      <span class="up">LEGAL SCORE <b>100</b> ▲</span>
+      <span>311 (90D) <b>30</b></span>
+      <span class="fl">COND SCORE <b>56</b> ●</span>
+      <span>DOHMH GRADES <b>MOSTLY A</b></span>
+      <!-- duplicate for seamless loop -->
+      <span>BBL <b>3018420001</b></span>
+      <span class="up">HPD OPEN VIOL <b>2</b> ▲</span>
+      <span class="fl">RENT VS MEDIAN <b>+21%</b> ▲</span>
+      <span class="dn">ACCESS SCORE <b>30</b> ▼</span>
+      <span class="up">LEGAL SCORE <b>100</b> ▲</span>
+      <span>311 (90D) <b>30</b></span>
+      <span class="fl">COND SCORE <b>56</b> ●</span>
+      <span>DOHMH GRADES <b>MOSTLY A</b></span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <main class="card">
+
+      <div class="chrome">
+        <div class="chrome-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="chrome-id">HC · BLDG-HEALTH</div>
+        <div class="chrome-live"><span class="live-dot" aria-hidden="true"></span>LIVE</div>
+      </div>
+
+      <header class="card-header">
+        <div class="wordmark">HOUSE<span class="dim">CHECK</span><span class="cursor" aria-hidden="true"></span></div>
+        <div class="subtitle">Building Health Terminal</div>
+      </header>
+
+      <form class="search" role="search" onsubmit="return false;">
+        <span class="prompt" aria-hidden="true">&gt;</span>
+        <input type="text" value="460 Macon St, Brooklyn" readonly aria-label="Building search">
+        <span class="go" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </span>
+      </form>
+
+      <div class="building-id">
+        <h1>460 Macon Street</h1>
+        <div class="building-meta">Bedford-Stuyvesant<span class="sep">·</span>BBL 3018420001</div>
+      </div>
+
+      <!-- SCORE CENTERPIECE -->
+      <div class="sec-label">
+        <span class="name">Overall Health Score</span>
+        <span class="code">IDX</span>
+      </div>
+      <div class="score-panel">
+        <div class="gauge">
+          <svg viewBox="0 0 120 120">
+            <circle class="ticks" cx="60" cy="60" r="58" stroke-width="1" stroke-dasharray="1 8.6"></circle>
+            <circle class="track" cx="60" cy="60" r="50" stroke-width="9"></circle>
+            <circle class="fill" cx="60" cy="60" r="50" stroke-width="9"
+                    stroke-dasharray="314.16" stroke-dashoffset="135.09"></circle>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-score num">57<sup> / 100</sup></div>
+            <div class="gauge-of">Composite Score</div>
+          </div>
+        </div>
+
+        <div class="score-tag"><span class="dot" aria-hidden="true"></span>Fair</div>
+
+        <div class="score-scale" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="score-scale-labels" aria-hidden="true"><span>Poor</span><span>Fair</span><span>Good</span></div>
+      </div>
+
+      <!-- SUB-SCORES -->
+      <div class="sec-label">
+        <span class="name">Component Scores</span>
+        <span class="code">4 SEG</span>
+      </div>
+      <div class="subscores">
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Condition</span>
+            <span class="subscore-val num">56<small>/100</small></span>
+          </div>
+          <div class="meter amber"><i style="width:56%"></i></div>
+          <div class="subscore-status status-amber">Caution</div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Legal</span>
+            <span class="subscore-val num">100<small>/100</small></span>
+          </div>
+          <div class="meter green"><i style="width:100%"></i></div>
+          <div class="subscore-status status-green">Protected</div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Neighborhood</span>
+            <span class="subscore-val num">40<small>/100</small></span>
+          </div>
+          <div class="meter amber"><i style="width:40%"></i></div>
+          <div class="subscore-status status-amber">Caution</div>
+        </div>
+        <div class="subscore">
+          <div class="subscore-top">
+            <span class="subscore-label">Accessibility</span>
+            <span class="subscore-val num">30<small>/100</small></span>
+          </div>
+          <div class="meter red"><i style="width:30%"></i></div>
+          <div class="subscore-status status-red">Limited</div>
+        </div>
+      </div>
+
+      <!-- RENT FAIRNESS -->
+      <div class="sec-label">
+        <span class="name">Rent Fairness</span>
+        <span class="code">RENT</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="rent-compare">
+          <div class="rent-col you">
+            <div class="lab">Your Rent</div>
+            <div class="amt num">$2,900</div>
+          </div>
+          <div class="rent-div" aria-hidden="true"></div>
+          <div class="rent-col">
+            <div class="lab">Tract Median</div>
+            <div class="amt num">$2,400</div>
+          </div>
+        </div>
+        <div class="rent-flag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7-7 7 7"></path></svg>
+          <span class="linked num">21% above the neighborhood median</span>
+        </div>
+        <div class="src"><b>Census ACS B25064</b></div>
+      </div>
+
+      <!-- BUILDING CONDITION -->
+      <div class="sec-label">
+        <span class="name">Building Condition</span>
+        <span class="code">COND</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="row">
+          <div class="k"><span class="flag red" aria-hidden="true"></span>1 open Class C <span style="color:var(--text-faint)">(hazardous)</span></div>
+          <div class="v red num linked">C</div>
+        </div>
+        <div class="row">
+          <div class="k"><span class="flag amber" aria-hidden="true"></span>1 open Class B</div>
+          <div class="v amber num linked">B</div>
+        </div>
+        <div class="row">
+          <div class="k">Violations open since 2025</div>
+          <div class="v num">▲</div>
+        </div>
+        <div class="src"><b>NYC HPD</b></div>
+      </div>
+
+      <!-- LEGAL PROTECTIONS -->
+      <div class="sec-label">
+        <span class="name">Legal Protections</span>
+        <span class="code">LGL</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="check-row">
+          <span class="check-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span class="check-text">Rent stabilized</span>
+        </div>
+        <div class="check-row">
+          <span class="check-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </span>
+          <span class="check-text">Good Cause covered</span>
+        </div>
+        <div class="src"><b>DHCR / NY HCR</b></div>
+      </div>
+
+      <!-- ACCESSIBILITY -->
+      <div class="sec-label">
+        <span class="name">Accessibility</span>
+        <span class="code">ACCS</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="a11y-badge">Step-free access: Lower</div>
+        <ul class="a11y-list">
+          <li>No elevator on record</li>
+          <li>4-story walk-up</li>
+          <li>ADA subway 640 m away</li>
+        </ul>
+        <div class="disclaimer">Access likelihood from public records — verify in person.</div>
+        <div class="src"><b>DOB / MTA</b></div>
+      </div>
+
+      <!-- NEIGHBORHOOD -->
+      <div class="sec-label">
+        <span class="name">Neighborhood</span>
+        <span class="code">NBHD</span>
+      </div>
+      <div class="panel panel-first">
+        <div class="row">
+          <div class="k">Recent 311 complaints nearby</div>
+          <div class="v amber num linked">30</div>
+        </div>
+        <div class="row">
+          <div class="k">Restaurant grades</div>
+          <div class="v green">Mostly A</div>
+        </div>
+        <div class="src"><b>NYC 311 / DOHMH</b></div>
+      </div>
+
+      <footer class="card-footer">
+        <div class="rule">End of Report</div>
+        <p>Every number links to a NYC or Census source · data from Jul 2026</p>
+      </footer>
+
+    </main>
+  </div>
+
+</body>
+</html>

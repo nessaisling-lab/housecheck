@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HouseCheck — Building Health Card (Millennial Hipster)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* base */
+    --cream:        #F6EFE3;
+    --cream-deep:   #EFE4D2;
+    --card:         #FFFDF8;
+    --card-tint:    #FBF5E9;
+    --ink:          #362F27;
+    --ink-soft:     #7A7266;
+    --ink-faint:    #A79E8F;
+    --line:         #E7DBC6;
+
+    /* pastel accent family */
+    --sage:         #93AC85;
+    --sage-bg:      #E4EBDA;
+    --sage-text:    #4E6B3E;
+
+    --coral:        #E1917E;
+    --coral-bg:     #F7E2D8;
+    --coral-text:   #B0543C;
+
+    --clay:         #D7A25C;
+    --clay-bg:      #F3E6CB;
+    --clay-text:    #8A611F;
+
+    --blue:         #8FAEC0;
+    --blue-bg:      #E1EBEF;
+    --blue-text:    #3E6B82;
+
+    --radius-xl: 30px;
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-pill: 999px;
+
+    --shadow-card: 0 1px 2px rgba(54,47,39,0.04), 0 12px 28px -14px rgba(54,47,39,0.16);
+    --shadow-soft: 0 6px 16px -10px rgba(54,47,39,0.18);
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+  }
+
+  body{
+    min-height:100vh;
+    font-family:'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(60% 50% at 12% 0%, #F1E5CE 0%, rgba(241,229,206,0) 60%),
+      radial-gradient(50% 45% at 100% 10%, #E7EEDD 0%, rgba(231,238,221,0) 55%),
+      radial-gradient(55% 50% at 90% 100%, #F3E1D6 0%, rgba(243,225,214,0) 60%),
+      var(--cream);
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    justify-content:center;
+    padding:40px 16px 56px;
+  }
+
+  .page{
+    width:100%;
+    max-width:390px;
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:18px;
+  }
+
+  /* ---------- brand row ---------- */
+  .brand{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:4px 0 2px;
+  }
+  .brand-mark{
+    width:30px; height:30px;
+    border-radius:10px;
+    background:linear-gradient(155deg, var(--sage) 0%, var(--clay) 100%);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:var(--shadow-soft);
+    flex:none;
+  }
+  .brand-mark svg{ width:17px; height:17px; }
+  .brand-word{
+    font-weight:800;
+    font-size:17px;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+  .brand-word span{ color:var(--sage-text); }
+
+  /* ---------- search bar ---------- */
+  .search-bar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius-pill);
+    padding:14px 18px;
+    box-shadow:var(--shadow-card);
+  }
+  .search-bar svg{ flex:none; width:18px; height:18px; color:var(--ink-faint); }
+  .search-text{
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .search-caret{
+    margin-left:auto;
+    flex:none;
+    width:26px; height:26px;
+    border-radius:50%;
+    background:var(--sage-bg);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .search-caret svg{ width:12px; height:12px; color:var(--sage-text); }
+
+  /* ---------- generic card ---------- */
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius-xl);
+    box-shadow:var(--shadow-card);
+    padding:22px;
+  }
+
+  /* ---------- building identity ---------- */
+  .building-card{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    padding:20px 24px;
+  }
+  .building-eyebrow{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.11em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .building-name{
+    font-size:22px;
+    font-weight:800;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+  .building-sub{
+    font-size:13.5px;
+    color:var(--ink-soft);
+    font-weight:500;
+  }
+  .building-sub .dot{ margin:0 6px; color:var(--ink-faint); }
+
+  /* ---------- hero score ---------- */
+  .hero-card{
+    padding:26px 22px 22px;
+    text-align:center;
+  }
+  .hero-label{
+    font-size:11.5px;
+    font-weight:700;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-bottom:14px;
+  }
+
+  .gauge-wrap{
+    position:relative;
+    width:188px;
+    height:188px;
+    margin:0 auto;
+    border-radius:50%;
+    background:conic-gradient(#E39D7E 0%, #D7A25C 40%, #D7A25C 57%, #EFE4D2 57%, #EFE4D2 100%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .gauge-wrap::before{
+    content:"";
+    position:absolute;
+    inset:16px;
+    border-radius:50%;
+    background:var(--card);
+    box-shadow: inset 0 2px 6px rgba(54,47,39,0.05);
+  }
+  .gauge-inner{
+    position:relative;
+    z-index:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .gauge-number{
+    font-size:60px;
+    font-weight:800;
+    line-height:0.9;
+    letter-spacing:-0.03em;
+    color:var(--ink);
+  }
+  .gauge-number sup{
+    font-size:18px;
+    font-weight:600;
+    color:var(--ink-faint);
+    margin-left:2px;
+    top:-1.6em;
+  }
+  .gauge-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 14px;
+    border-radius:var(--radius-pill);
+    background:var(--clay-bg);
+    color:var(--clay-text);
+    font-size:12.5px;
+    font-weight:700;
+    letter-spacing:0.02em;
+  }
+  .gauge-pill .dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--clay-text);
+  }
+
+  /* ---------- subscores ---------- */
+  .subscores{
+    margin-top:22px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    text-align:left;
+  }
+  .subscore-chip{
+    background:var(--card-tint);
+    border:1px solid var(--line);
+    border-radius:var(--radius-md);
+    padding:12px 14px;
+  }
+  .subscore-top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .subscore-label{
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+  }
+  .subscore-value{
+    font-size:17px;
+    font-weight:800;
+    color:var(--ink);
+  }
+  .subscore-bar{
+    height:6px;
+    border-radius:var(--radius-pill);
+    background:var(--line);
+    overflow:hidden;
+  }
+  .subscore-fill{ height:100%; border-radius:var(--radius-pill); }
+  .fill-condition{ background:var(--coral); }
+  .fill-legal{ background:var(--sage); }
+  .fill-neighborhood{ background:var(--clay); }
+  .fill-accessibility{ background:var(--blue); }
+
+  /* ---------- section card shared bits ---------- */
+  .section-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .icon-badge{
+    flex:none;
+    width:34px; height:34px;
+    border-radius:11px;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800;
+    font-size:15px;
+  }
+  .icon-badge svg{ width:17px; height:17px; }
+  .icon-badge.clay{ background:var(--clay-bg); color:var(--clay-text); }
+  .icon-badge.coral{ background:var(--coral-bg); color:var(--coral-text); }
+  .icon-badge.sage{ background:var(--sage-bg); color:var(--sage-text); }
+  .icon-badge.blue{ background:var(--blue-bg); color:var(--blue-text); }
+
+  .section-title{
+    font-size:15.5px;
+    font-weight:700;
+    color:var(--ink);
+    letter-spacing:-0.005em;
+  }
+
+  .source-tag{
+    margin-top:16px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    color:var(--ink-faint);
+  }
+  .source-tag svg{ width:11px; height:11px; flex:none; }
+  .source-tag .src-name{
+    text-decoration:underline;
+    text-decoration-style:dotted;
+    text-decoration-color:var(--ink-faint);
+    text-underline-offset:2px;
+  }
+
+  /* ---------- rent fairness ---------- */
+  .rent-compare{
+    display:flex;
+    align-items:flex-end;
+    gap:18px;
+    margin:4px 0 14px;
+  }
+  .rent-col{ flex:1; }
+  .rent-figure{
+    font-size:24px;
+    font-weight:800;
+    letter-spacing:-0.02em;
+    color:var(--ink);
+    font-family:'DM Mono','DM Sans',monospace;
+  }
+  .rent-col.med .rent-figure{ color:var(--ink-soft); font-size:20px; }
+  .rent-caption{
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink-faint);
+    margin-top:2px;
+  }
+  .rent-bars{
+    display:flex;
+    align-items:flex-end;
+    gap:10px;
+    height:56px;
+    margin-top:10px;
+  }
+  .rent-bar{
+    flex:1;
+    border-radius:10px 10px 6px 6px;
+    background:var(--clay-bg);
+  }
+  .rent-bar.you{ height:100%; background:linear-gradient(180deg, var(--clay) 0%, #C4903F 100%); }
+  .rent-bar.med{ height:82%; background:var(--clay-bg); border:1px dashed #C9A667; }
+
+  .rent-callout{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--coral-bg);
+    color:var(--coral-text);
+    border-radius:var(--radius-md);
+    padding:11px 14px;
+    font-size:13px;
+    font-weight:700;
+  }
+  .rent-callout svg{ width:15px; height:15px; flex:none; }
+
+  /* ---------- condition ---------- */
+  .violation-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:11px 13px;
+    border-radius:var(--radius-md);
+    font-size:13.5px;
+    font-weight:600;
+    margin-bottom:8px;
+  }
+  .violation-row:last-of-type{ margin-bottom:0; }
+  .violation-row.severe{ background:var(--coral-bg); color:var(--coral-text); }
+  .violation-row.moderate{ background:var(--clay-bg); color:var(--clay-text); }
+  .violation-row em{ font-style:normal; opacity:0.85; font-weight:600; }
+  .violation-dot{
+    width:8px; height:8px; border-radius:50%;
+    flex:none;
+    background:currentColor;
+  }
+  .condition-meta{
+    margin-top:12px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-faint);
+  }
+
+  /* ---------- legal ---------- */
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 0;
+    font-size:14px;
+    font-weight:600;
+    color:var(--ink);
+    border-bottom:1px solid var(--line);
+  }
+  .check-row:last-of-type{ border-bottom:none; padding-bottom:0; }
+  .check-row:first-of-type{ padding-top:2px; }
+  .check-icon{
+    flex:none;
+    width:22px; height:22px;
+    border-radius:50%;
+    background:var(--sage-bg);
+    color:var(--sage-text);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .check-icon svg{ width:12px; height:12px; }
+
+  /* ---------- accessibility ---------- */
+  .access-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    background:var(--coral-bg);
+    color:var(--coral-text);
+    border-radius:var(--radius-pill);
+    padding:7px 14px;
+    font-size:12.5px;
+    font-weight:700;
+    margin-bottom:14px;
+  }
+  .access-badge .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .access-detail{
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--ink-soft);
+    line-height:1.55;
+    margin-bottom:10px;
+  }
+  .access-disclaimer{
+    font-style:italic;
+    font-size:11.5px;
+    color:var(--ink-faint);
+    line-height:1.5;
+  }
+
+  /* ---------- neighborhood ---------- */
+  .neigh-stats{
+    display:flex;
+    gap:10px;
+  }
+  .neigh-stat{
+    flex:1;
+    background:var(--card-tint);
+    border:1px solid var(--line);
+    border-radius:var(--radius-md);
+    padding:14px 12px;
+  }
+  .neigh-num{
+    font-size:22px;
+    font-weight:800;
+    color:var(--ink);
+    letter-spacing:-0.02em;
+  }
+  .neigh-num.grade{ color:var(--sage-text); }
+  .neigh-text{
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-top:3px;
+    line-height:1.4;
+  }
+
+  /* ---------- footer ---------- */
+  .footer{
+    text-align:center;
+    padding:10px 18px 4px;
+  }
+  .footer-line{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-faint);
+  }
+  .footer-line svg{ width:12px; height:12px; flex:none; }
+
+  @media (max-width:400px){
+    body{ padding:28px 12px 40px; }
+    .card, .building-card{ padding-left:18px; padding-right:18px; }
+    .gauge-wrap{ width:168px; height:168px; }
+    .gauge-number{ font-size:52px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- brand -->
+  <div class="brand">
+    <span class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 11.5L12 4l8 7.5" stroke="#FFFDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M6 10.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-8.5" stroke="#FFFDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M10 20v-5h4v5" stroke="#FFFDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <span class="brand-word">House<span>Check</span></span>
+  </div>
+
+  <!-- search -->
+  <div class="search-bar">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/>
+      <path d="M20 20L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span class="search-text">460 Macon St, Brooklyn</span>
+    <span class="search-caret">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+  </div>
+
+  <!-- building identity -->
+  <div class="card building-card">
+    <span class="building-eyebrow">Building Health Card</span>
+    <span class="building-name">460 Macon Street</span>
+    <span class="building-sub">Bedford-Stuyvesant<span class="dot">&middot;</span>BBL 3018420001</span>
+  </div>
+
+  <!-- overall score -->
+  <div class="card hero-card">
+    <div class="hero-label">Overall Health Score</div>
+    <div class="gauge-wrap">
+      <div class="gauge-inner">
+        <div class="gauge-number">57<sup>/100</sup></div>
+        <div class="gauge-pill"><span class="dot"></span>Fair</div>
+      </div>
+    </div>
+
+    <div class="subscores">
+      <div class="subscore-chip">
+        <div class="subscore-top"><span class="subscore-label">Condition</span><span class="subscore-value">56</span></div>
+        <div class="subscore-bar"><div class="subscore-fill fill-condition" style="width:56%"></div></div>
+      </div>
+      <div class="subscore-chip">
+        <div class="subscore-top"><span class="subscore-label">Legal</span><span class="subscore-value">100</span></div>
+        <div class="subscore-bar"><div class="subscore-fill fill-legal" style="width:100%"></div></div>
+      </div>
+      <div class="subscore-chip">
+        <div class="subscore-top"><span class="subscore-label">Neighborhood</span><span class="subscore-value">40</span></div>
+        <div class="subscore-bar"><div class="subscore-fill fill-neighborhood" style="width:40%"></div></div>
+      </div>
+      <div class="subscore-chip">
+        <div class="subscore-top"><span class="subscore-label">Accessibility</span><span class="subscore-value">30</span></div>
+        <div class="subscore-bar"><div class="subscore-fill fill-accessibility" style="width:30%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- rent fairness -->
+  <div class="card">
+    <div class="section-head">
+      <span class="icon-badge clay">$</span>
+      <span class="section-title">Rent Fairness</span>
+    </div>
+
+    <div class="rent-compare">
+      <div class="rent-col you">
+        <div class="rent-figure">$2,900</div>
+        <div class="rent-caption">Your rent</div>
+      </div>
+      <div class="rent-col med">
+        <div class="rent-figure">$2,400</div>
+        <div class="rent-caption">Tract median</div>
+      </div>
+    </div>
+    <div class="rent-bars">
+      <div class="rent-bar you"></div>
+      <div class="rent-bar med"></div>
+    </div>
+
+    <div class="rent-callout" style="margin-top:14px;">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 20V7m0 0l-4.5 4.5M12 7l4.5 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 20h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      21% above the neighborhood median
+    </div>
+
+    <div class="source-tag">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 14.5l5-5M9 8H7a3 3 0 000 6h2m6 0h2a3 3 0 000-6h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Source: <span class="src-name">Census ACS B25064</span>
+    </div>
+  </div>
+
+  <!-- building condition -->
+  <div class="card">
+    <div class="section-head">
+      <span class="icon-badge coral">!</span>
+      <span class="section-title">Building Condition</span>
+    </div>
+
+    <div class="violation-row severe">
+      <span class="violation-dot"></span>
+      1 open Class C <em>(hazardous)</em>
+    </div>
+    <div class="violation-row moderate">
+      <span class="violation-dot"></span>
+      1 open Class B
+    </div>
+    <div class="condition-meta">Open since 2025</div>
+
+    <div class="source-tag">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 14.5l5-5M9 8H7a3 3 0 000 6h2m6 0h2a3 3 0 000-6h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Source: <span class="src-name">NYC HPD</span>
+    </div>
+  </div>
+
+  <!-- legal protections -->
+  <div class="card">
+    <div class="section-head">
+      <span class="icon-badge sage">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3l7 3v5c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="section-title">Legal Protections</span>
+    </div>
+
+    <div class="check-row">
+      <span class="check-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      Rent stabilized
+    </div>
+    <div class="check-row">
+      <span class="check-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      Good Cause covered
+    </div>
+
+    <div class="source-tag">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 14.5l5-5M9 8H7a3 3 0 000 6h2m6 0h2a3 3 0 000-6h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Source: <span class="src-name">DHCR / NY HCR</span>
+    </div>
+  </div>
+
+  <!-- accessibility -->
+  <div class="card">
+    <div class="section-head">
+      <span class="icon-badge blue">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 18h3v-3.2h3.4L13 18h3.6l-3-5.6 2.2-2.1L18 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="14.5" cy="5.5" r="1.7" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="section-title">Accessibility</span>
+    </div>
+
+    <div class="access-badge">
+      <span class="dot"></span>
+      Step-free access: Lower
+    </div>
+
+    <div class="access-detail">
+      No elevator on record &middot; 4-story walk-up &middot; ADA subway 640 m away
+    </div>
+
+    <div class="access-disclaimer">
+      Access likelihood from public records — verify in person.
+    </div>
+
+    <div class="source-tag">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 14.5l5-5M9 8H7a3 3 0 000 6h2m6 0h2a3 3 0 000-6h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Source: <span class="src-name">DOB / MTA</span>
+    </div>
+  </div>
+
+  <!-- neighborhood -->
+  <div class="card">
+    <div class="section-head">
+      <span class="icon-badge clay">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 15c0-4 3-9 7-11 4 2 7 7 7 11a7 7 0 01-14 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <circle cx="12" cy="14" r="2.3" stroke="currentColor" stroke-width="1.8"/>
+        </svg>
+      </span>
+      <span class="section-title">Neighborhood</span>
+    </div>
+
+    <div class="neigh-stats">
+      <div class="neigh-stat">
+        <div class="neigh-num">30</div>
+        <div class="neigh-text">recent 311 complaints nearby</div>
+      </div>
+      <div class="neigh-stat">
+        <div class="neigh-num grade">A</div>
+        <div class="neigh-text">restaurant grades mostly A</div>
+      </div>
+    </div>
+
+    <div class="source-tag">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 14.5l5-5M9 8H7a3 3 0 000 6h2m6 0h2a3 3 0 000-6h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Source: <span class="src-name">NYC 311 / DOHMH</span>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div class="footer">
+    <div class="footer-line">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 14.5l5-5M9 8H7a3 3 0 000 6h2m6 0h2a3 3 0 000-6h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Every number links to a NYC or Census source &middot; data from Jul 2026
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

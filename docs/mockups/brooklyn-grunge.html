@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>HouseCheck — Building Health Card (Brooklyn Grunge)</title>
+<meta name="description" content="Brooklyn grunge / DIY zine themed mockup of the HouseCheck building health card.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#efe7d4;
+    --paper-light:#faf5e7;
+    --ink:#141210;
+    --ink-soft:#2a2622;
+    --orange:#ff4d1c;
+    --orange-dim:#c93b12;
+    --orange-text:#b8330f;
+    --grey:#6f6a5c;
+    --font-display:'Anton','Arial Narrow',Impact,sans-serif;
+    --font-head:'Oswald','Arial Narrow',Arial,sans-serif;
+    --font-mono:'Space Mono','Courier New',monospace;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+
+  html{ -webkit-text-size-adjust:100%; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    width:100%;
+    overflow-x:hidden;
+    background-color:var(--paper);
+    background-image:
+      radial-gradient(circle, rgba(20,18,16,0.14) 1px, transparent 1.4px),
+      radial-gradient(circle, rgba(20,18,16,0.07) 1px, transparent 1.4px);
+    background-size:7px 7px, 13px 13px;
+    background-position:0 0, 4px 5px;
+    color:var(--ink);
+    font-family:var(--font-head);
+    display:flex;
+    justify-content:center;
+    padding:28px 14px 56px;
+  }
+
+  img,svg{ display:block; }
+
+  .card{
+    position:relative;
+    width:100%;
+    max-width:390px;
+    background:var(--paper-light);
+    border:4px solid var(--ink);
+    box-shadow:8px 8px 0 var(--ink);
+  }
+
+  /* subtle photocopy grit over the whole card */
+  .card::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background-image:repeating-linear-gradient(
+      to bottom,
+      rgba(20,18,16,0.05) 0px,
+      rgba(20,18,16,0.05) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode:multiply;
+    z-index:5;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    position:relative;
+    background:var(--ink);
+    color:var(--paper-light);
+    padding:22px 20px 30px;
+    background-image:radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1.3px);
+    background-size:6px 6px;
+  }
+
+  .masthead-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+
+  .masthead h1{
+    margin:0;
+    font-family:var(--font-display);
+    font-size:40px;
+    line-height:0.88;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+  }
+
+  .masthead h1 span{ color:var(--orange); }
+
+  .issue-stamp{
+    flex:none;
+    border:2px solid var(--orange);
+    color:var(--orange);
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    padding:4px 7px;
+    transform:rotate(6deg);
+    white-space:nowrap;
+  }
+
+  .tagline{
+    margin-top:8px;
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:0.8px;
+    text-transform:uppercase;
+    color:var(--paper-light);
+    opacity:0.85;
+  }
+
+  .barcode{
+    margin-top:14px;
+    width:70px;
+    height:20px;
+    background-image:repeating-linear-gradient(
+      90deg,
+      var(--paper-light) 0 1px, transparent 1px 3px,
+      var(--paper-light) 3px 5px, transparent 5px 6px,
+      var(--paper-light) 6px 7px, transparent 7px 10px,
+      var(--paper-light) 10px 11px, transparent 11px 12px,
+      var(--paper-light) 12px 14px, transparent 14px 16px
+    );
+    opacity:0.9;
+  }
+
+  /* torn paper edge — jagged bottom of the masthead */
+  .torn{
+    position:relative;
+    height:14px;
+    background:var(--ink);
+    clip-path:polygon(
+      0% 0%, 100% 0%,
+      100% 45%, 92% 100%, 84% 45%, 76% 100%, 68% 45%, 60% 100%,
+      52% 45%, 44% 100%, 36% 45%, 28% 100%, 20% 45%, 12% 100%,
+      4% 45%, 0% 100%
+    );
+  }
+
+  .torn--up{
+    clip-path:polygon(
+      0% 100%, 100% 100%,
+      100% 55%, 92% 0%, 84% 55%, 76% 0%, 68% 55%, 60% 0%,
+      52% 55%, 44% 0%, 36% 55%, 28% 0%, 20% 55%, 12% 0%,
+      4% 55%, 0% 0%
+    );
+  }
+
+  /* ---------- search bar ---------- */
+  .search-wrap{ padding:20px 20px 6px; }
+
+  .search-bar{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    background:var(--paper-light);
+    border:2px dashed var(--ink);
+    padding:11px 14px;
+    transform:rotate(-1deg);
+    box-shadow:4px 4px 0 var(--ink);
+  }
+
+  .search-bar svg{ flex:none; color:var(--ink); }
+
+  .search-bar span{
+    font-family:var(--font-mono);
+    font-size:13.5px;
+    letter-spacing:0.3px;
+    text-transform:uppercase;
+  }
+
+  /* ---------- building id ---------- */
+  .building-id{ padding:18px 20px 4px; }
+
+  .building-id h2{
+    margin:0;
+    font-family:var(--font-display);
+    font-size:25px;
+    letter-spacing:0.4px;
+    line-height:1.05;
+    text-transform:uppercase;
+  }
+
+  .building-id .meta{
+    margin-top:6px;
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    letter-spacing:0.4px;
+    text-transform:uppercase;
+    color:var(--grey);
+  }
+
+  /* ---------- score hero ---------- */
+  .score-hero{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:22px 20px 40px;
+  }
+
+  .score-kicker{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--grey);
+    margin-bottom:16px;
+  }
+
+  .gauge-wrap{ position:relative; width:188px; height:188px; }
+
+  .gauge{
+    width:100%;
+    height:100%;
+    border-radius:50%;
+    background:conic-gradient(var(--orange) 0deg 205.2deg, var(--ink) 205.2deg 360deg);
+    box-shadow:0 0 0 4px var(--ink), 7px 7px 0 0 var(--ink);
+    position:relative;
+  }
+
+  .gauge-inner{
+    position:absolute;
+    inset:16px;
+    border-radius:50%;
+    background:var(--paper-light);
+    background-image:radial-gradient(circle, rgba(20,18,16,0.10) 1px, transparent 1.3px);
+    background-size:6px 6px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .gauge-value{
+    font-family:var(--font-display);
+    font-size:66px;
+    line-height:0.85;
+    letter-spacing:0.5px;
+  }
+
+  .gauge-max{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--grey);
+    margin-top:4px;
+    letter-spacing:0.5px;
+  }
+
+  .score-stamp{
+    position:absolute;
+    bottom:-6px;
+    right:-14px;
+    background:var(--paper-light);
+    border:3px double var(--orange-text);
+    color:var(--orange-text);
+    font-family:var(--font-display);
+    font-size:19px;
+    letter-spacing:2.5px;
+    padding:6px 13px 5px 16px;
+    transform:rotate(-9deg);
+    box-shadow:3px 3px 0 var(--ink);
+  }
+
+  /* ---------- subscore tickets ---------- */
+  .subscores{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px 14px;
+    padding:0 20px 30px;
+  }
+
+  .ticket{
+    background:var(--paper-light);
+    border:3px solid var(--ink);
+    box-shadow:5px 5px 0 var(--ink);
+    padding:12px 12px 14px;
+    position:relative;
+  }
+
+  .ticket:nth-child(1){ transform:rotate(-1.4deg); }
+  .ticket:nth-child(2){ transform:rotate(1.1deg); }
+  .ticket:nth-child(3){ transform:rotate(1.3deg); }
+  .ticket:nth-child(4){ transform:rotate(-1deg); }
+
+  .ticket .label{
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--grey);
+  }
+
+  .ticket .value{
+    font-family:var(--font-display);
+    font-size:32px;
+    line-height:1;
+    margin:5px 0 9px;
+  }
+
+  .ticket .value small{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--grey);
+    margin-left:2px;
+    letter-spacing:0;
+  }
+
+  .bar-track{
+    height:8px;
+    background:rgba(20,18,16,0.10);
+    border:1px solid var(--ink);
+  }
+
+  .bar-fill{ height:100%; background:var(--orange); }
+
+  /* ---------- panels ---------- */
+  .panel{
+    position:relative;
+    background:var(--paper-light);
+    border:3px solid var(--ink);
+    box-shadow:6px 6px 0 var(--ink);
+    padding:24px 16px 16px;
+    margin:0 20px 30px;
+  }
+
+  .panel-tag{
+    position:absolute;
+    top:-14px;
+    left:12px;
+    background:var(--ink);
+    color:var(--paper-light);
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:12.5px;
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    padding:5px 12px;
+    transform:rotate(-2deg);
+    box-shadow:3px 3px 0 rgba(20,18,16,0.3);
+  }
+
+  .source-tag{
+    display:block;
+    margin-top:16px;
+    text-align:right;
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.4px;
+    text-transform:uppercase;
+    color:var(--grey);
+    border-top:1px dashed #b9b09a;
+    padding-top:7px;
+  }
+
+  /* rent fairness */
+  .rent-chart{
+    display:flex;
+    align-items:flex-end;
+    gap:26px;
+    height:100px;
+    padding:0 10px;
+    margin-top:6px;
+  }
+
+  .rent-col{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    height:100%;
+    justify-content:flex-end;
+  }
+
+  .rent-bar-track{
+    height:100px;
+    width:100%;
+    max-width:70px;
+    display:flex;
+    align-items:flex-end;
+  }
+
+  .rent-bar{
+    width:100%;
+    position:relative;
+    border:3px solid var(--ink);
+  }
+
+  .rent-bar.you{ height:100%; background:var(--orange); }
+
+  .rent-bar.median{
+    height:83%;
+    background:repeating-linear-gradient(135deg, var(--ink) 0 6px, var(--paper-light) 6px 12px);
+  }
+
+  .rent-amount{
+    position:absolute;
+    top:-22px;
+    left:50%;
+    transform:translateX(-50%);
+    font-family:var(--font-mono);
+    font-weight:700;
+    font-size:13px;
+    white-space:nowrap;
+  }
+
+  .rent-caption{
+    margin-top:10px;
+    font-family:var(--font-head);
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    text-align:center;
+    color:var(--grey);
+  }
+
+  .rent-alert{
+    display:block;
+    margin-top:22px;
+    border:3px solid var(--orange-text);
+    color:var(--orange-text);
+    font-family:var(--font-display);
+    font-size:22px;
+    line-height:1.08;
+    text-transform:uppercase;
+    padding:11px 14px;
+    transform:rotate(-1.6deg);
+    box-shadow:4px 4px 0 var(--ink);
+    background:var(--paper-light);
+    width:fit-content;
+  }
+
+  /* building condition */
+  .violation-tag{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    border:3px solid var(--ink);
+    padding:9px 12px;
+    margin-bottom:10px;
+    font-family:var(--font-head);
+    font-weight:600;
+    text-transform:uppercase;
+    font-size:12.5px;
+    letter-spacing:0.3px;
+  }
+
+  .violation-tag svg{ flex:none; }
+
+  .violation-tag.hazard{
+    border-color:var(--orange-text);
+    color:var(--orange-text);
+    background:repeating-linear-gradient(45deg, rgba(255,77,28,0.09) 0 8px, transparent 8px 16px);
+  }
+
+  .violation-caption{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    color:var(--grey);
+    margin-top:4px;
+  }
+
+  /* legal protections */
+  .stamps-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px 10px;
+    margin-top:4px;
+  }
+
+  .stamp-check{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    border:2.5px solid var(--orange-text);
+    color:var(--orange-text);
+    padding:8px 13px;
+    border-radius:999px;
+    font-family:var(--font-mono);
+    font-weight:700;
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+
+  .stamp-check:nth-child(1){ transform:rotate(-3deg); }
+  .stamp-check:nth-child(2){ transform:rotate(2deg); }
+
+  .stamp-check svg{ flex:none; }
+
+  /* accessibility */
+  .hazard-tape{
+    display:inline-block;
+    background:repeating-linear-gradient(45deg, var(--ink) 0 12px, var(--orange) 12px 24px);
+    padding:6px;
+    transform:rotate(-1.6deg);
+    box-shadow:4px 4px 0 var(--ink);
+    margin-top:2px;
+  }
+
+  .hazard-tape .label-text{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    background:var(--paper-light);
+    color:var(--ink);
+    border:2px solid var(--ink);
+    padding:6px 11px;
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.3px;
+  }
+
+  .access-detail{
+    margin-top:16px;
+    font-family:var(--font-head);
+    font-size:13px;
+    line-height:1.55;
+    text-transform:uppercase;
+    letter-spacing:0.2px;
+  }
+
+  .access-disclaimer{
+    margin-top:10px;
+    font-family:var(--font-mono);
+    font-style:italic;
+    font-size:11px;
+    line-height:1.5;
+    color:var(--grey);
+  }
+
+  /* neighborhood */
+  .neighborhood-row{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    margin-top:2px;
+  }
+
+  .neighborhood-stat{ flex:1; }
+
+  .neighborhood-stat .value{
+    font-family:var(--font-display);
+    font-size:44px;
+    line-height:0.9;
+  }
+
+  .neighborhood-stat .label{
+    margin-top:6px;
+    font-family:var(--font-head);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.3px;
+    line-height:1.4;
+  }
+
+  .grade-stamp{
+    flex:none;
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    border:3px solid var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transform:rotate(-8deg);
+    position:relative;
+  }
+
+  .grade-stamp::before{
+    content:"";
+    position:absolute;
+    inset:5px;
+    border-radius:50%;
+    border:1.5px solid var(--ink);
+  }
+
+  .grade-stamp span{
+    font-family:var(--font-display);
+    font-size:30px;
+    line-height:1;
+  }
+
+  .neighborhood-note{
+    margin-top:14px;
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.4px;
+    text-transform:uppercase;
+    color:var(--grey);
+  }
+
+  /* ---------- footer ---------- */
+  .footer{
+    background:var(--ink);
+    color:var(--paper-light);
+    padding:20px 22px 24px;
+    text-align:center;
+    background-image:radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1.3px);
+    background-size:6px 6px;
+  }
+
+  .footer p{
+    margin:0;
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:0.5px;
+    line-height:1.6;
+    text-transform:uppercase;
+  }
+
+  .footer .accent{ color:var(--orange); }
+
+  /* ---------- responsive tightening ---------- */
+  @media (max-width:420px){
+    body{ padding:20px 10px 44px; }
+    .card{ box-shadow:5px 5px 0 var(--ink); }
+    .masthead h1{ font-size:34px; }
+    .gauge-wrap{ width:168px; height:168px; }
+    .gauge-value{ font-size:56px; }
+    .panel{ margin:0 14px 26px; padding:22px 13px 14px; }
+    .subscores{ padding:0 14px 26px; gap:12px; }
+    .search-wrap{ padding:18px 14px 6px; }
+    .building-id{ padding:16px 14px 4px; }
+    .score-hero{ padding:20px 14px 34px; }
+  }
+
+  @media (max-width:340px){
+    .ticket .value{ font-size:27px; }
+    .rent-alert{ font-size:19px; }
+  }
+</style>
+</head>
+<body>
+
+<main class="card" role="main" aria-label="HouseCheck building health card for 460 Macon Street, Brooklyn">
+
+  <header class="masthead">
+    <div class="masthead-top">
+      <h1>House<span>Check</span></h1>
+      <div class="issue-stamp">No. 057</div>
+    </div>
+    <p class="tagline">Building health card — street-level data, zero spin</p>
+    <div class="barcode" aria-hidden="true"></div>
+  </header>
+  <div class="torn" aria-hidden="true"></div>
+
+  <section class="search-wrap">
+    <div class="search-bar" role="search" aria-label="Address search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <span>460 Macon St, Brooklyn</span>
+    </div>
+  </section>
+
+  <section class="building-id">
+    <h2>460 Macon Street</h2>
+    <p class="meta">Bedford-Stuyvesant &middot; BBL 3018420001</p>
+  </section>
+
+  <section class="score-hero" aria-label="Overall building health score">
+    <p class="score-kicker">Overall Score</p>
+    <div class="gauge-wrap">
+      <div class="gauge">
+        <div class="gauge-inner">
+          <div class="gauge-value">57</div>
+          <div class="gauge-max">/ 100</div>
+        </div>
+      </div>
+      <div class="score-stamp">Fair</div>
+    </div>
+  </section>
+
+  <section class="subscores" aria-label="Sub-scores">
+    <div class="ticket">
+      <div class="label">Condition</div>
+      <div class="value">56<small>/100</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:56%;"></div></div>
+    </div>
+    <div class="ticket">
+      <div class="label">Legal</div>
+      <div class="value">100<small>/100</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div>
+    </div>
+    <div class="ticket">
+      <div class="label">Neighborhood</div>
+      <div class="value">40<small>/100</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:40%;"></div></div>
+    </div>
+    <div class="ticket">
+      <div class="label">Accessibility</div>
+      <div class="value">30<small>/100</small></div>
+      <div class="bar-track"><div class="bar-fill" style="width:30%;"></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <span class="panel-tag">Rent Fairness</span>
+    <div class="rent-chart">
+      <div class="rent-col">
+        <div class="rent-bar-track">
+          <div class="rent-bar you">
+            <span class="rent-amount">$2,900</span>
+          </div>
+        </div>
+        <p class="rent-caption">Your rent</p>
+      </div>
+      <div class="rent-col">
+        <div class="rent-bar-track">
+          <div class="rent-bar median">
+            <span class="rent-amount">$2,400</span>
+          </div>
+        </div>
+        <p class="rent-caption">Tract median</p>
+      </div>
+    </div>
+    <span class="rent-alert">21% above the<br>neighborhood median</span>
+    <span class="source-tag">Source: Census ACS B25064</span>
+  </section>
+
+  <section class="panel">
+    <span class="panel-tag">Building Condition</span>
+    <div class="violation-tag hazard">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2 1 21h22L12 2zm0 6 6.5 11h-13L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z"></path>
+      </svg>
+      <span>1 open Class C (hazardous)</span>
+    </div>
+    <div class="violation-tag">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="16" rx="1"></rect>
+      </svg>
+      <span>1 open Class B</span>
+    </div>
+    <p class="violation-caption">Open since 2025</p>
+    <span class="source-tag">Source: NYC HPD</span>
+  </section>
+
+  <section class="panel">
+    <span class="panel-tag">Legal Protections</span>
+    <div class="stamps-row">
+      <span class="stamp-check">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Rent stabilized
+      </span>
+      <span class="stamp-check">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Good Cause covered
+      </span>
+    </div>
+    <span class="source-tag">Source: DHCR / NY HCR</span>
+  </section>
+
+  <section class="panel">
+    <span class="panel-tag">Accessibility</span>
+    <div class="hazard-tape">
+      <span class="label-text">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 21h4v-4h4v-4h4v-4h4V5"></path>
+        </svg>
+        Step-free access: Lower
+      </span>
+    </div>
+    <p class="access-detail">No elevator on record &middot; 4-story walk-up &middot; ADA subway 640&nbsp;m away</p>
+    <p class="access-disclaimer">Access likelihood from public records — verify in person.</p>
+    <span class="source-tag">Source: DOB / MTA</span>
+  </section>
+
+  <section class="panel">
+    <span class="panel-tag">Neighborhood</span>
+    <div class="neighborhood-row">
+      <div class="neighborhood-stat">
+        <div class="value">30</div>
+        <p class="label">Recent 311 complaints nearby</p>
+      </div>
+      <div class="grade-stamp" aria-hidden="true"><span>A</span></div>
+    </div>
+    <p class="neighborhood-note">Restaurant grades mostly A</p>
+    <span class="source-tag">Source: NYC 311 / DOHMH</span>
+  </section>
+
+  <div class="torn torn--up" aria-hidden="true"></div>
+  <footer class="footer">
+    <p>Every number links to a <span class="accent">NYC or Census source</span> &middot; data from Jul 2026</p>
+  </footer>
+
+</main>
+
+</body>
+</html>

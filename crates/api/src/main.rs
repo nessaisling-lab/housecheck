@@ -60,20 +60,29 @@ pub fn app() -> Router {
     app_with_state(state)
 }
 
+/// Log the real error server-side; return a generic message to the client so a public
+/// API never leaks internal detail (table/column names, file paths) from rusqlite errors.
+fn internal_error(context: &str, e: impl std::fmt::Display) -> axum::response::Response {
+    tracing::error!(error = %e, context, "internal error");
+    (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+}
+
 async fn building_handler(
     State(state): State<AppState>,
     Path(bbl): Path<String>,
 ) -> impl IntoResponse {
-    let conn = state.conn.lock().unwrap();
+    // Recover from a poisoned mutex instead of panicking: one prior panic-with-lock-held
+    // would otherwise brick every subsequent request on a public server.
+    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
 
     let building = match get_building(&conn, &bbl) {
         Ok(Some(b)) => b,
         Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => return internal_error("database query failed", e),
     };
     let violations = match get_open_violations(&conn, &bbl) {
         Ok(v) => v,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => return internal_error("database query failed", e),
     };
 
     let condition = scoring::condition_score(&violations, SCORING_YEAR);
@@ -110,16 +119,18 @@ async fn rent_fairness_handler(
     if req.monthly_rent <= 0 {
         return (StatusCode::BAD_REQUEST, "monthly_rent must be positive").into_response();
     }
-    let conn = state.conn.lock().unwrap();
+    // Recover from a poisoned mutex instead of panicking: one prior panic-with-lock-held
+    // would otherwise brick every subsequent request on a public server.
+    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
     let building = match get_building(&conn, &req.bbl) {
         Ok(Some(b)) => b,
         Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => return internal_error("database query failed", e),
     };
     let median = match get_tract_median(&conn, &building.tract_geoid) {
         Ok(Some(m)) => m,
         Ok(None) => return (StatusCode::NOT_FOUND, "no rent data for tract").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => return internal_error("database query failed", e),
     };
     let (pct, verdict) = scoring::rent_fairness(req.monthly_rent, median);
     let body = model::RentFairness {
@@ -137,7 +148,11 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let db = std::env::var("HOUSECHECK_DB").unwrap_or_else(|_| "data/housecheck.db".to_string());
     let state = AppState::from_path(&db)?;
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8787").await?;
+    // Bind host/port from env so a container can listen on 0.0.0.0:$PORT (Fly/Shuttle);
+    // defaults keep local dev on 127.0.0.1:8787.
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8787".to_string());
+    let listener = tokio::net::TcpListener::bind(format!("{host}:{port}")).await?;
     tracing::info!("listening on {}", listener.local_addr()?);
     axum::serve(listener, app_with_state(state)).await?;
     Ok(())

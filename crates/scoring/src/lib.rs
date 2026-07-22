@@ -65,6 +65,12 @@ pub fn total_score(condition: u8, legal: u8, neighborhood: u8, accessibility: u8
 
 /// Rent vs tract median: (pct difference, human verdict). >5% above, <-5% below, else "about at".
 pub fn rent_fairness(user_rent: i32, tract_median: i32) -> (f64, String) {
+    // Defense-in-depth: Census B25064 ships suppressed tracts as 0 or a sentinel
+    // negative (e.g. -666666666). A non-positive median is meaningless — never divide
+    // by it, or the flagship feature would print a confident, fabricated number.
+    if tract_median <= 0 {
+        return (0.0, "no reliable neighborhood median available".to_string());
+    }
     let pct = (user_rent - tract_median) as f64 / tract_median as f64 * 100.0;
     let verdict = if pct > 5.0 {
         format!("{:.0}% above neighborhood median", pct)
@@ -183,5 +189,16 @@ mod tests {
         let (pct, verdict) = rent_fairness(3000, 2500);
         assert_eq!(pct.round() as i32, 20);
         assert_eq!(verdict, "20% above neighborhood median");
+    }
+
+    #[test]
+    fn rent_fairness_guards_nonpositive_median() {
+        // A suppressed/sentinel Census median must not divide-by-zero or print garbage.
+        for bad in [0, -666666666] {
+            let (pct, verdict) = rent_fairness(3000, bad);
+            assert!(pct.is_finite());
+            assert_eq!(pct, 0.0);
+            assert!(verdict.contains("no reliable"));
+        }
     }
 }

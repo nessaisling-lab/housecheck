@@ -118,8 +118,12 @@ pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation
 }
 
 pub fn get_tract_median(conn: &Connection, tract_geoid: &str) -> Result<Option<i32>> {
-    let mut stmt =
-        conn.prepare("SELECT median_gross_rent FROM acs_rent_by_tract WHERE tract_geoid = ?1")?;
+    // `median_gross_rent > 0` filters out suppressed/sentinel ACS values (0 or negative
+    // jam-values like -666666666) so they surface as "no data" rather than bad math.
+    let mut stmt = conn.prepare(
+        "SELECT median_gross_rent FROM acs_rent_by_tract
+         WHERE tract_geoid = ?1 AND median_gross_rent > 0",
+    )?;
     let mut rows = stmt.query_map([tract_geoid], |row| row.get::<_, i32>(0))?;
     match rows.next() {
         Some(v) => Ok(Some(v?)),
@@ -183,6 +187,23 @@ mod tests {
     fn tract_median_loads() -> Result<()> {
         let conn = seeded()?;
         assert_eq!(get_tract_median(&conn, "36047000100")?, Some(2500));
+        Ok(())
+    }
+
+    #[test]
+    fn tract_median_ignores_suppressed_sentinel_values() -> Result<()> {
+        let conn = seeded()?;
+        // Census suppressed/sentinel medians must read as "no data", not a real number.
+        conn.execute(
+            "INSERT INTO acs_rent_by_tract (tract_geoid, median_gross_rent) VALUES ('36047999900', -666666666)",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO acs_rent_by_tract (tract_geoid, median_gross_rent) VALUES ('36047999901', 0)",
+            [],
+        )?;
+        assert_eq!(get_tract_median(&conn, "36047999900")?, None);
+        assert_eq!(get_tract_median(&conn, "36047999901")?, None);
         Ok(())
     }
 }

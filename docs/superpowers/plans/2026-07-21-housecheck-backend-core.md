@@ -853,6 +853,7 @@ path = "src/main.rs"
 model = { path = "../model" }
 scoring = { path = "../scoring" }
 store = { path = "../store" }
+rusqlite.workspace = true   # AppState holds a rusqlite::Connection directly
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true

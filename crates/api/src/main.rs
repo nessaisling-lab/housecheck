@@ -7,6 +7,8 @@ use axum::{
 };
 use std::sync::{Arc, Mutex};
 
+use serde::Deserialize;
+
 use model::{HealthCard, ScoreBreakdown, ViolationCounts};
 use store::{get_building, get_open_violations, get_tract_median};
 
@@ -40,6 +42,7 @@ pub fn app_with_state(state: AppState) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/building/{bbl}", get(building_handler))
+        .route("/rent-fairness", axum::routing::post(rent_fairness_handler))
         .with_state(state)
 }
 
@@ -82,6 +85,41 @@ async fn building_handler(
         building,
     };
     (StatusCode::OK, Json(card)).into_response()
+}
+
+#[derive(Deserialize)]
+struct RentFairnessReq {
+    bbl: String,
+    monthly_rent: i32,
+}
+
+async fn rent_fairness_handler(
+    State(state): State<AppState>,
+    Json(req): Json<RentFairnessReq>,
+) -> impl IntoResponse {
+    if req.monthly_rent <= 0 {
+        return (StatusCode::BAD_REQUEST, "monthly_rent must be positive").into_response();
+    }
+    let conn = state.conn.lock().unwrap();
+    let building = match get_building(&conn, &req.bbl) {
+        Ok(Some(b)) => b,
+        Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+    let median = match get_tract_median(&conn, &building.tract_geoid) {
+        Ok(Some(m)) => m,
+        Ok(None) => return (StatusCode::NOT_FOUND, "no rent data for tract").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+    let (pct, verdict) = scoring::rent_fairness(req.monthly_rent, median);
+    let body = model::RentFairness {
+        bbl: req.bbl,
+        user_rent: req.monthly_rent,
+        tract_median: median,
+        pct_vs_median: pct,
+        verdict,
+    };
+    (StatusCode::OK, Json(body)).into_response()
 }
 
 #[tokio::main]
@@ -132,6 +170,43 @@ mod tests {
     async fn unknown_building_is_404() {
         let server = test_server();
         let res = server.get("/building/9999999999").await;
+        res.assert_status_not_found();
+    }
+
+    use model::RentFairness;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn rent_fairness_returns_pct_vs_median() {
+        let server = test_server();
+        let res = server
+            .post("/rent-fairness")
+            .json(&json!({"bbl": "3000010001", "monthly_rent": 3000}))
+            .await;
+        res.assert_status_ok();
+        let rf: RentFairness = res.json();
+        assert_eq!(rf.tract_median, 2500);
+        assert_eq!(rf.pct_vs_median.round() as i32, 20);
+        assert!(rf.verdict.contains("above"));
+    }
+
+    #[tokio::test]
+    async fn rent_fairness_rejects_nonpositive_rent() {
+        let server = test_server();
+        let res = server
+            .post("/rent-fairness")
+            .json(&json!({"bbl": "3000010001", "monthly_rent": 0}))
+            .await;
+        res.assert_status_bad_request();
+    }
+
+    #[tokio::test]
+    async fn rent_fairness_unknown_bbl_is_404() {
+        let server = test_server();
+        let res = server
+            .post("/rent-fairness")
+            .json(&json!({"bbl": "9999999999", "monthly_rent": 3000}))
+            .await;
         res.assert_status_not_found();
     }
 }

@@ -8,6 +8,8 @@ use axum::{
 use std::sync::{Arc, Mutex};
 
 use serde::Deserialize;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 
 use model::{HealthCard, ScoreBreakdown, ViolationCounts};
 use store::{get_building, get_open_violations, get_tract_median};
@@ -23,7 +25,9 @@ impl AppState {
     pub fn from_path(path: &str) -> anyhow::Result<Self> {
         let conn = store::open_db(path)?;
         store::migrate(&conn)?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     /// In-memory DB seeded with fixtures — used by tests.
@@ -31,7 +35,9 @@ impl AppState {
         let conn = store::open_db(":memory:")?;
         store::migrate(&conn)?;
         store::insert_fixture(&conn)?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 }
 
@@ -43,6 +49,8 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/health", get(|| async { "ok" }))
         .route("/building/{bbl}", get(building_handler))
         .route("/rent-fairness", axum::routing::post(rent_fairness_handler))
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::permissive()) // MVP: tighten to the Vercel origin before launch
         .with_state(state)
 }
 
@@ -61,15 +69,11 @@ async fn building_handler(
     let building = match get_building(&conn, &bbl) {
         Ok(Some(b)) => b,
         Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
-        Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-        }
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
     let violations = match get_open_violations(&conn, &bbl) {
         Ok(v) => v,
-        Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-        }
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
 
     let condition = scoring::condition_score(&violations, SCORING_YEAR);
@@ -80,7 +84,13 @@ async fn building_handler(
 
     let card = HealthCard {
         open_violations: ViolationCounts::open_from(&violations),
-        score: ScoreBreakdown { total, condition, legal, neighborhood, accessibility },
+        score: ScoreBreakdown {
+            total,
+            condition,
+            legal,
+            neighborhood,
+            accessibility,
+        },
         access_likelihood,
         building,
     };

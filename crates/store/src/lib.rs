@@ -81,7 +81,9 @@ fn row_to_building(row: &rusqlite::Row) -> rusqlite::Result<Building> {
         num_floors: row.get("num_floors")?,
         units_res: row.get("units_res")?,
         tract_geoid: row.get("tract_geoid")?,
-        rent_stabilized: row.get::<_, Option<i64>>("rent_stabilized")?.map(|v| v != 0),
+        rent_stabilized: row
+            .get::<_, Option<i64>>("rent_stabilized")?
+            .map(|v| v != 0),
         good_cause: row.get::<_, i64>("good_cause")? != 0,
         has_elevator: row.get::<_, i64>("has_elevator")? != 0,
         near_ada_subway_m: row.get("near_ada_subway_m")?,
@@ -99,9 +101,8 @@ pub fn get_building(conn: &Connection, bbl: &str) -> Result<Option<Building>> {
 }
 
 pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation>> {
-    let mut stmt = conn.prepare(
-        "SELECT class, open, year FROM violations WHERE bbl = ?1 AND open = 1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT class, open, year FROM violations WHERE bbl = ?1 AND open = 1")?;
     let rows = stmt.query_map([bbl], |row| {
         Ok(Violation {
             class: row.get("class")?,
@@ -158,7 +159,7 @@ mod tests {
         let conn = seeded()?;
         let b: Building = get_building(&conn, "3000010001")?.expect("building exists");
         assert_eq!(b.address, "1 Fixture Ave, Brooklyn");
-        assert_eq!(b.has_elevator, true);
+        assert!(b.has_elevator);
         Ok(())
     }
 

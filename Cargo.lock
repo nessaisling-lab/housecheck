@@ -28,6 +28,7 @@ dependencies = [
  "axum",
  "axum-test",
  "model",
+ "rusqlite",
  "scoring",
  "serde",
  "serde_json",

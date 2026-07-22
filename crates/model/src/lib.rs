@@ -78,9 +78,21 @@ mod tests {
     #[test]
     fn counts_only_open_violations_by_class() {
         let vs = vec![
-            Violation { class: "C".into(), open: true, year: 2025 },
-            Violation { class: "C".into(), open: false, year: 2020 },
-            Violation { class: "A".into(), open: true, year: 2024 },
+            Violation {
+                class: "C".into(),
+                open: true,
+                year: 2025,
+            },
+            Violation {
+                class: "C".into(),
+                open: false,
+                year: 2020,
+            },
+            Violation {
+                class: "A".into(),
+                open: true,
+                year: 2024,
+            },
         ];
         let counts = ViolationCounts::open_from(&vs);
         assert_eq!(counts, ViolationCounts { a: 1, b: 0, c: 1 });

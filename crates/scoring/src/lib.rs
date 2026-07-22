@@ -82,21 +82,33 @@ mod tests {
 
     #[test]
     fn one_recent_open_class_c_costs_30_points() {
-        let vs = vec![Violation { class: "C".into(), open: true, year: 2026 }];
+        let vs = vec![Violation {
+            class: "C".into(),
+            open: true,
+            year: 2026,
+        }];
         // recent (within 2 yrs of 2026) C = 15 * 2 = 30 penalty -> 70
         assert_eq!(condition_score(&vs, 2026), 70);
     }
 
     #[test]
     fn closed_violations_are_ignored() {
-        let vs = vec![Violation { class: "C".into(), open: false, year: 2026 }];
+        let vs = vec![Violation {
+            class: "C".into(),
+            open: false,
+            year: 2026,
+        }];
         assert_eq!(condition_score(&vs, 2026), 100);
     }
 
     #[test]
     fn penalty_clamps_at_zero() {
         let vs: Vec<Violation> = (0..20)
-            .map(|_| Violation { class: "C".into(), open: true, year: 2026 })
+            .map(|_| Violation {
+                class: "C".into(),
+                open: true,
+                year: 2026,
+            })
             .collect();
         assert_eq!(condition_score(&vs, 2026), 0);
     }

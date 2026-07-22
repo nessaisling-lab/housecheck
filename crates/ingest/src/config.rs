@@ -38,7 +38,12 @@ impl Config {
             .map(|s| s.parse().map_err(|_| "bad --limit".to_string()))
             .transpose()?
             .unwrap_or(200);
-        Ok(Config { mode, out, community_district, limit })
+        Ok(Config {
+            mode,
+            out,
+            community_district,
+            limit,
+        })
     }
 }
 
@@ -50,7 +55,15 @@ mod tests {
     fn parses_real_mode_with_defaults() {
         let args = ["--real", "--out", "data/hc.db"].map(String::from);
         let c = Config::parse(&args).unwrap();
-        assert_eq!(c, Config { mode: Mode::Real, out: "data/hc.db".into(), community_district: 303, limit: 200 });
+        assert_eq!(
+            c,
+            Config {
+                mode: Mode::Real,
+                out: "data/hc.db".into(),
+                community_district: 303,
+                limit: 200
+            }
+        );
     }
 
     #[test]

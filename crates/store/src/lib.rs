@@ -270,10 +270,17 @@ mod tests {
         let conn = open_db(":memory:")?;
         migrate(&conn)?;
         let b = Building {
-            bbl: "3018420001".into(), address: "123 Macon St".into(), year_built: 1910,
-            num_floors: 3, units_res: 6, tract_geoid: "36047025300".into(),
-            rent_stabilized: None, good_cause: false, has_elevator: true,
-            near_ada_subway_m: Some(420), complaints_311: 7,
+            bbl: "3018420001".into(),
+            address: "123 Macon St".into(),
+            year_built: 1910,
+            num_floors: 3,
+            units_res: 6,
+            tract_geoid: "36047025300".into(),
+            rent_stabilized: None,
+            good_cause: false,
+            has_elevator: true,
+            near_ada_subway_m: Some(420),
+            complaints_311: 7,
         };
         upsert_building(&conn, &b)?;
         assert_eq!(get_building(&conn, "3018420001")?.unwrap(), b);
@@ -284,7 +291,15 @@ mod tests {
     fn insert_violation_and_median_roundtrip() -> Result<()> {
         let conn = open_db(":memory:")?;
         migrate(&conn)?;
-        insert_violation(&conn, "3018420001", &Violation { class: "C".into(), open: true, year: 2025 })?;
+        insert_violation(
+            &conn,
+            "3018420001",
+            &Violation {
+                class: "C".into(),
+                open: true,
+                year: 2025,
+            },
+        )?;
         upsert_tract_median(&conn, "36047025300", 1850)?;
         assert_eq!(get_tract_median(&conn, "36047025300")?, Some(1850));
         assert_eq!(get_open_violations(&conn, "3018420001")?.len(), 1);

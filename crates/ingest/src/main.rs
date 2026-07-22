@@ -1,7 +1,7 @@
 mod config;
-mod sources;
 mod geo;
 mod run;
+mod sources;
 
 use anyhow::Result;
 use config::{Config, Mode};

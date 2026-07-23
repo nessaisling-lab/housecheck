@@ -64,6 +64,10 @@ pub fn pluto_query(cd: u32, limit: u32) -> Query {
             "$where".to_string(),
             format!("borough='BK' AND cd={cd} AND unitsres>0"),
         ),
+        // Largest residential buildings first: pre-war multi-unit buildings are the
+        // stabilization-eligible ones, so ordering by unit count surfaces real rent-stabilized
+        // buildings in the curated slice instead of the small rowhouses a natural-order scan hits.
+        ("$order".to_string(), "unitsres DESC".to_string()),
         ("$limit".to_string(), limit.to_string()),
     ];
     (base, params)
@@ -393,6 +397,7 @@ mod tests {
         assert!(where_clause.contains("cd=303"));
         assert!(where_clause.contains("unitsres>0"));
         assert_eq!(param(&params, "$limit"), "200");
+        assert_eq!(param(&params, "$order"), "unitsres DESC");
         assert!(param(&params, "$select").contains("bbl"));
         assert!(param(&params, "$select").contains("bct2020"));
     }

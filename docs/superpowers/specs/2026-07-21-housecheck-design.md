@@ -156,3 +156,16 @@ Building-level LGBTQ+ safety score, real-time crime by address, authoritative re
 - **Launch Radar** roadmap structure + Axum/SQLx Cargo patterns → PRD template + backend reference.
 - **Nisaba-Brand-Kit / Ziqpu-Design** → frontend design tokens.
 - All copied into this folder as templates; originals untouched.
+
+## Appendix C — Resolved decisions & current status (2026-07-23, PRD approved)
+
+These supersede earlier pre-decision mentions in the body (React/Tailwind, Mapbox, Shuttle, SpatiaLite).
+
+- **Curated set:** 250 buildings = all residential buildings in Brooklyn CD3 (Bed-Stuy), capped at 250 (`--cd 303 --limit 250`); scales to the full ~2,000-building CD3 post-grade. Framed as a neighborhood slice, not a hand-picked list.
+- **Rent-stabilization wording:** 3-state honest labels — "Likely rent-stabilized (signal, not a ruling)" / "No record found (lists are incomplete)" / "Unverified (ask for the DHCR rent history)" + footnote "a signal, not a verdict."
+- **Backend hosting:** Fly.io — the read-only SQLite DB baked into the Docker image (no DB service/volume), scale-to-zero. Frontend on Vercel.
+- **Frontend framework:** **Dioxus 0.6** (Rust→WASM over the Axum API), NOT React/Tailwind. Topcoat evaluated, deferred (too early; full-stack).
+- **Serving DB:** plain **bundled SQLite** (not SpatiaLite); geospatial handled at ingest. DuckDB reserved for a *future full-NYC bulk-CSV/Parquet ingest*, never the serving DB.
+- **Map:** **MapLibre GL + Protomaps pmtiles** (free, no key), NOT Mapbox. Geocoding via NYC GeoSearch (keyless).
+- **Cost:** data APIs $0 · hosting < $10/mo — within the $20–50 budget. Secrets: `CENSUS_API_KEY` (required) + `NYC_APP_TOKEN` (free Socrata app token, recommended).
+- **Build status:** backend LIVE with real Bed-Stuy data (PLUTO buildings, HPD violations, 311, DOB elevators, MTA ADA, Census medians). Rent-fairness + neighborhood axes are real. Repo: github.com/nessaisling-lab/housecheck (public, CI green). Plan 2 Tasks 5–6 done.

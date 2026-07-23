@@ -56,20 +56,22 @@ fn norm_bbl(raw: &str) -> Option<String> {
 
 /// PLUTO residential buildings for one Community District. `$where` carries spaces and a
 /// `>` operator, so it MUST be sent through `reqwest`'s `.query()` — never interpolated raw.
-pub fn pluto_query(cd: u32, limit: u32) -> Query {
+pub fn pluto_query(cd: u32, limit: u32, order: Option<&str>) -> Query {
     let base = format!("{SODA}/64uk-42ks.json");
-    let params = vec![
+    let mut params = vec![
         ("$select".to_string(), PLUTO_SELECT.to_string()),
         (
             "$where".to_string(),
             format!("borough='BK' AND cd={cd} AND unitsres>0"),
         ),
-        // Largest residential buildings first: pre-war multi-unit buildings are the
-        // stabilization-eligible ones, so ordering by unit count surfaces real rent-stabilized
-        // buildings in the curated slice instead of the small rowhouses a natural-order scan hits.
-        ("$order".to_string(), "unitsres DESC".to_string()),
         ("$limit".to_string(), limit.to_string()),
     ];
+    // Optional sort. The ingest blends two pulls: one by `unitsres DESC` (the largest, pre-war,
+    // stabilization-eligible buildings) and one unordered (the neighborhood's small-rowhouse
+    // mix), so both stories show instead of only one end of the size distribution.
+    if let Some(o) = order {
+        params.push(("$order".to_string(), o.to_string()));
+    }
     (base, params)
 }
 
@@ -389,7 +391,7 @@ mod tests {
 
     #[test]
     fn pluto_query_filters_by_cd_and_residential() {
-        let (base, params) = pluto_query(303, 200);
+        let (base, params) = pluto_query(303, 200, Some("unitsres DESC"));
         assert!(base.ends_with("/64uk-42ks.json"), "base was {base}");
         // The where clause carries the raw operators; reqwest encodes them at send time.
         let where_clause = param(&params, "$where");
@@ -400,6 +402,9 @@ mod tests {
         assert_eq!(param(&params, "$order"), "unitsres DESC");
         assert!(param(&params, "$select").contains("bbl"));
         assert!(param(&params, "$select").contains("bct2020"));
+        // No order → no $order param (the unordered neighborhood-mix pull).
+        let (_, unordered) = pluto_query(303, 200, None);
+        assert!(!unordered.iter().any(|(k, _)| k == "$order"));
     }
 
     #[test]

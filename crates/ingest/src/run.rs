@@ -89,23 +89,44 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         .context("set CENSUS_API_KEY (https://api.census.gov/data/key_signup.html)")?;
     let c = client();
 
-    // 1. Buildings from PLUTO for the community district.
-    let (pluto_base, pluto_params) = pluto_query(cfg.community_district, cfg.limit);
-    let pluto = get_json_query(&c, &pluto_base, &pluto_params)?;
-    let mut buildings: Vec<model::Building> = arr(&pluto)
+    // 1. Buildings from PLUTO — a BLEND so both stories show: ~60% pulled largest-first (the
+    //    pre-war, multi-unit, stabilization-eligible buildings) and the rest from the
+    //    neighborhood's natural mix of small rowhouses. Merge, dedup by BBL, cap at the limit.
+    let big_n = (cfg.limit * 3) / 5;
+    let (b1, p1) = pluto_query(cfg.community_district, big_n, Some("unitsres DESC"));
+    let (b2, p2) = pluto_query(cfg.community_district, cfg.limit, None);
+    let big = get_json_query(&c, &b1, &p1)?;
+    let mix = get_json_query(&c, &b2, &p2)?;
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut buildings: Vec<model::Building> = Vec::new();
+    let mut coords: HashMap<String, (f64, f64)> = HashMap::new();
+    let mut big_taken = 0usize;
+    for (is_big, v) in arr(&big)
         .iter()
-        .filter_map(parse_pluto)
-        .filter(|b| !b.bbl.is_empty())
-        .collect();
-    // Coordinates for geo joins, keyed by the same normalized BBL the buildings use.
-    let coords: HashMap<String, (f64, f64)> = arr(&pluto)
-        .iter()
-        .filter_map(|v| pluto_coords(v).map(|(bbl, lat, lon)| (bbl, (lat, lon))))
-        .collect();
+        .map(|v| (true, v))
+        .chain(arr(&mix).iter().map(|v| (false, v)))
+    {
+        let Some(b) = parse_pluto(v) else { continue };
+        if b.bbl.is_empty() || !seen.insert(b.bbl.clone()) {
+            continue;
+        }
+        if let Some((bbl, lat, lon)) = pluto_coords(v) {
+            coords.insert(bbl, (lat, lon));
+        }
+        if is_big {
+            big_taken += 1;
+        }
+        buildings.push(b);
+        if buildings.len() >= cfg.limit as usize {
+            break;
+        }
+    }
     println!(
-        "PLUTO: {} residential buildings in CD {}",
+        "PLUTO: {} residential buildings in CD {} (blend: {} large + {} neighborhood mix)",
         buildings.len(),
-        cfg.community_district
+        cfg.community_district,
+        big_taken,
+        buildings.len() - big_taken
     );
     let bbl_set: HashSet<String> = buildings.iter().map(|b| b.bbl.clone()).collect();
     let bbls: Vec<String> = buildings.iter().map(|b| b.bbl.clone()).collect();

@@ -30,8 +30,15 @@ curl https://housecheck.fly.dev/building/3015990007
 ## Frontend → Vercel
 
 The Dioxus/WASM app is a static build; point Vercel at the `frontend/` dir. Set the API base
-URL (the Fly URL above) as a build env var. Tighten the API's CORS to the Vercel origin before
-launch (currently permissive for local dev).
+URL (the Fly URL above) as a build env var.
+
+Tighten the API's CORS to the Vercel origin at launch by setting `CORS_ALLOWED_ORIGIN` on the
+backend to the exact Vercel URL — no code change needed:
+```bash
+fly secrets set CORS_ALLOWED_ORIGIN=https://housecheck.vercel.app
+```
+When set, the API allows only that origin (GET+POST, JSON `content-type`); when unset it falls
+back to permissive for local dev. The active mode is logged at startup.
 
 ## Cost
 Data APIs $0 · Fly.io ~$0–5/mo (scale-to-zero) · map tiles via MapLibre + Protomaps $0.

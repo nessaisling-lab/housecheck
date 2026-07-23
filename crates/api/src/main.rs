@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Json},
     routing::get,
     Router,
@@ -76,8 +76,10 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/health", get(|| async { "ok" }))
         .route("/building/{bbl}", get(building_handler))
         .route("/buildings", get(buildings_handler))
+        .route("/compare", get(compare_handler))
         .route("/search", get(search_handler))
         .route("/rent-fairness", axum::routing::post(rent_fairness_handler))
+        .route("/summary", axum::routing::post(summary_handler))
         .layer(TraceLayer::new_for_http())
         // Rate limiting: we evaluated `tower_governor` 0.8 (which does support axum 0.8), but its
         // per-client `PeerIpKeyExtractor` needs `ConnectInfo<SocketAddr>` from
@@ -86,8 +88,41 @@ pub fn app_with_state(state: AppState) -> Router {
         // fallback, we use `ConcurrencyLimitLayer(64)` instead: it caps in-flight requests
         // (bounding resource use on the public API) and integrates cleanly with both transports.
         .layer(ConcurrencyLimitLayer::new(64))
-        .layer(CorsLayer::permissive()) // MVP: tighten to the Vercel origin before launch
+        .layer(cors_layer())
         .with_state(state)
+}
+
+/// Build the CORS layer from the environment.
+///
+/// - `CORS_ALLOWED_ORIGIN` set (e.g. the Vercel URL) → allow exactly that origin for GET+POST
+///   with a JSON `content-type`. Lets prod tighten to one origin with no code change.
+/// - unset (or blank / unparseable) → `CorsLayer::permissive()` for local dev.
+///
+/// The active mode is logged at startup so the running config is auditable.
+fn cors_layer() -> CorsLayer {
+    match std::env::var("CORS_ALLOWED_ORIGIN") {
+        Ok(origin) if !origin.trim().is_empty() => {
+            let origin = origin.trim();
+            match origin.parse::<HeaderValue>() {
+                Ok(value) => {
+                    tracing::info!(origin = %origin, "CORS: restricted to configured origin");
+                    CorsLayer::new()
+                        .allow_origin(value)
+                        .allow_methods([Method::GET, Method::POST])
+                        .allow_headers([header::CONTENT_TYPE])
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, origin = %origin,
+                        "CORS_ALLOWED_ORIGIN is not a valid origin; falling back to permissive");
+                    CorsLayer::permissive()
+                }
+            }
+        }
+        _ => {
+            tracing::info!("CORS: permissive (local dev); set CORS_ALLOWED_ORIGIN to restrict");
+            CorsLayer::permissive()
+        }
+    }
 }
 
 /// Back-compat helper for the `main` fn / simplest tests.
@@ -103,24 +138,20 @@ fn internal_error(context: &str, e: impl std::fmt::Display) -> axum::response::R
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
-async fn building_handler(
-    State(state): State<AppState>,
-    Path(bbl): Path<String>,
-) -> impl IntoResponse {
-    let snapshot_year = state.snapshot_year;
-    // Recover from a poisoned mutex instead of panicking: one prior panic-with-lock-held
-    // would otherwise brick every subsequent request on a public server.
-    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
-
-    let building = match get_building(&conn, &bbl) {
-        Ok(Some(b)) => b,
-        Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
-        Err(e) => return internal_error("database query failed", e),
+/// Build a full Health Card for one BBL from the serving DB.
+///
+/// `Ok(None)` means the BBL isn't in the curated set (→ 404 / skip); `Err` is a real DB failure
+/// (→ 500). Shared by `/building`, `/compare`, and `/summary` so all three stay in lockstep.
+fn card_for(
+    conn: &rusqlite::Connection,
+    snapshot_year: i32,
+    bbl: &str,
+) -> anyhow::Result<Option<HealthCard>> {
+    let building = match get_building(conn, bbl)? {
+        Some(b) => b,
+        None => return Ok(None),
     };
-    let violations = match get_open_violations(&conn, &bbl) {
-        Ok(v) => v,
-        Err(e) => return internal_error("database query failed", e),
-    };
+    let violations = get_open_violations(conn, bbl)?;
 
     let condition = scoring::condition_score(&violations, snapshot_year);
     let legal = scoring::legal_score(&building);
@@ -128,7 +159,7 @@ async fn building_handler(
     let (accessibility, access_likelihood) = scoring::access_likelihood(&building);
     let total = scoring::total_score(condition, legal, neighborhood, accessibility);
 
-    let card = HealthCard {
+    Ok(Some(HealthCard {
         open_violations: ViolationCounts::open_from(&violations),
         score: ScoreBreakdown {
             total,
@@ -143,8 +174,71 @@ async fn building_handler(
         // "Unverified" until one is; the wording never overstates a match.
         stabilization: Stabilization::from_flag(building.rent_stabilized),
         building,
-    };
-    (StatusCode::OK, Json(card)).into_response()
+    }))
+}
+
+async fn building_handler(
+    State(state): State<AppState>,
+    Path(bbl): Path<String>,
+) -> impl IntoResponse {
+    let snapshot_year = state.snapshot_year;
+    // Recover from a poisoned mutex instead of panicking: one prior panic-with-lock-held
+    // would otherwise brick every subsequent request on a public server.
+    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+
+    match card_for(&conn, snapshot_year, &bbl) {
+        Ok(Some(card)) => (StatusCode::OK, Json(card)).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "building not found").into_response(),
+        Err(e) => internal_error("database query failed", e),
+    }
+}
+
+/// Maximum number of buildings a single `/compare` request will score, to bound work.
+const COMPARE_MAX_BBLS: usize = 4;
+
+#[derive(Deserialize)]
+struct CompareParams {
+    bbls: String,
+}
+
+#[derive(Serialize)]
+struct CompareResponse {
+    buildings: Vec<HealthCard>,
+}
+
+/// `GET /compare?bbls=a,b,c` — side-by-side Health Cards for up to `COMPARE_MAX_BBLS` buildings.
+/// Each card is built with the exact same logic as `/building`. BBLs not in the curated set are
+/// silently skipped (so a mixed list still returns the ones we have). `400` if `bbls` is
+/// missing/empty.
+async fn compare_handler(
+    State(state): State<AppState>,
+    Query(params): Query<CompareParams>,
+) -> impl IntoResponse {
+    // Split, trim, drop blanks, dedupe-preserving-order, then cap the count.
+    let mut seen = std::collections::HashSet::new();
+    let bbls: Vec<&str> = params
+        .bbls
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .filter(|s| seen.insert(*s))
+        .take(COMPARE_MAX_BBLS)
+        .collect();
+    if bbls.is_empty() {
+        return (StatusCode::BAD_REQUEST, "bbls query param required").into_response();
+    }
+
+    let snapshot_year = state.snapshot_year;
+    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+    let mut buildings = Vec::with_capacity(bbls.len());
+    for bbl in bbls {
+        match card_for(&conn, snapshot_year, bbl) {
+            Ok(Some(card)) => buildings.push(card),
+            Ok(None) => {} // not in the curated set → silently skip
+            Err(e) => return internal_error("database query failed", e),
+        }
+    }
+    (StatusCode::OK, Json(CompareResponse { buildings })).into_response()
 }
 
 /// `GET /buildings` — compact list/map feed for the frontend. Total score is computed on the
@@ -319,6 +413,165 @@ async fn search_handler(
         .into_response()
 }
 
+/// System prompt for `/summary`. Honest and hedged — it must not invent facts.
+const SUMMARY_SYSTEM_PROMPT: &str = "You are a plain-spoken NYC renter's advocate. In 2-3 \
+sentences, explain what this building's data means for a prospective renter. Be concrete and \
+honest; do not invent facts.";
+
+/// OpenRouter's OpenAI-compatible chat-completions endpoint.
+const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+/// The team's free model on OpenRouter.
+const SUMMARY_MODEL: &str = "nvidia/nemotron-3-ultra-550b-a55b:free";
+
+#[derive(Deserialize)]
+struct SummaryReq {
+    bbl: String,
+}
+
+#[derive(Serialize)]
+struct SummaryResp {
+    bbl: String,
+    summary: String,
+}
+
+/// `POST /summary` — optional plain-language summary of a building's Health Card via OpenRouter.
+///
+/// - `404` if the BBL isn't in the curated set.
+/// - `501 Not Implemented` (with a JSON error) if `OPENROUTER_API_KEY` is unset — this endpoint
+///   is optional, so a missing key disables it rather than erroring the server.
+/// - `502 Bad Gateway` if the upstream call/parse fails.
+async fn summary_handler(
+    State(state): State<AppState>,
+    Json(req): Json<SummaryReq>,
+) -> impl IntoResponse {
+    let snapshot_year = state.snapshot_year;
+
+    // Build the card (and grab the tract median for rent context) under the lock, then drop it
+    // before any await — the guard never crosses the network call.
+    let (card, tract_median) = {
+        let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+        match card_for(&conn, snapshot_year, &req.bbl) {
+            Ok(Some(card)) => {
+                let median = get_tract_median(&conn, &card.building.tract_geoid)
+                    .ok()
+                    .flatten();
+                (card, median)
+            }
+            Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
+            Err(e) => return internal_error("database query failed", e),
+        }
+    };
+
+    // Optional feature: no key → advertise it as disabled, don't error the server.
+    let api_key = match std::env::var("OPENROUTER_API_KEY") {
+        Ok(k) if !k.trim().is_empty() => k,
+        _ => {
+            return (
+                StatusCode::NOT_IMPLEMENTED,
+                Json(serde_json::json!({
+                    "error": "summary disabled — set OPENROUTER_API_KEY"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // The card's key facts. `/summary` takes only a BBL (no user rent), so "rent-fairness" is
+    // surfaced as the neighborhood tract median for context rather than a personalized percentage.
+    let rent_context = match tract_median {
+        Some(m) => format!("neighborhood median gross rent ${m}/mo (Census tract)"),
+        None => "no reliable neighborhood median rent available".to_string(),
+    };
+    let v = &card.open_violations;
+    let user_facts = format!(
+        "Building: {address} (BBL {bbl}), built {year_built}, {units_res} residential units.\n\
+         Overall health score: {total}/100 (condition {condition}, legal protection {legal}, \
+         neighborhood {neighborhood}, accessibility {accessibility}).\n\
+         Open HPD violations: {c} class-C (most serious), {b} class-B, {a} class-A.\n\
+         Rent-stabilization signal: {stab_message} ({stab_status}).\n\
+         Rent context: {rent_context}.\n\
+         Accessibility likelihood: {access}.\n\
+         Nearby 311 complaints: {complaints_311}.",
+        address = card.building.address,
+        bbl = card.building.bbl,
+        year_built = card.building.year_built,
+        units_res = card.building.units_res,
+        total = card.score.total,
+        condition = card.score.condition,
+        legal = card.score.legal,
+        neighborhood = card.score.neighborhood,
+        accessibility = card.score.accessibility,
+        c = v.c,
+        b = v.b,
+        a = v.a,
+        stab_message = card.stabilization.message,
+        stab_status = card.stabilization.status,
+        rent_context = rent_context,
+        access = card.access_likelihood,
+        complaints_311 = card.building.complaints_311,
+    );
+
+    let payload = serde_json::json!({
+        "model": SUMMARY_MODEL,
+        "messages": [
+            { "role": "system", "content": SUMMARY_SYSTEM_PROMPT },
+            { "role": "user", "content": user_facts },
+        ],
+    });
+
+    let resp = match state
+        .http
+        .post(OPENROUTER_URL)
+        .bearer_auth(&api_key)
+        // Per-request override of the shared client's 10s default — LLMs can be slower.
+        .timeout(std::time::Duration::from_secs(20))
+        .json(&payload)
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(error = %e, "openrouter upstream failed");
+            return (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response();
+        }
+    };
+
+    let json: serde_json::Value = match resp.json().await {
+        Ok(j) => j,
+        Err(e) => {
+            tracing::error!(error = %e, "openrouter decode failed");
+            return (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response();
+        }
+    };
+
+    // OpenAI-compatible shape: choices[0].message.content.
+    let summary = json
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .and_then(|a| a.first())
+        .and_then(|m| m.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    match summary {
+        Some(s) => (
+            StatusCode::OK,
+            Json(SummaryResp {
+                bbl: req.bbl,
+                summary: s.to_string(),
+            }),
+        )
+            .into_response(),
+        None => {
+            tracing::error!("openrouter response had no summary content");
+            (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response()
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -474,6 +727,70 @@ mod tests {
         // Whitespace-only address trims to empty → 400 before any upstream call.
         let res = server.get("/search?address=%20%20").await;
         res.assert_status_bad_request();
+    }
+
+    #[tokio::test]
+    async fn compare_returns_multiple_cards() {
+        let server = test_server();
+        let res = server.get("/compare?bbls=3000010001,3000020002").await;
+        res.assert_status_ok();
+        let body: serde_json::Value = res.json();
+        let buildings = body["buildings"].as_array().expect("buildings array");
+        // Both fixture BBLs resolve → two full Health Cards, in request order.
+        assert_eq!(buildings.len(), 2);
+        assert_eq!(buildings[0]["building"]["bbl"], "3000010001");
+        assert_eq!(buildings[1]["building"]["bbl"], "3000020002");
+        // Cards carry the same shape as /building (scored breakdown present).
+        assert!(buildings[0]["score"]["total"].is_number());
+    }
+
+    #[tokio::test]
+    async fn compare_skips_unknown_bbls() {
+        let server = test_server();
+        // An unknown BBL sandwiched between two real ones is silently dropped.
+        let res = server
+            .get("/compare?bbls=3000010001,9999999999,3000020002")
+            .await;
+        res.assert_status_ok();
+        let body: serde_json::Value = res.json();
+        assert_eq!(body["buildings"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn compare_requires_bbls() {
+        let server = test_server();
+        // Missing param entirely → Query rejection → 400.
+        server.get("/compare").await.assert_status_bad_request();
+        // Present but whitespace-only → our explicit empty guard → 400.
+        server
+            .get("/compare?bbls=%20")
+            .await
+            .assert_status_bad_request();
+    }
+
+    #[tokio::test]
+    async fn summary_returns_501_when_key_unset() {
+        // Disable the optional LLM path so no network call is attempted in tests.
+        std::env::remove_var("OPENROUTER_API_KEY");
+        let server = test_server();
+        let res = server
+            .post("/summary")
+            .json(&json!({"bbl": "3000010001"}))
+            .await;
+        res.assert_status(StatusCode::NOT_IMPLEMENTED);
+        let body: serde_json::Value = res.json();
+        assert_eq!(body["error"], "summary disabled — set OPENROUTER_API_KEY");
+    }
+
+    #[tokio::test]
+    async fn summary_unknown_bbl_is_404() {
+        // 404 is returned before the key check, so this never touches the network.
+        let server = test_server();
+        let res = server
+            .post("/summary")
+            .json(&json!({"bbl": "9999999999"}))
+            .await;
+        res.assert_status_not_found();
     }
 
     #[test]

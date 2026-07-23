@@ -10,8 +10,11 @@
 // tract), and HPD violations (wvxf-dwi5) have no `bbl` column at all — only `boroid`/`block`/
 // `lot`, plus an `Open`/`Close` `violationstatus`. The parsers below normalize all of that.
 
+use anyhow::{Context, Result};
 use model::{Building, Violation};
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::io::{BufRead, BufReader};
 
 const SODA: &str = "https://data.cityofnewyork.us/resource";
 const PLUTO_SELECT: &str =
@@ -83,7 +86,8 @@ pub fn parse_pluto(v: &Value) -> Option<Building> {
         num_floors: num(v, "numfloors"),
         units_res: num(v, "unitsres"),
         tract_geoid,
-        rent_stabilized: None, // filled later from DHCR/WOW if available; None = unknown
+        rent_stabilized: None, // filled later from the JustFix nyc-doffer CSV; None = unknown
+        rent_stab_units: None, // filled later from the JustFix nyc-doffer CSV
         good_cause: false,     // filled later
         has_elevator: false,   // filled from DOB
         near_ada_subway_m: None, // filled from MTA
@@ -297,6 +301,75 @@ pub fn parse_restaurant_grade(v: &Value) -> Option<(String, f64, f64)> {
     ))
 }
 
+// --- Rent stabilization (JustFix nyc-doffer) ---------------------------------------------------
+// Source: JustFix.org (nyc-doffer), derived from NYC DOF Statement of Account records; latest
+// year 2024. A single ~25 MB static CSV, keyless, one row per tax lot (BBL). Header:
+//   ucbbl,uc2018,pdfsoa2018,uc2019,pdfsoa2019,...,uc2024,pdfsoa2024
+// `ucbbl` is the 10-digit BBL; each `uc<year>` is that year's rent-stabilized unit count and may
+// be blank or "NA" (a scrape gap, not a real change). The most recent numeric value is the count.
+
+/// The keyless JustFix `rentstab_counts_from_doffer` static CSV (latest year 2024).
+pub const RENTSTAB_URL: &str =
+    "https://s3.amazonaws.com/justfix-data/rentstab_counts_from_doffer_2024.csv";
+
+/// Column indices of the `uc<year>` unit counts, newest-first (2024,2023,…,2018). The header is
+/// `ucbbl,uc2018,pdfsoa2018,…` so the counts land on odd indices 1..=13; scanning newest-first
+/// yields the most recent reported value.
+const UC_YEAR_COLS_NEWEST_FIRST: [usize; 7] = [13, 11, 9, 7, 5, 3, 1];
+
+/// Parse one CSV row into `(bbl, latest_units)`, where `latest_units` is the most recent
+/// non-blank / non-`NA` `uc<year>` value (scanning 2024 → 2018). Fields never contain embedded
+/// commas, so a plain split is safe. Returns `None` for the header, a malformed BBL, or a row
+/// with no numeric year at all. A row whose most recent numeric value is `0` (units dropped in a
+/// later year) correctly yields `latest_units = 0`.
+pub fn parse_rentstab_row(line: &str) -> Option<(String, i32)> {
+    let cols: Vec<&str> = line.split(',').collect();
+    if cols.len() < 15 {
+        return None;
+    }
+    let bbl = cols[0].trim();
+    // 10-digit numeric BBL only — this also drops the header row (`ucbbl`).
+    if bbl.len() != 10 || !bbl.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    for &i in &UC_YEAR_COLS_NEWEST_FIRST {
+        let cell = cols[i].trim();
+        if cell.is_empty() || cell.eq_ignore_ascii_case("NA") {
+            continue;
+        }
+        if let Ok(n) = cell.parse::<i32>() {
+            return Some((bbl.to_string(), n));
+        }
+    }
+    None
+}
+
+/// Download the JustFix nyc-doffer rent-stabilization CSV and return `bbl -> latest_units` for
+/// only the BBLs in `bbl_set`. Streams the response line-by-line through a `BufReader` so the
+/// ~25 MB file never fully lands in memory. Reuses the caller's blocking `reqwest` client.
+pub fn fetch_rent_stab(
+    client: &reqwest::blocking::Client,
+    bbl_set: &HashSet<String>,
+) -> Result<HashMap<String, i32>> {
+    let resp = client
+        .get(RENTSTAB_URL)
+        .send()
+        .with_context(|| format!("GET {RENTSTAB_URL}"))?
+        .error_for_status()
+        .with_context(|| format!("bad status for {RENTSTAB_URL}"))?;
+    let reader = BufReader::new(resp);
+    let mut out = HashMap::new();
+    for line in reader.lines() {
+        let line = line.context("read rentstab CSV line")?;
+        if let Some((bbl, units)) = parse_rentstab_row(&line) {
+            if bbl_set.contains(&bbl) {
+                out.insert(bbl, units);
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,5 +578,56 @@ mod tests {
         )
         .is_none());
         assert!(parse_restaurant_grade(&json!({"grade": "A", "latitude": 40.6})).is_none());
+    }
+
+    // Column layout: ucbbl,uc2018,pdfsoa2018,uc2019,pdfsoa2019,uc2020,pdfsoa2020,uc2021,
+    // pdfsoa2021,uc2022,pdfsoa2022,uc2023,pdfsoa2023,uc2024,pdfsoa2024 (15 fields). The pdf
+    // columns are left blank in these fixtures — only the uc counts matter.
+    #[test]
+    fn parse_rentstab_row_takes_most_recent_numeric() {
+        // 2024 is an "NA" scrape gap, so the latest real value is 2023's 20 → stabilized.
+        let line = "3018420001,15,,16,,18,,19,,20,,20,,NA,";
+        let (bbl, units) = parse_rentstab_row(line).expect("valid row");
+        assert_eq!(bbl, "3018420001");
+        assert_eq!(units, 20);
+        assert!(units > 0); // → rent_stabilized = Some(true)
+    }
+
+    #[test]
+    fn parse_rentstab_row_trailing_zero_is_not_stabilized() {
+        // Building carried stabilized units through 2023 but dropped to 0 in 2024 (the latest
+        // numeric value) → latest_units 0, not stabilized.
+        let line = "3018420002,8,,8,,6,,4,,2,,1,,0,";
+        let (bbl, units) = parse_rentstab_row(line).expect("valid row");
+        assert_eq!(bbl, "3018420002");
+        assert_eq!(units, 0);
+        assert!(units == 0); // → rent_stabilized = Some(false)
+    }
+
+    #[test]
+    fn parse_rentstab_row_uses_2024_when_present() {
+        let line = "3018420004,10,,20,,30,,35,,38,,40,,42,";
+        assert_eq!(
+            parse_rentstab_row(line),
+            Some(("3018420004".to_string(), 42))
+        );
+    }
+
+    #[test]
+    fn parse_rentstab_row_all_na_yields_none() {
+        // Every year blank or NA → no numeric value → dropped (building stays "unverified").
+        let line = "3018420003,NA,,NA,,NA,,NA,,NA,,NA,,NA,";
+        assert_eq!(parse_rentstab_row(line), None);
+    }
+
+    #[test]
+    fn parse_rentstab_row_skips_header_and_malformed() {
+        // The CSV header (ucbbl is non-numeric) is naturally skipped.
+        let header = "ucbbl,uc2018,pdfsoa2018,uc2019,pdfsoa2019,uc2020,pdfsoa2020,uc2021,pdfsoa2021,uc2022,pdfsoa2022,uc2023,pdfsoa2023,uc2024,pdfsoa2024";
+        assert_eq!(parse_rentstab_row(header), None);
+        // Too few columns.
+        assert_eq!(parse_rentstab_row("3018420001,5"), None);
+        // Non-10-digit BBL.
+        assert_eq!(parse_rentstab_row("999,1,,2,,3,,4,,5,,6,,7,"), None);
     }
 }

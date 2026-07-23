@@ -169,10 +169,13 @@ fn card_for(
             accessibility,
         },
         access_likelihood,
-        // Honest three-state signal derived from the stored `rent_stabilized` flag. See the
-        // Feature 7 FLAG: no live rent-stabilization source is wired, so real rows read
-        // "Unverified" until one is; the wording never overstates a match.
-        stabilization: Stabilization::from_flag(building.rent_stabilized),
+        // Honest three-state signal derived from the stored rent-stabilization data (JustFix
+        // nyc-doffer, from NYC DOF Statement-of-Account records, latest year 2024). Carries the
+        // unit count for the "likely" wording; the message never overstates a match.
+        stabilization: Stabilization::from_units(
+            building.rent_stabilized,
+            building.rent_stab_units,
+        ),
         building,
     }))
 }
@@ -697,15 +700,19 @@ mod tests {
     #[tokio::test]
     async fn building_card_includes_stabilization_signal() {
         let server = test_server();
-        // Fixture building 1 has rent_stabilized = 1 → honest "on_record" wording.
+        // Fixture building 1 has rent_stabilized = 1 with 12 units → "likely" wording that
+        // surfaces the unit count, and the count travels in the building payload.
         let res = server.get("/building/3000010001").await;
         res.assert_status_ok();
         let card: HealthCard = res.json();
-        assert_eq!(card.stabilization.status, "on_record");
+        assert_eq!(card.stabilization.status, "likely");
+        assert!(card.stabilization.message.contains("12 units"));
+        assert_eq!(card.building.rent_stab_units, Some(12));
         // Building 2 has rent_stabilized = NULL → "unverified" (never overstated).
         let res2 = server.get("/building/3000020002").await;
         let card2: HealthCard = res2.json();
         assert_eq!(card2.stabilization.status, "unverified");
+        assert_eq!(card2.building.rent_stab_units, None);
     }
 
     #[tokio::test]

@@ -9,6 +9,10 @@ pub struct Building {
     pub units_res: i32,
     pub tract_geoid: String,
     pub rent_stabilized: Option<bool>,
+    /// Count of rent-stabilized units on the latest NYC DOF Statement-of-Account record
+    /// (JustFix nyc-doffer, latest year 2024). `Some(n>0)` pairs with `rent_stabilized =
+    /// Some(true)`; `Some(0)` with `Some(false)`; `None` when the building has no DOF record.
+    pub rent_stab_units: Option<i32>,
     pub good_cause: bool,
     pub has_elevator: bool,
     pub near_ada_subway_m: Option<i32>,
@@ -71,20 +75,29 @@ pub struct Stabilization {
 }
 
 impl Stabilization {
-    /// Map the stored `rent_stabilized` tri-state into the honest display wording.
-    pub fn from_flag(rent_stabilized: Option<bool>) -> Self {
+    /// Map the stored `rent_stabilized` tri-state plus its unit count into the honest display
+    /// wording. Backed by JustFix nyc-doffer (NYC DOF Statement-of-Account records, latest year
+    /// 2024): `Some(true)` carries the unit count `n`, `Some(false)` means zero units on the
+    /// latest record, `None` means no DOF record was found for the building.
+    pub fn from_units(rent_stabilized: Option<bool>, rent_stab_units: Option<i32>) -> Self {
         match rent_stabilized {
             Some(true) => Stabilization {
-                status: "on_record".into(),
-                message: "Likely rent-stabilized — a signal, not a legal ruling".into(),
+                status: "likely".into(),
+                message: format!(
+                    "Likely rent-stabilized — {} units on the latest NYC DOF record (2024). \
+                     A signal, not a legal ruling; confirm with DHCR.",
+                    rent_stab_units.unwrap_or(0)
+                ),
             },
             Some(false) => Stabilization {
-                status: "not_found".into(),
-                message: "No record found — public lists are incomplete".into(),
+                status: "none_on_record".into(),
+                message: "No stabilized units on the latest DOF record (2024) — public data \
+                          lags, so not proof it is market-rate."
+                    .into(),
             },
             None => Stabilization {
                 status: "unverified".into(),
-                message: "Unverified".into(),
+                message: "Unverified — no DOF stabilization record found for this building.".into(),
             },
         }
     }

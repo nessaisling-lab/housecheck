@@ -151,6 +151,7 @@ mod tests {
             units_res: 20,
             tract_geoid: "36047000100".into(),
             rent_stabilized: None,
+            rent_stab_units: None,
             good_cause: false,
             has_elevator: false,
             near_ada_subway_m: None,

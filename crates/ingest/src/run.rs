@@ -6,9 +6,10 @@ use std::collections::{HashMap, HashSet};
 use crate::config::Config;
 use crate::geo::{count_within_m, haversine_m, nearest_ada_m, Station};
 use crate::sources::{
-    bbl_block, bbl_in_query, census_url, complaints_311_query, hpd_bbl, hpd_block_query,
-    parse_311_point, parse_census_medians, parse_dob_has_elevator, parse_hpd_violation,
-    parse_pluto, parse_restaurant_grade, pluto_coords, pluto_query, restaurant_grades_query,
+    bbl_block, bbl_in_query, census_url, complaints_311_query, fetch_rent_stab, hpd_bbl,
+    hpd_block_query, parse_311_point, parse_census_medians, parse_dob_has_elevator,
+    parse_hpd_violation, parse_pluto, parse_restaurant_grade, pluto_coords, pluto_query,
+    restaurant_grades_query,
 };
 
 /// Grade of the nearest DOHMH-graded restaurant within `radius_m` metres of (lat, lon), or
@@ -248,6 +249,27 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     };
     println!("DOHMH: {} graded restaurants loaded", restaurants.len());
 
+    // 5d. Rent-stabilization unit counts. Source: JustFix.org (nyc-doffer), derived from NYC DOF
+    //     Statement of Account records; latest year 2024. Streams the ~25 MB static CSV and keeps
+    //     only rows whose BBL is in our curated set. Non-fatal: a download/parse failure must not
+    //     abort the whole ingest — warn and continue with an empty map (buildings read "unverified").
+    let rent_stab: HashMap<String, i32> = match fetch_rent_stab(&c, &bbl_set) {
+        Ok(m) => {
+            println!(
+                "JustFix nyc-doffer: {} of {} buildings matched in rent-stab CSV",
+                m.len(),
+                buildings.len()
+            );
+            m
+        }
+        Err(e) => {
+            println!(
+                "warning: rent-stabilization source skipped ({e:#}); rent_stabilized left null"
+            );
+            HashMap::new()
+        }
+    };
+
     // 6. Enrich each building and write everything through the tested `store` inserts.
     let _ = std::fs::remove_file(&cfg.out);
     let conn = store::open_db(&cfg.out)?;
@@ -260,6 +282,7 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     store::set_snapshot_year(&conn, snapshot_year)?;
 
     let mut tracts_written: HashSet<String> = HashSet::new();
+    let mut stabilized_count = 0usize;
     for b in buildings.iter_mut() {
         b.has_elevator = has_elevator.get(&b.bbl).copied().unwrap_or(false);
         if let Some((lat, lon)) = coords.get(&b.bbl) {
@@ -268,6 +291,23 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             b.near_ada_subway_m = nearest_ada_m(*lat, *lon, &stations).map(|d| d as i32);
             b.complaints_311 = count_within_m(*lat, *lon, &points_311, 150.0) as i32;
             b.restaurant_grade = nearest_grade_within(*lat, *lon, &restaurants, 200.0);
+        }
+        // Rent-stabilization tri-state from the JustFix map: units>0 → stabilized, 0 → on
+        // record with none, absent → left unknown (None) so the card reads "unverified".
+        match rent_stab.get(&b.bbl) {
+            Some(&units) if units > 0 => {
+                b.rent_stabilized = Some(true);
+                b.rent_stab_units = Some(units);
+                stabilized_count += 1;
+            }
+            Some(_) => {
+                b.rent_stabilized = Some(false);
+                b.rent_stab_units = Some(0);
+            }
+            None => {
+                b.rent_stabilized = None;
+                b.rent_stab_units = None;
+            }
         }
         store::upsert_building(&conn, b)?;
         for v in violations.remove(&b.bbl).unwrap_or_default() {
@@ -279,6 +319,11 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             }
         }
     }
+    println!(
+        "rent-stab: {}/{} buildings stabilized (source: JustFix nyc-doffer 2024)",
+        stabilized_count,
+        buildings.len()
+    );
     println!("wrote {} buildings to {}", buildings.len(), cfg.out);
     Ok(())
 }

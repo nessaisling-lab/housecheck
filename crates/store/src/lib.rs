@@ -55,6 +55,9 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     add_column_if_missing(conn, "buildings", "latitude", "REAL")?;
     add_column_if_missing(conn, "buildings", "longitude", "REAL")?;
     add_column_if_missing(conn, "buildings", "restaurant_grade", "TEXT")?;
+    // Rent-stabilized unit count from the latest NYC DOF Statement-of-Account record
+    // (JustFix nyc-doffer 2024). NULL = no DOF record found for the building.
+    add_column_if_missing(conn, "buildings", "rent_stab_units", "INTEGER")?;
     Ok(())
 }
 
@@ -84,15 +87,15 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
     // adds latitude/longitude/restaurant_grade — a bare VALUES(...) would mismatch arity.)
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade)
-         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,5,40.6829,-73.9251,'A')",
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade,rent_stab_units)
+         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,5,40.6829,-73.9251,'A',12)",
         [],
     )?;
     // Building 2: walk-up, open violations, no protections.
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade)
-         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,40,40.6835,-73.9240,NULL)",
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade,rent_stab_units)
+         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,40,40.6835,-73.9240,NULL,NULL)",
         [],
     )?;
     conn.execute(
@@ -121,6 +124,7 @@ fn row_to_building(row: &rusqlite::Row) -> rusqlite::Result<Building> {
         rent_stabilized: row
             .get::<_, Option<i64>>("rent_stabilized")?
             .map(|v| v != 0),
+        rent_stab_units: row.get("rent_stab_units")?,
         good_cause: row.get::<_, i64>("good_cause")? != 0,
         has_elevator: row.get::<_, i64>("has_elevator")? != 0,
         near_ada_subway_m: row.get("near_ada_subway_m")?,
@@ -185,18 +189,20 @@ pub fn get_tract_median(conn: &Connection, tract_geoid: &str) -> Result<Option<i
 pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade,rent_stab_units)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
          ON CONFLICT(bbl) DO UPDATE SET
           address=excluded.address, year_built=excluded.year_built, num_floors=excluded.num_floors,
           units_res=excluded.units_res, tract_geoid=excluded.tract_geoid, rent_stabilized=excluded.rent_stabilized,
           good_cause=excluded.good_cause, has_elevator=excluded.has_elevator,
           near_ada_subway_m=excluded.near_ada_subway_m, complaints_311=excluded.complaints_311,
-          latitude=excluded.latitude, longitude=excluded.longitude, restaurant_grade=excluded.restaurant_grade",
+          latitude=excluded.latitude, longitude=excluded.longitude, restaurant_grade=excluded.restaurant_grade,
+          rent_stab_units=excluded.rent_stab_units",
         rusqlite::params![
             b.bbl, b.address, b.year_built, b.num_floors, b.units_res, b.tract_geoid,
             b.rent_stabilized.map(|v| v as i64), b.good_cause as i64, b.has_elevator as i64,
-            b.near_ada_subway_m, b.complaints_311, b.latitude, b.longitude, b.restaurant_grade
+            b.near_ada_subway_m, b.complaints_311, b.latitude, b.longitude, b.restaurant_grade,
+            b.rent_stab_units
         ],
     )?;
     Ok(())
@@ -270,6 +276,9 @@ mod tests {
         let b: Building = get_building(&conn, "3000010001")?.expect("building exists");
         assert_eq!(b.address, "1 Fixture Ave, Brooklyn");
         assert!(b.has_elevator);
+        // Stabilized fixture carries its DOF unit count alongside the boolean flag.
+        assert_eq!(b.rent_stabilized, Some(true));
+        assert_eq!(b.rent_stab_units, Some(12));
         Ok(())
     }
 
@@ -324,7 +333,8 @@ mod tests {
             num_floors: 3,
             units_res: 6,
             tract_geoid: "36047025300".into(),
-            rent_stabilized: None,
+            rent_stabilized: Some(true),
+            rent_stab_units: Some(9),
             good_cause: false,
             has_elevator: true,
             near_ada_subway_m: Some(420),
@@ -349,7 +359,12 @@ mod tests {
             .prepare("PRAGMA table_info(buildings)")?
             .query_map([], |r| r.get::<_, String>(1))?
             .collect::<rusqlite::Result<_>>()?;
-        for c in ["latitude", "longitude", "restaurant_grade"] {
+        for c in [
+            "latitude",
+            "longitude",
+            "restaurant_grade",
+            "rent_stab_units",
+        ] {
             assert!(cols.iter().any(|x| x == c), "missing column {c}");
         }
         Ok(())

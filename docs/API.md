@@ -53,6 +53,7 @@ curl -s http://127.0.0.1:8787/building/3018420001
     "units_res": 6,
     "tract_geoid": "36047025300",
     "rent_stabilized": null,
+    "rent_stab_units": null,
     "good_cause": false,
     "has_elevator": false,
     "near_ada_subway_m": 420,
@@ -72,7 +73,7 @@ curl -s http://127.0.0.1:8787/building/3018420001
   "access_likelihood": "Lower",
   "stabilization": {
     "status": "unverified",
-    "message": "Unverified"
+    "message": "Unverified — no DOF stabilization record found for this building."
   }
 }
 ```
@@ -83,16 +84,22 @@ Field notes:
   never geocoded). Same coordinates the `/buildings` map feed uses.
 - `building.restaurant_grade` — letter grade (`"A"`/`"B"`/`"C"`) of the nearest DOHMH-graded
   restaurant within ~200 m, or `null`. **Neighborhood context only — never part of any score.**
+- `building.rent_stab_units` — count of rent-stabilized units on the latest NYC DOF
+  Statement-of-Account record (2024). `>0` when stabilized, `0` when the building is on the DOF
+  record with no stabilized units, `null` when no DOF record was found. Source below.
 - `access_likelihood` — one of `"Higher"`, `"Mixed"`, `"Lower"`. A likelihood, not a certification.
-- `stabilization` — three honest states derived from `building.rent_stabilized`:
-  | `rent_stabilized` | `status`      | `message` |
-  |-------------------|---------------|-----------|
-  | `true`            | `on_record`   | `Likely rent-stabilized — a signal, not a legal ruling` |
-  | `false`           | `not_found`   | `No record found — public lists are incomplete` |
-  | `null`            | `unverified`  | `Unverified` |
+- `stabilization` — three honest states derived from `building.rent_stabilized` +
+  `building.rent_stab_units` (`N` is the unit count):
+  | `rent_stabilized` | `status`         | `message` |
+  |-------------------|------------------|-----------|
+  | `true`            | `likely`         | `Likely rent-stabilized — N units on the latest NYC DOF record (2024). A signal, not a legal ruling; confirm with DHCR.` |
+  | `false`           | `none_on_record` | `No stabilized units on the latest DOF record (2024) — public data lags, so not proof it is market-rate.` |
+  | `null`            | `unverified`     | `Unverified — no DOF stabilization record found for this building.` |
 
-  > No live rent-stabilization dataset is wired into ingest yet, so real rows currently read
-  > `unverified`. The wording is intentionally hedged and never overstates a match.
+  > **Source:** [JustFix.org](https://github.com/JustFixNYC/nyc-doffer) (`nyc-doffer`), derived from
+  > NYC DOF Statement of Account records; latest year 2024. The count is the most recent non-blank
+  > year in the JustFix dataset. It's an incomplete public signal, never a legal ruling — the
+  > wording is intentionally hedged and never overstates a match.
 
 ---
 
@@ -151,8 +158,8 @@ curl -s 'http://127.0.0.1:8787/compare?bbls=3018420001,3018420015'
 ```json
 {
   "buildings": [
-    { "building": { "bbl": "3018420001", "...": "..." }, "score": { "total": 72, "...": "..." }, "open_violations": { "a": 0, "b": 1, "c": 1 }, "access_likelihood": "Lower", "stabilization": { "status": "unverified", "message": "Unverified" } },
-    { "building": { "bbl": "3018420015", "...": "..." }, "score": { "total": 88, "...": "..." }, "open_violations": { "a": 0, "b": 0, "c": 0 }, "access_likelihood": "Higher", "stabilization": { "status": "on_record", "message": "Likely rent-stabilized — a signal, not a legal ruling" } }
+    { "building": { "bbl": "3018420001", "rent_stab_units": null, "...": "..." }, "score": { "total": 72, "...": "..." }, "open_violations": { "a": 0, "b": 1, "c": 1 }, "access_likelihood": "Lower", "stabilization": { "status": "unverified", "message": "Unverified — no DOF stabilization record found for this building." } },
+    { "building": { "bbl": "3018420015", "rent_stab_units": 24, "...": "..." }, "score": { "total": 88, "...": "..." }, "open_violations": { "a": 0, "b": 0, "c": 0 }, "access_likelihood": "Higher", "stabilization": { "status": "likely", "message": "Likely rent-stabilized — 24 units on the latest NYC DOF record (2024). A signal, not a legal ruling; confirm with DHCR." } }
   ]
 }
 ```

@@ -1,0 +1,12 @@
+target/
+.git/
+data/raw/
+data/*.db-wal
+data/*.db-shm
+frontend/node_modules/
+frontend/dist/
+docs/
+*.md
+.github/
+.gstack/
+# keep data/housecheck.db — it is baked into the image

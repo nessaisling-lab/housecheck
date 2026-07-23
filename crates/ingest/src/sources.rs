@@ -88,6 +88,9 @@ pub fn parse_pluto(v: &Value) -> Option<Building> {
         has_elevator: false,   // filled from DOB
         near_ada_subway_m: None, // filled from MTA
         complaints_311: 0,     // filled from 311 (Task 6)
+        latitude: None,        // filled from the PLUTO coords map in run_real
+        longitude: None,       // filled from the PLUTO coords map in run_real
+        restaurant_grade: None, // filled from DOHMH nearest-graded-restaurant in run_real
     })
 }
 
@@ -246,6 +249,52 @@ pub fn complaints_311_query(
 /// (latitude, longitude) of a 311 record, or None if either coordinate is missing/unparseable.
 pub fn parse_311_point(v: &Value) -> Option<(f64, f64)> {
     Some((fnum(v, "latitude")?, fnum(v, "longitude")?))
+}
+
+/// DOHMH restaurant inspections (43nn-pn8j) with a real letter grade inside a lat/long box.
+/// The box (built around the curated set) is what restricts this to Brooklyn. `$where` carries
+/// spaces + `>=`, so it goes through `reqwest`'s `.query()` for encoding like the other Socrata
+/// builders. `$order` newest-first so the most recent grade wins a nearest-point tie downstream.
+pub fn restaurant_grades_query(
+    min_lat: f64,
+    min_lon: f64,
+    max_lat: f64,
+    max_lon: f64,
+    limit: u32,
+) -> Query {
+    let base = format!("{SODA}/43nn-pn8j.json");
+    let params = vec![
+        (
+            "$select".to_string(),
+            "grade,latitude,longitude,inspection_date".to_string(),
+        ),
+        (
+            "$where".to_string(),
+            format!(
+                "grade in('A','B','C') \
+                 AND latitude >= {min_lat} AND latitude <= {max_lat} \
+                 AND longitude >= {min_lon} AND longitude <= {max_lon}"
+            ),
+        ),
+        ("$order".to_string(), "inspection_date DESC".to_string()),
+        ("$limit".to_string(), limit.to_string()),
+    ];
+    (base, params)
+}
+
+/// (grade, latitude, longitude) of a graded restaurant record, or None if the grade is empty or
+/// either coordinate is missing/unparseable. Grades are the DOHMH letters A/B/C.
+pub fn parse_restaurant_grade(v: &Value) -> Option<(String, f64, f64)> {
+    let grade = s(v, "grade")?;
+    let grade = grade.trim();
+    if grade.is_empty() {
+        return None;
+    }
+    Some((
+        grade.to_string(),
+        fnum(v, "latitude")?,
+        fnum(v, "longitude")?,
+    ))
 }
 
 #[cfg(test)]
@@ -422,5 +471,39 @@ mod tests {
         assert!(parse_311_point(&json!({"latitude": 40.6829, "longitude": -73.9251})).is_some());
         // A record missing a coordinate is dropped, not defaulted to (0,0).
         assert!(parse_311_point(&json!({"latitude": "40.6829"})).is_none());
+    }
+
+    #[test]
+    fn restaurant_grades_query_bounds_bbox_and_letter_grades() {
+        let (base, params) = restaurant_grades_query(40.68, -74.0, 40.70, -73.90, 20000);
+        assert!(base.ends_with("/43nn-pn8j.json"), "base was {base}");
+        let where_clause = param(&params, "$where");
+        assert!(where_clause.contains("grade in('A','B','C')"));
+        assert!(where_clause.contains("latitude >= 40.68"));
+        assert!(where_clause.contains("longitude <= -73.9"));
+        assert_eq!(param(&params, "$order"), "inspection_date DESC");
+        assert_eq!(param(&params, "$limit"), "20000");
+    }
+
+    #[test]
+    fn parses_restaurant_grade_and_drops_empty() {
+        // Socrata ships the coords as strings in some slices, numbers in others.
+        let (g, lat, lon) = parse_restaurant_grade(
+            &json!({"grade": "A", "latitude": "40.6829", "longitude": "-73.9251"}),
+        )
+        .expect("graded record");
+        assert_eq!(g, "A");
+        assert!((lat - 40.6829).abs() < 1e-6);
+        assert!((lon + 73.9251).abs() < 1e-6);
+        assert!(parse_restaurant_grade(
+            &json!({"grade": "B", "latitude": 40.6, "longitude": -73.9})
+        )
+        .is_some());
+        // Empty grade or missing coordinate → dropped.
+        assert!(parse_restaurant_grade(
+            &json!({"grade": "", "latitude": 40.6, "longitude": -73.9})
+        )
+        .is_none());
+        assert!(parse_restaurant_grade(&json!({"grade": "A", "latitude": 40.6})).is_none());
     }
 }

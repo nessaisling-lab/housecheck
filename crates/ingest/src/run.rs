@@ -4,12 +4,31 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 use crate::config::Config;
-use crate::geo::{count_within_m, nearest_ada_m, Station};
+use crate::geo::{count_within_m, haversine_m, nearest_ada_m, Station};
 use crate::sources::{
     bbl_block, bbl_in_query, census_url, complaints_311_query, hpd_bbl, hpd_block_query,
     parse_311_point, parse_census_medians, parse_dob_has_elevator, parse_hpd_violation,
-    parse_pluto, pluto_coords, pluto_query,
+    parse_pluto, parse_restaurant_grade, pluto_coords, pluto_query, restaurant_grades_query,
 };
+
+/// Grade of the nearest DOHMH-graded restaurant within `radius_m` metres of (lat, lon), or
+/// None. Reuses `geo::haversine_m` for the exact distance. The restaurant list is ordered
+/// newest-inspection-first, and ties keep the first-seen row, so a tie prefers the fresher grade.
+fn nearest_grade_within(
+    lat: f64,
+    lon: f64,
+    restaurants: &[(String, f64, f64)],
+    radius_m: f64,
+) -> Option<String> {
+    let mut best: Option<(f64, &str)> = None;
+    for (grade, rlat, rlon) in restaurants {
+        let d = haversine_m(lat, lon, *rlat, *rlon);
+        if d <= radius_m && best.map(|(bd, _)| d < bd).unwrap_or(true) {
+            best = Some((d, grade.as_str()));
+        }
+    }
+    best.map(|(_, g)| g.to_string())
+}
 
 /// Blocking HTTP client with a UA (Socrata throttles anonymous no-UA traffic harder) and a
 /// generous timeout for the larger tract/station pulls. If `NYC_APP_TOKEN` is set, it is sent
@@ -172,12 +191,10 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         })
         .collect();
 
-    // 5b. 311 complaints for the nearby-context density (count within 150 m of each building).
-    //     Bound the pull to the curated set's lat/long bbox and to recent complaints so a single
-    //     request with a tens-of-thousands `$limit` covers the slice. No geocoded buildings
-    //     (empty coords) → skip the call rather than fetch all of Brooklyn.
-    let points_311: Vec<(f64, f64)> = if coords.is_empty() {
-        Vec::new()
+    // Bounding box around the curated set's coordinates, reused to bound both the 311 pull
+    // (below) and the DOHMH restaurant pull (5c). No geocoded buildings → no box → skip both.
+    let bbox: Option<(f64, f64, f64, f64)> = if coords.is_empty() {
+        None
     } else {
         let (min_lat, max_lat) = coords
             .values()
@@ -191,11 +208,45 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
                 (lo.min(x), hi.max(x))
             });
-        let (base, params) = complaints_311_query(min_lat, min_lon, max_lat, max_lon, 50_000);
-        let rows = get_json_query(&c, &base, &params)?;
-        arr(&rows).iter().filter_map(parse_311_point).collect()
+        Some((min_lat, min_lon, max_lat, max_lon))
+    };
+
+    // 5b. 311 complaints for the nearby-context density (count within 150 m of each building).
+    //     Bound the pull to the curated set's lat/long bbox and to recent complaints so a single
+    //     request with a tens-of-thousands `$limit` covers the slice.
+    let points_311: Vec<(f64, f64)> = match bbox {
+        None => Vec::new(),
+        Some((min_lat, min_lon, max_lat, max_lon)) => {
+            let (base, params) = complaints_311_query(min_lat, min_lon, max_lat, max_lon, 50_000);
+            let rows = get_json_query(&c, &base, &params)?;
+            arr(&rows).iter().filter_map(parse_311_point).collect()
+        }
     };
     println!("311: {} complaint points loaded", points_311.len());
+
+    // 5c. DOHMH restaurant grades within the same box. Each building gets the grade of the
+    //     nearest graded restaurant within ~200 m (neighborhood context, display only — never
+    //     folded into any score). Non-fatal: a DOHMH outage must not abort the whole ingest.
+    let restaurants: Vec<(String, f64, f64)> = match bbox {
+        None => Vec::new(),
+        Some((min_lat, min_lon, max_lat, max_lon)) => {
+            let (base, params) =
+                restaurant_grades_query(min_lat, min_lon, max_lat, max_lon, 20_000);
+            match get_json_query(&c, &base, &params) {
+                Ok(rows) => arr(&rows)
+                    .iter()
+                    .filter_map(parse_restaurant_grade)
+                    .collect(),
+                Err(e) => {
+                    println!(
+                        "warning: DOHMH restaurant grades skipped ({e:#}); restaurant_grade left null"
+                    );
+                    Vec::new()
+                }
+            }
+        }
+    };
+    println!("DOHMH: {} graded restaurants loaded", restaurants.len());
 
     // 6. Enrich each building and write everything through the tested `store` inserts.
     let _ = std::fs::remove_file(&cfg.out);
@@ -212,8 +263,11 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     for b in buildings.iter_mut() {
         b.has_elevator = has_elevator.get(&b.bbl).copied().unwrap_or(false);
         if let Some((lat, lon)) = coords.get(&b.bbl) {
+            b.latitude = Some(*lat);
+            b.longitude = Some(*lon);
             b.near_ada_subway_m = nearest_ada_m(*lat, *lon, &stations).map(|d| d as i32);
             b.complaints_311 = count_within_m(*lat, *lon, &points_311, 150.0) as i32;
+            b.restaurant_grade = nearest_grade_within(*lat, *lon, &restaurants, 200.0);
         }
         store::upsert_building(&conn, b)?;
         for v in violations.remove(&b.bbl).unwrap_or_default() {

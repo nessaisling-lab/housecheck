@@ -49,6 +49,25 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             value TEXT NOT NULL
          );",
     )?;
+    // Columns added after the original schema shipped. SQLite errors on re-adding an existing
+    // column, so each is guarded by a PRAGMA table_info check — keeping `migrate` idempotent
+    // across an existing DB and a fresh one alike.
+    add_column_if_missing(conn, "buildings", "latitude", "REAL")?;
+    add_column_if_missing(conn, "buildings", "longitude", "REAL")?;
+    add_column_if_missing(conn, "buildings", "restaurant_grade", "TEXT")?;
+    Ok(())
+}
+
+/// Add `col <decl>` to `table` only if it isn't already present (idempotent migration helper).
+fn add_column_if_missing(conn: &Connection, table: &str, col: &str, decl: &str) -> Result<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let existing: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(1))? // column 1 = name
+        .collect::<rusqlite::Result<_>>()?;
+    if !existing.iter().any(|c| c == col) {
+        // Table/column names are internal constants here, never user input — safe to inline.
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"), [])?;
+    }
     Ok(())
 }
 
@@ -61,14 +80,19 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
         "INSERT INTO acs_rent_by_tract (tract_geoid, median_gross_rent) VALUES ('36047000100', 2500)",
         [],
     )?;
-    // Building 1: elevator, well-kept, stabilized.
+    // Building 1: elevator, well-kept, stabilized. (Explicit column list because migrate now
+    // adds latitude/longitude/restaurant_grade — a bare VALUES(...) would mismatch arity.)
     conn.execute(
-        "INSERT INTO buildings VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,5)",
+        "INSERT INTO buildings
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade)
+         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,5,40.6829,-73.9251,'A')",
         [],
     )?;
     // Building 2: walk-up, open violations, no protections.
     conn.execute(
-        "INSERT INTO buildings VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,40)",
+        "INSERT INTO buildings
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade)
+         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,40,40.6835,-73.9240,NULL)",
         [],
     )?;
     conn.execute(
@@ -101,7 +125,21 @@ fn row_to_building(row: &rusqlite::Row) -> rusqlite::Result<Building> {
         has_elevator: row.get::<_, i64>("has_elevator")? != 0,
         near_ada_subway_m: row.get("near_ada_subway_m")?,
         complaints_311: row.get("complaints_311")?,
+        latitude: row.get("latitude")?,
+        longitude: row.get("longitude")?,
+        restaurant_grade: row.get("restaurant_grade")?,
     })
+}
+
+/// Every building, for the `/buildings` list/map endpoint. Ordered by BBL for a stable list.
+pub fn get_all_buildings(conn: &Connection) -> Result<Vec<Building>> {
+    let mut stmt = conn.prepare("SELECT * FROM buildings ORDER BY bbl")?;
+    let rows = stmt.query_map([], row_to_building)?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
 }
 
 pub fn get_building(conn: &Connection, bbl: &str) -> Result<Option<Building>> {
@@ -147,17 +185,18 @@ pub fn get_tract_median(conn: &Connection, tract_geoid: &str) -> Result<Option<i
 pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
          ON CONFLICT(bbl) DO UPDATE SET
           address=excluded.address, year_built=excluded.year_built, num_floors=excluded.num_floors,
           units_res=excluded.units_res, tract_geoid=excluded.tract_geoid, rent_stabilized=excluded.rent_stabilized,
           good_cause=excluded.good_cause, has_elevator=excluded.has_elevator,
-          near_ada_subway_m=excluded.near_ada_subway_m, complaints_311=excluded.complaints_311",
+          near_ada_subway_m=excluded.near_ada_subway_m, complaints_311=excluded.complaints_311,
+          latitude=excluded.latitude, longitude=excluded.longitude, restaurant_grade=excluded.restaurant_grade",
         rusqlite::params![
             b.bbl, b.address, b.year_built, b.num_floors, b.units_res, b.tract_geoid,
             b.rent_stabilized.map(|v| v as i64), b.good_cause as i64, b.has_elevator as i64,
-            b.near_ada_subway_m, b.complaints_311
+            b.near_ada_subway_m, b.complaints_311, b.latitude, b.longitude, b.restaurant_grade
         ],
     )?;
     Ok(())
@@ -290,9 +329,41 @@ mod tests {
             has_elevator: true,
             near_ada_subway_m: Some(420),
             complaints_311: 7,
+            latitude: Some(40.6829),
+            longitude: Some(-73.9251),
+            restaurant_grade: Some("B".into()),
         };
         upsert_building(&conn, &b)?;
         assert_eq!(get_building(&conn, "3018420001")?.unwrap(), b);
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_is_idempotent_on_existing_db() -> Result<()> {
+        // Running migrate twice must not error re-adding the latitude/longitude/restaurant_grade
+        // columns (SQLite has no ADD COLUMN IF NOT EXISTS — the PRAGMA guard is what saves us).
+        let conn = open_db(":memory:")?;
+        migrate(&conn)?;
+        migrate(&conn)?;
+        let cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(buildings)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<rusqlite::Result<_>>()?;
+        for c in ["latitude", "longitude", "restaurant_grade"] {
+            assert!(cols.iter().any(|x| x == c), "missing column {c}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn get_all_buildings_returns_fixture_set() -> Result<()> {
+        let conn = seeded()?;
+        let all = get_all_buildings(&conn)?;
+        assert_eq!(all.len(), 2);
+        // Ordered by BBL; the first fixture carries stored coordinates + a restaurant grade.
+        assert_eq!(all[0].bbl, "3000010001");
+        assert_eq!(all[0].restaurant_grade.as_deref(), Some("A"));
+        assert!(all[0].latitude.is_some() && all[0].longitude.is_some());
         Ok(())
     }
 

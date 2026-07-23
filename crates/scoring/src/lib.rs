@@ -32,9 +32,30 @@ pub fn legal_score(b: &Building) -> u8 {
     s.clamp(0, 100) as u8
 }
 
-/// 0–100 neighborhood score from 311 complaint count. Each complaint -2, capped -60.
+/// 0–100 neighborhood score from the nearby 311-complaint count.
+///
+/// The old linear rule (`-2` per complaint, capped at `-60`) hit its floor at just 30
+/// complaints, so every dense-NYC building scored an identical 40 — the signal was useless.
+/// This LOG rule keeps 311 volume discriminating across the whole realistic range:
+///
+///   `penalty = clamp(round((ln(1 + c) - 4.0).max(0) * 20.0), 0, 60)`
+///   `score   = 100 - penalty`
+///
+/// Constants and rationale:
+/// - `ln(1 + c)` — complaint counts are heavy-tailed; log compresses them so a jump from 50→60
+///   barely moves the score while 300→3000 still does. `1 +` keeps `c = 0` well-defined.
+/// - `- 4.0` — a "free" allowance: `ln(1 + c) <= 4` (≈ c ≤ 54) means zero penalty, because a
+///   busy-but-normal block shouldn't be dinged. `.max(0)` prevents low counts from *raising* it.
+/// - `* 20.0` — slope: converts the ~0→4.1 usable log range into the 0→60 penalty band.
+/// - `clamp(.., 0, 60)` — floor the score at 40 for the very worst blocks.
+///
+/// Reference points: c≈54 → 100, c=262 → 69, c=3209 → 40.
 pub fn neighborhood_score(complaints_311: i32) -> u8 {
-    (100 - (complaints_311 * 2).min(60)).clamp(0, 100) as u8
+    let c = complaints_311.max(0) as f64;
+    let penalty = (((1.0 + c).ln() - 4.0).max(0.0) * 20.0)
+        .round()
+        .clamp(0.0, 60.0);
+    (100.0 - penalty) as u8
 }
 
 /// Accessibility likelihood as (score, label). Elevator-on-record is the strongest
@@ -134,6 +155,9 @@ mod tests {
             has_elevator: false,
             near_ada_subway_m: None,
             complaints_311: 0,
+            latitude: None,
+            longitude: None,
+            restaurant_grade: None,
         }
     }
 
@@ -148,9 +172,22 @@ mod tests {
 
     #[test]
     fn neighborhood_penalizes_311_density() {
+        // LOG rule: a busy-but-normal block (≤ ~54 complaints) is not penalized.
         assert_eq!(neighborhood_score(0), 100);
-        assert_eq!(neighborhood_score(10), 80);
-        assert_eq!(neighborhood_score(100), 40); // capped penalty at 60
+        assert_eq!(neighborhood_score(10), 100);
+        assert_eq!(neighborhood_score(100), 88);
+        // Spec reference points that the discriminating curve must hit.
+        assert_eq!(neighborhood_score(262), 69);
+        assert_eq!(neighborhood_score(3209), 40); // penalty clamped at 60
+    }
+
+    #[test]
+    fn neighborhood_discriminates_dense_blocks() {
+        // Under the old linear rule (−2/complaint, −60 cap) both 100 and 500 saturated to 40,
+        // so the score told you nothing. The LOG rule must now separate them.
+        assert_ne!(neighborhood_score(100), neighborhood_score(500));
+        assert_eq!(neighborhood_score(100), 88);
+        assert_eq!(neighborhood_score(500), 56);
     }
 
     #[test]

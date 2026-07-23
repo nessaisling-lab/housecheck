@@ -60,7 +60,7 @@ Rust · Axum · bundled SQLite (read-only, baked into the Docker image → the d
 | Jagger | `jagger-agent` | Agent |
 | — | `db-analyst` | Data |
 
-`main` is the capstone snapshot. `post-capstone` is where the backend keeps evolving into a fuller product.
+`main` is the **shared team branch** — everyone's work (including Anthony's frontend) merges here; `main` isn't complete until the frontend lands. `post-capstone` is **Aisling's personal branch** for evolving the backend past the capstone — the rest of the team doesn't work in it.
 
 ## Data & honesty
 

@@ -12,10 +12,23 @@ use crate::sources::{
 };
 
 /// Blocking HTTP client with a UA (Socrata throttles anonymous no-UA traffic harder) and a
-/// generous timeout for the larger tract/station pulls.
+/// generous timeout for the larger tract/station pulls. If `NYC_APP_TOKEN` is set, it is sent
+/// as the Socrata `X-App-Token` header on every request, lifting the anonymous rate limit
+/// (harmless on the Census/MTA hosts, which ignore an unknown token).
 fn client() -> Client {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Ok(token) = std::env::var("NYC_APP_TOKEN") {
+        let token = token.trim();
+        if !token.is_empty() {
+            if let Ok(val) = reqwest::header::HeaderValue::from_str(token) {
+                headers.insert(reqwest::header::HeaderName::from_static("x-app-token"), val);
+                println!("Socrata: using NYC_APP_TOKEN (raised rate limit)");
+            }
+        }
+    }
     Client::builder()
         .user_agent("housecheck-ingest/0.1")
+        .default_headers(headers)
         .timeout(std::time::Duration::from_secs(90))
         .build()
         .expect("build reqwest client")

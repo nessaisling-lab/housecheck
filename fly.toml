@@ -1,15 +1,21 @@
-app = "housecheck"
-primary_region = "ewr"   # Newark — closest Fly region to NYC
+# fly.toml app configuration file generated for housecheck-nessa on 2026-07-23T14:05:33-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'housecheck-nessa'
+primary_region = 'ewr'
 
 [build]
-
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0   # scale-to-zero: ~free when idle
+  min_machines_running = 0
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"          # read-only SQLite + Axum is tiny
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+  cpus = 1
+  memory_mb = 256

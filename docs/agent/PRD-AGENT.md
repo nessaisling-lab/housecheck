@@ -147,7 +147,14 @@ These are requirements, not suggestions. Each maps to a specific way this featur
 
 **7.6 No speculation about people.** The agent must not characterize a landlord's intent or make claims about named individuals. Public violation records are facts about a *building*. Inferences about a person are defamation risk.
 
-**7.7 Rate limiting.** `/summary` currently sits behind a single global `ConcurrencyLimitLayer::new(64)` (`crates/api/src/main.rs:84-90`) shared by every route. A multi-turn agent holds a slot far longer. Without a per-endpoint budget, agent traffic starves `/building` and `/search`.
+**7.7 Rate limiting — this is a spend control.** `/summary` currently sits behind a single global `ConcurrencyLimitLayer::new(64)` (`crates/api/src/main.rs:84-90`) shared by every route, and **no per-IP rate limit at all**. A multi-turn agent holds a slot far longer, so agent traffic starves `/building` and `/search`.
+
+The bigger issue is money. The OpenRouter account is personally funded (§11). A public endpoint that calls a paid model with no per-client limit means any stranger with `curl` can run up someone's bill in a loop. **A per-IP rate limit ships with slice 2, not later.**
+
+> **▸ Background — why this wasn't a problem before**
+> Every other endpoint reads from a SQLite file baked into the image. Serving one is nearly free, so abuse costs us latency at worst. `/agent/chat` is the first endpoint where each request spends real money on an external service. That single property changes the threat model: the attacker's goal is no longer to take the service down, it's to make it run. Rate limiting is the control for that.
+
+Note the existing constraint documented at `main.rs:85-89`: `tower_governor`'s `PeerIpKeyExtractor` needs `ConnectInfo<SocketAddr>`, which the `axum-test` mock transport doesn't populate, which is why the team used a concurrency limit instead. Solving this properly is part of the slice — don't skip it because the first attempt fails in tests.
 
 ## 8. Build slices
 
@@ -184,12 +191,68 @@ Each slice is independently shippable and independently useful. Do them in order
 - Demo/fallback responses are visibly labeled as demo.
 - No API key is reachable from the browser.
 
-## 10. Open questions for the team
+## 10. Decisions (settled 2026-07-25)
 
-1. Paid model choice and who owns the OpenRouter account and its spend.
-2. Streaming or not? Non-streamed multi-turn answers under a 30s timeout will feel slow. Streaming is a meaningful amount of extra work on both sides.
-3. Do we keep conversation history across a page reload? Currently it's component-local state (`AgentSheet.tsx:73`) and vanishes.
-4. Is `rank_by_priorities` a tool the model calls, or a deterministic UI flow that skips the LLM? A form wizard is cheaper, faster, and can't hallucinate. Worth deciding on purpose.
+### 10.1 Streaming — not for now
+
+Non-streamed. Revisit after the agent works end to end.
+
+**Consequence to design around:** a multi-turn answer that takes 15 seconds with no visible progress reads as broken. Two mitigations are required instead of streaming:
+
+- Set `MAX_TOKENS` low — start around **400, not 800**. Shorter answers return faster and suit a mobile sheet. Raise it only if answers are getting cut off.
+- The client timeout **must exceed** the server timeout. Today it's backwards: client aborts at 8s (`frontend/src/lib/api.ts:31`), server allows 20s (`crates/api/src/main.rs:530`). Fixed in slice 0; don't let it regress when the agent's timeout goes to 30s.
+
+### 10.2 Conversation history — client-side, persisted
+
+Keep history across reloads, stored in the **browser's `localStorage`**, keyed by BBL. Not server-side.
+
+> **▸ Background — why not store it on the server**
+> Our backend's defining property is that it's stateless: the SQLite file is **read-only and baked into the Docker image**, which is why the deployed API needs zero secrets and can scale to zero. Verified in production — the Fly app runs with no secrets configured at all.
+>
+> Server-side chat history would need a writable database, which means a persistent volume, backups, and a place where users' housing questions accumulate under our control. That's a meaningful privacy liability for questions like "my landlord is refusing repairs." `localStorage` keeps history on the user's own device, costs nothing, and preserves the read-only architecture.
+>
+> This is a genuine architectural fork. Persistent server-side user state is planned for the commercial product on a *separate writable database* — deliberately not this one.
+
+Requirements: key by BBL so switching buildings doesn't mix threads; cap stored history (the same `MAX_HISTORY_MESSAGES` cap the API uses); give the user a visible way to clear it; never store anything the user didn't type or receive.
+
+### 10.3 Ranking — both, and here's the split
+
+The instinct to mix is correct. The right seam is **compute with code, narrate with the model**:
+
+| Concern | Who does it | Why |
+|---|---|---|
+| The ranking math — weights, scores, sort order | **Deterministic Rust**, calling `crates/scoring` | Numbers must be reproducible and identical to the Health Card. Code cannot hallucinate a score. |
+| Deciding *when* to rank | **The model**, via tool call | So a user can just ask "which of these is better for me?" instead of hunting for a form. |
+| Explaining *why* a building ranked where it did | **The model**, from the tool's output | Natural language is what an LLM is actually good at. |
+| Collecting the priorities | **UI flow** (the tap-to-rank picker) | Faster and clearer than negotiating a ranking in conversation. |
+
+So `rank_by_priorities` is a tool the model may call, whose implementation contains no LLM at all. The model receives structured output — ranked buildings with sub-scores — and writes prose about it. It never computes a number.
+
+**The rule that makes this safe:** if the model states a number that did not appear in the tool's output, that's a bug. Test for it.
+
+## 11. Key management and spend
+
+The OpenRouter account is **personally owned and personally funded**. That makes key handling a financial control, not just a security one.
+
+**Where the key lives:**
+
+| Environment | Mechanism | Notes |
+|---|---|---|
+| Production (Fly) | `flyctl secrets set OPENROUTER_API_KEY=...` | Encrypted at rest, injected as an env var, never in the image. Same mechanism already used for `CORS_ALLOWED_ORIGIN`. |
+| Local dev | `.env` file, gitignored | `.gitignore` already covers `.env`. Rust reads it via `std::env::var`. |
+| The repo | **Never.** | This repo is public. A committed key is scraped by bots within minutes. |
+
+**Recommended team access model — do not share the key.** Teammates working on the frontend don't need it: the app already degrades to the grounded offline path when the key is unset, and they can point at the deployed backend for live answers. Sharing one key across laptops means no attribution, no revocation granularity, and one careless commit charges the account owner. If a teammate genuinely needs local LLM calls, they should use their own OpenRouter key with their own small credit balance.
+
+**Spend protection, in order of importance:**
+
+1. **Fund with a fixed credit balance. Do not enable auto-reload.** This is the hard ceiling — a bug can only ever cost what's loaded.
+2. Per-IP rate limit on `/agent/chat` (§7.7).
+3. `MAX_TOKENS` and `MAX_TOOL_ITERATIONS` caps (§6) — a tool loop that never converges is the classic runaway.
+4. Log token usage per request so cost is observable before it's surprising.
+5. Rotate the key if it's ever pasted into a chat, a screenshot, or a terminal someone else can see.
+
+**On the paid model:** whichever is chosen must be a paid tier with zero data retention, for the reason in §7.5 — prompts contain a home address and a rent figure. The current hardcoded `:free` model logs prompts and is barred by our own legal audit.
 
 ---
 

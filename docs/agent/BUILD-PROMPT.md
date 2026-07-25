@@ -79,9 +79,13 @@ Do them in order. Each one assumes the last one is merged and working.
 >
 > The system prompt is the most important part. The current one is a single sentence at `main.rs:420-422`. Explain what a system prompt does, then let me write the new one. It must cover: only use facts provided; never give legal advice; say "I don't have that" rather than guessing; never speculate about individuals. Review what I write and tell me what's missing and why — don't rewrite it for me.
 >
+> **This endpoint also needs a per-IP rate limit, and it ships in this session — not later.** Explain to me why: every other endpoint in this app reads a local SQLite file and is nearly free to serve, but this one spends real money from a personally-funded account on every request. Explain what an attacker's goal is when the endpoint costs the owner money, and why that's a different threat than trying to take a service down.
+>
+> There's a known obstacle. Read the comment at `main.rs:85-89` — the team tried `tower_governor` and found its `PeerIpKeyExtractor` needs `ConnectInfo<SocketAddr>`, which the `axum-test` mock transport doesn't provide, so every test would 500. Explain what that means, then help me work through it rather than around it. Do not settle for "we'll add it later."
+>
 > Do not add tool calling in this session.
 
-**Done when:** the endpoint works end to end with a real key, refuses to exceed limits, and there's at least one test.
+**Done when:** the endpoint works end to end with a real key, refuses to exceed limits, has a working per-IP rate limit, and there's at least one test.
 
 ---
 
@@ -101,9 +105,15 @@ Do them in order. Each one assumes the last one is merged and working.
 >
 > The conversation history currently lives in `useState` at `AgentSheet.tsx:73` and is never sent anywhere. Explain what has to change for the backend to see it, and let me write that part.
 >
+> **We also decided history should survive a page reload, stored in the browser's `localStorage`, keyed by BBL.** Before implementing, explain to me why we chose the browser over the server. The key fact: our backend's SQLite file is read-only and baked into the Docker image, which is why it needs zero secrets and can scale to zero. Explain what storing chat on the server would force us to add, and why a database full of people's housing problems is a liability we don't want.
+>
+> The app already uses `localStorage` elsewhere — find that code (`frontend/src/lib/store.ts`) and explain the pattern before we add a second one. Reuse it if it fits.
+>
+> Requirements I want you to help me think through, not just implement: key by BBL so two buildings don't share a thread; cap what we store; give the user a visible way to clear it. Ask me why the clear button matters for this product specifically.
+>
 > Also make sure the `source` field is actually used this time, so demo answers are labeled as demo. That was bug 1 in session 0 — explain how this session could reintroduce it if we're careless.
 
-**Done when:** a free-text question reaches the backend and returns a grounded answer; with no API key the offline path works and is labeled demo.
+**Done when:** a free-text question reaches the backend and returns a grounded answer; history survives a reload and can be cleared; with no API key the offline path works and is labeled demo.
 
 ---
 
@@ -153,7 +163,11 @@ Do them in order. Each one assumes the last one is merged and working.
 >
 > Help me port the ranking UI into the React frontend, keeping the interaction and discarding the scoring. Add a `rank_by_priorities` tool that calls the Rust scoring crate.
 >
-> Open question I want to decide with you: should ranking be a tool the model calls, or a plain UI flow that skips the model entirely? A form can't hallucinate and costs nothing. Give me both arguments before I choose.
+> **We decided this is a mix of both approaches, and I want you to make sure I understand the seam.** The split is: the math is deterministic Rust calling `crates/scoring`; the model decides *when* to rank by calling the tool; the model explains *why* a building ranked where it did; the priorities themselves are collected by the tap-to-rank UI, not by conversation.
+>
+> Explain back to me why the math must never be done by the model, even though the model is the one calling the tool. Then explain what specifically would go wrong if we let the model compute the weighted average itself.
+>
+> There's a rule that makes this safe: **if the model states a number that did not appear in the tool's output, that's a bug.** Help me design a test for exactly that. I want to see what it looks like to test that a model didn't make something up.
 >
 > Also lift the hedged copy from `mvp/src/lib/compare.ts:200-226` — strings like "Likely rent-stabilized (best-available public signal — confirm unit)." Explain why that phrasing fits this product.
 

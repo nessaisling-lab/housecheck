@@ -1,4 +1,4 @@
-import { bandColor } from "@/lib/score";
+import { scoreCircleColor } from "@/lib/score";
 
 interface ScoreRingProps {
   score: number | null | undefined;
@@ -28,7 +28,7 @@ export function ScoreRing({
   const c = 2 * Math.PI * r;
   const filled = Math.max(0, Math.min(100, value)) / 100;
   const offset = c * (1 - filled);
-  const color = bandColor(score);
+  const color = scoreCircleColor(score);
 
   return (
     <div
@@ -110,7 +110,7 @@ export function MiniRing({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={bandColor(score)}
+          stroke={scoreCircleColor(score)}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}

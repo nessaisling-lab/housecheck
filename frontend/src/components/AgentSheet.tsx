@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
 import { getSummary } from "@/lib/api";
-import { bandMeta, fmtDistance, fmtMoney, fmtPct } from "@/lib/score";
+import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
 
 interface Msg {
   role: "agent" | "user";
@@ -80,38 +80,45 @@ export function AgentSheet() {
   useEffect(() => {
     if (!open || !building || loadedFor.current === building.bbl) return;
     loadedFor.current = building.bbl;
-    setBusy(true);
-    getSummary(building.bbl)
-      .then(({ data }) =>
-        setMsgs([
-          {
-            role: "agent",
-            text: data,
-            source: "Source: HPD · DHCR · Census B25064",
-          },
-        ])
-      )
-      .catch(() =>
-        setMsgs([
-          {
-            role: "agent",
-            text: "The agent couldn't summarize this building — the raw data on the card is still your best source.",
-          },
-        ])
-      )
-      .finally(() => setBusy(false));
+    const t = setTimeout(() => {
+      setBusy(true);
+      getSummary(building.bbl)
+        .then(({ data }) =>
+          setMsgs([
+            {
+              role: "agent",
+              text: data,
+              source: "Source: HPD · DHCR · Census B25064",
+            },
+          ])
+        )
+        .catch(() =>
+          setMsgs([
+            {
+              role: "agent",
+              text: "The agent couldn't summarize this building — the raw data on the card is still your best source.",
+            },
+          ])
+        )
+        .finally(() => setBusy(false));
+    }, 0);
+    return () => clearTimeout(t);
   }, [open, building]);
 
   useEffect(() => {
-    if (open && !building) {
-      loadedFor.current = null;
-      setMsgs([
-        {
-          role: "agent",
-          text: "Search a building first and I'll answer questions with its data attached. I can still explain how scores work meanwhile.",
-        },
-      ]);
-    }
+    if (!open || building) return;
+    loadedFor.current = null;
+    const t = setTimeout(
+      () =>
+        setMsgs([
+          {
+            role: "agent",
+            text: "Search a building first and I'll answer questions with its data attached. I can still explain how scores work meanwhile.",
+          },
+        ]),
+      0
+    );
+    return () => clearTimeout(t);
   }, [open, building]);
 
   useEffect(() => {
@@ -263,5 +270,3 @@ export function AgentSheet() {
     </Sheet>
   );
 }
-
-export { fmtDistance };

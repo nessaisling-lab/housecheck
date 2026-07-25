@@ -22,21 +22,26 @@ export default function Home() {
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
     const query = q.trim();
-    if (query.length < 3) {
-      setResults(null);
-      setNotFound(false);
-      return;
-    }
-    debounce.current = setTimeout(async () => {
-      setSearching(true);
-      const { data } = await searchAddress(query);
-      setSearching(false);
-      const inSet = data.filter((r) => r.in_curated_set);
-      const outSet = data.find((r) => !r.in_curated_set);
-      setResults(inSet.length ? inSet : null);
-      setNotFound(!inSet.length && !outSet);
-      if (!inSet.length && outSet) setCoverage(outSet);
-    }, 300);
+    // Always defer to a timeout: resets and searches both sync with the
+    // external system (the API), not with render (react-hooks/set-state-in-effect).
+    debounce.current = setTimeout(
+      async () => {
+        if (query.length < 3) {
+          setResults(null);
+          setNotFound(false);
+          return;
+        }
+        setSearching(true);
+        const { data } = await searchAddress(query);
+        setSearching(false);
+        const inSet = data.filter((r) => r.in_curated_set);
+        const outSet = data.find((r) => !r.in_curated_set);
+        setResults(inSet.length ? inSet : null);
+        setNotFound(!inSet.length && !outSet);
+        if (!inSet.length && outSet) setCoverage(outSet);
+      },
+      query.length < 3 ? 0 : 300
+    );
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
@@ -55,21 +60,42 @@ export default function Home() {
     : DEFAULT_SUGGESTIONS.map((label) => ({ label, bbl: null as string | null }));
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pb-32 pt-14">
-      <h1 className="text-[22px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
-        HouseCheck
-      </h1>
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-14 text-center">
+      <div className="flex w-full flex-1 flex-col items-center justify-center pb-16">
+        <h1 className="text-[24px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+          HouseCheck
+        </h1>
 
-      <p
-        className="mt-16 text-[34px] font-semibold leading-[1.15] tracking-tight"
-        style={{ color: "var(--hc-ink)" }}
-      >
-        Know the building
-        <br />
-        before you sign.
-      </p>
+        <div
+          className="glass-orb mt-8 flex h-24 w-24 items-center justify-center rounded-full"
+          aria-hidden
+        >
+          <svg
+            width="44"
+            height="44"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--hc-ink)"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 11l9-7 9 7" />
+            <path d="M6 9.5V20h12V9.5" />
+            <path d="M9.5 14.5l2.5 2.5 4.5-4.5" />
+          </svg>
+        </div>
 
-      <div className="relative mt-8">
+        <p
+          className="mt-8 text-[34px] font-semibold leading-[1.12] tracking-tight"
+          style={{ color: "var(--hc-ink)" }}
+        >
+          Know the building
+          <br />
+          before you sign.
+        </p>
+
+        <div className="relative mt-8 w-full">
         <div
           className="glass-field flex h-14 items-center gap-3 rounded-full px-5"
         >
@@ -80,10 +106,10 @@ export default function Home() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Enter a Brooklyn address"
+            placeholder="look up a building"
             className="w-full bg-transparent text-[17px] outline-none"
             style={{ color: "var(--hc-ink)" }}
-            aria-label="Search a Brooklyn address"
+            aria-label="Look up a building by address"
             enterKeyHint="search"
           />
           {searching && (
@@ -120,29 +146,20 @@ export default function Home() {
             Address not found — try street + house number.
           </p>
         )}
-      </div>
+        </div>
 
-      <div className="mt-6 flex flex-col items-start gap-2.5">
-        {chips.map((c) => (
-          <button
-            key={c.label}
-            onClick={() => (c.bbl ? navigate(`/building/${c.bbl}`) : setQ(c.label))}
-            className="rounded-full px-4 py-2 text-[14px] font-medium"
-            style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-auto pt-16">
-        <p className="hc-eyebrow">Pilot coverage</p>
-        <p className="mt-2 text-[15px]" style={{ color: "var(--hc-ink-2)" }}>
-          ~250 buildings · Bedford-Stuyvesant
-        </p>
-        <p className="mt-1 text-[13px]" style={{ color: "var(--hc-ink-3)" }}>
-          HPD · DOB · 311 · Census · DHCR · MTA
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-2.5">
+          {chips.map((c) => (
+            <button
+              key={c.label}
+              onClick={() => (c.bbl ? navigate(`/building/${c.bbl}`) : setQ(c.label))}
+              className="rounded-full px-4 py-2 text-[14px] font-medium"
+              style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Out-of-coverage sheet (flow 1 edge state) */}

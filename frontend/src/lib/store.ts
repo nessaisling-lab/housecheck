@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 // localStorage-backed Saved / Recent / Compare tray / Onboarding (no accounts — design decision #3)
 
@@ -180,11 +180,3 @@ export function useOnboarding(): OnboardingState {
 export function usePriorityCounts(): Partial<Record<Priority, number>> {
   return useStore(store.priorityCounts);
 }
-
-export const useStoreActions = () => {
-  const toggleSave = useCallback(store.toggleSave, []);
-  const addRecent = useCallback(store.addRecent, []);
-  const addToTray = useCallback(store.addToTray, []);
-  const removeFromTray = useCallback(store.removeFromTray, []);
-  return { toggleSave, addRecent, addToTray, removeFromTray };
-};

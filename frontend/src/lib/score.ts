@@ -23,6 +23,19 @@ export const BANDS: Record<Band, BandMeta> = {
   unverified: { label: "Unverified", short: "Unverified", color: "#8E8E93" },
 };
 
+const SCALE_START = [228, 159, 159] as const;
+const SCALE_MID = [238, 192, 149] as const;
+const SCALE_END = [75, 205, 167] as const;
+
+const SCORE_CIRCLE_COLORS: Record<Band, string> = {
+  strong: "rgb(75, 205, 167)",
+  solid: "rgb(75, 205, 167)",
+  mixed: "rgb(238, 192, 149)",
+  concern: "rgb(228, 159, 159)",
+  critical: "rgb(228, 159, 159)",
+  unverified: "#717182",
+};
+
 export function bandFor(score: number | null | undefined): Band {
   if (score === null || score === undefined || Number.isNaN(score))
     return "unverified";
@@ -39,6 +52,21 @@ export function bandMeta(score: number | null | undefined): BandMeta {
 
 export function bandColor(score: number | null | undefined): string {
   return bandMeta(score).color;
+}
+
+export function scoreCircleColor(score: number | null | undefined): string {
+  return SCORE_CIRCLE_COLORS[bandFor(score)];
+}
+
+export function gradientScaleColor(position: number): string {
+  const t = Math.max(0, Math.min(1, position));
+  const start = t < 0.5 ? SCALE_START : SCALE_MID;
+  const end = t < 0.5 ? SCALE_MID : SCALE_END;
+  const local = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+  const [r, g, b] = start.map((channel, i) =>
+    Math.round(channel + (end[i] - channel) * local)
+  );
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 /** 8% opacity wash of band color → transparent, for the top of the Health Card */
@@ -62,4 +90,11 @@ export function fmtPct(p: number | null | undefined): string {
   if (p === null || p === undefined) return "—";
   const v = Math.round(p);
   return `${Math.abs(v)}% ${v >= 0 ? "above" : "below"}`;
+}
+
+/** Map a pct-vs-median value (-50%..+60%) onto 0..1 for the rent spectrum track. */
+export function pctToPosition(pct: number | null | undefined): number | null {
+  if (pct == null) return null;
+  const clamped = Math.max(-50, Math.min(60, pct));
+  return (clamped + 50) / 110;
 }

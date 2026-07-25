@@ -1,0 +1,75 @@
+# Continuous deployment of the Rust/Axum API to Fly.io.
+# https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+#
+# Requires the repository secret FLY_API_TOKEN. Generate an APP-SCOPED deploy
+# token (not a personal account token) so a leak cannot touch other apps:
+#
+#   flyctl tokens create deploy -a housecheck-nessa
+#
+# then add it under Settings -> Secrets and variables -> Actions.
+# The Fly app is owned by a different account than the GitHub repo owner, so the
+# token must be created from a shell logged into the account that owns the app.
+
+name: Fly Deploy
+
+on:
+  push:
+    branches: [main]
+    # Only redeploy when something that ends up in the image actually changes.
+    # Without this, every docs commit rebuilds the image and restarts production.
+    paths:
+      - "crates/**"
+      - "data/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Dockerfile"
+      - "fly.toml"
+    # Deliberately NOT this workflow file: editing the pipeline does not change
+    # the image, and self-triggering means every pipeline tweak restarts prod.
+  workflow_dispatch: # manual deploys, e.g. to ship a config change or roll forward
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false # let an in-flight deploy finish; queue the next one
+
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    # Never let a fork attempt a deploy with a missing/foreign token.
+    if: github.repository == 'nessaisling-lab/housecheck'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to a release tag rather than @master: a moving branch reference
+      # executes whatever lands there, with the deploy token in scope.
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Fail fast if the deploy token is missing
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN is not set. Create an app-scoped token with"
+            echo "::error::  flyctl tokens create deploy -a housecheck-nessa"
+            echo "::error::and add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only
+
+      - name: Verify the deployed API is healthy
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://housecheck-nessa.fly.dev/health || echo 000)
+            echo "attempt $i: /health -> $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 6
+          done
+          echo "::error::/health did not return 200 after the deploy"
+          exit 1

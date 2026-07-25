@@ -122,8 +122,18 @@ export default function HealthCard() {
     </span>
   );
 
-  const load = useCallback(() => {
+  // Reset to the loading state when the user navigates to a different building.
+  // Done during render (React's documented "adjusting state when a prop changes"
+  // pattern) rather than inside the effect, so the fetch effect below stays free
+  // of synchronous setState — see react-hooks/set-state-in-effect.
+  const [loadedBbl, setLoadedBbl] = useState(bbl);
+  if (loadedBbl !== bbl) {
+    setLoadedBbl(bbl);
     setState("loading");
+    setBuilding(null);
+  }
+
+  const load = useCallback(() => {
     const started = Date.now();
     getBuilding(bbl)
       .then(({ data, source }) => {

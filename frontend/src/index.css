@@ -1,0 +1,272 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* shadcn theme (light) */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.625rem;
+
+    /* HouseCheck design tokens (design-strategy v1.1) */
+    --hc-canvas: #F6F6F8;
+    --hc-card: #FFFFFF;
+    --hc-sunken: #EFEFF2;
+    --hc-ink: #1C1C1E;
+    --hc-ink-2: rgba(60, 60, 67, 0.6);
+    --hc-ink-3: rgba(60, 60, 67, 0.38);
+    --hc-strong: #248A3D;
+    --hc-solid: #7DA629;
+    --hc-mixed: #B7791F;
+    --hc-concern: #D04A1E;
+    --hc-critical: #C7272B;
+    --hc-unverified: #8E8E93;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply text-foreground;
+    /* Apple-style gradient mesh wallpaper (public/apple-glass-bg.jpg) —
+       the color field the Liquid Glass refracts. Pastel so the app stays
+       light-first; a faint canvas veil keeps it airy, never loud. */
+    background:
+      linear-gradient(rgba(246, 246, 248, 0.22), rgba(246, 246, 248, 0.22)),
+      url("/apple-glass-bg.jpg") center / cover no-repeat fixed,
+      var(--hc-canvas);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",
+      "Inter", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* ── Liquid Glass material system ──────────────────────────────────────
+     Shared optics: strong blur + saturation boost, layered white gradient,
+     specular top edge highlight, hairline inner stroke, soft deep shadow.
+     Content infuses the material and shines through (Apple Liquid Glass).
+     Variants differ only in opacity — text-carrying surfaces stay legible. */
+
+  .glass-nav {
+    /* floating chrome: nav capsule, sticky strip, chips */
+    background: linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.62),
+      rgba(255, 255, 255, 0.36)
+    );
+    backdrop-filter: blur(26px) saturate(200%) brightness(1.06);
+    -webkit-backdrop-filter: blur(26px) saturate(200%) brightness(1.06);
+    border: 0.5px solid rgba(255, 255, 255, 0.65);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.1),
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -0.5px 0 rgba(120, 120, 128, 0.1);
+  }
+
+  .glass-orb {
+    /* the one tinted element — agent orb, "most alive" thing on screen */
+    background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.7),
+      rgba(255, 255, 255, 0.42)
+    );
+    backdrop-filter: blur(26px) saturate(210%) brightness(1.08);
+    -webkit-backdrop-filter: blur(26px) saturate(210%) brightness(1.08);
+    border: 0.5px solid rgba(255, 255, 255, 0.75);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.12),
+      0 0 28px rgba(125, 166, 41, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -0.5px 0 rgba(120, 120, 128, 0.08);
+  }
+
+  .glass-sheet {
+    /* sheets & agent panel carry text → most opaque variant */
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.88),
+      rgba(255, 255, 255, 0.74)
+    );
+    backdrop-filter: blur(30px) saturate(190%) brightness(1.04);
+    -webkit-backdrop-filter: blur(30px) saturate(190%) brightness(1.04);
+    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 -8px 48px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+
+  .glass-card,
+  .hc-card {
+    /* content cards: near-opaque so text contrast is guaranteed,
+       but visibly lenses the wallpaper while scrolling */
+    background: linear-gradient(
+      170deg,
+      rgba(255, 255, 255, 0.76),
+      rgba(255, 255, 255, 0.58)
+    );
+    backdrop-filter: blur(22px) saturate(180%) brightness(1.05);
+    -webkit-backdrop-filter: blur(22px) saturate(180%) brightness(1.05);
+    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    border-radius: 20px;
+    box-shadow:
+      0 10px 32px rgba(0, 0, 0, 0.07),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  }
+
+  .glass-field {
+    /* input capsules: slightly recessed — inner shade + top highlight */
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.66),
+      rgba(255, 255, 255, 0.5)
+    );
+    backdrop-filter: blur(22px) saturate(190%);
+    -webkit-backdrop-filter: blur(22px) saturate(190%);
+    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 10px 32px rgba(0, 0, 0, 0.08),
+      inset 0 2px 6px rgba(0, 0, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  .glass-dark {
+    /* dark floating pills (toast, compare CTA) */
+    background: linear-gradient(
+      170deg,
+      rgba(28, 28, 30, 0.85),
+      rgba(28, 28, 30, 0.72)
+    );
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 0.5px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
+  .hc-eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--hc-ink-3);
+  }
+  .hc-row-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--hc-ink-3);
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-nav,
+    .glass-sheet,
+    .glass-orb,
+    .glass-card,
+    .hc-card,
+    .glass-field {
+      background: rgba(255, 255, 255, 0.94);
+    }
+    .glass-dark {
+      background: rgba(28, 28, 30, 0.94);
+    }
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-nav,
+  .glass-sheet,
+  .glass-orb,
+  .glass-card,
+  .hc-card,
+  .glass-field {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .glass-dark {
+    background: rgba(28, 28, 30, 0.97);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hc-anim,
+  .hc-anim * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes hc-ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-c, 100);
+  }
+  to {
+    stroke-dashoffset: var(--ring-o, 0);
+  }
+}
+@keyframes hc-pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes hc-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes hc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes hc-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- standard context provider + hook pairing */
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { BuildingCard } from "@/types/building";
 

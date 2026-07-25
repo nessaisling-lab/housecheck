@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ScoreRing } from "@/components/ScoreRing";
 import { SectionCard } from "@/components/SectionCard";
 import { Sheet } from "@/components/Sheet";
-import { SpectrumTrack, pctToPosition } from "@/components/SpectrumTrack";
+import { SpectrumTrack } from "@/components/SpectrumTrack";
 import { StatusPill } from "@/components/StatusPill";
-import { StickyStrip } from "@/components/StickyStrip";
 import { SubScoreTile } from "@/components/SubScoreRow";
 import { checkRentFairness, getBuilding } from "@/lib/api";
 import { useAgent } from "@/lib/agent-context";
-import { bandMeta, fmtDistance, fmtMoney, fmtPct, scoreWash } from "@/lib/score";
+import { bandMeta, fmtDistance, fmtMoney, fmtPct, pctToPosition, scoreWash } from "@/lib/score";
 import { store, useIsSaved, useOnboarding, useTray, type Priority } from "@/lib/store";
 import type { BuildingCard as Building, DataSource, RentFairnessResult } from "@/types/building";
 
@@ -105,7 +104,6 @@ export default function HealthCard() {
   const [rentResult, setRentResult] = useState<RentFairnessResult | null>(null);
   const [rentBusy, setRentBusy] = useState(false);
 
-  const heroRef = useRef<HTMLDivElement>(null);
   const saved = useIsSaved(building?.bbl);
   const { priorities } = useOnboarding();
 
@@ -331,8 +329,6 @@ export default function HealthCard() {
 
   return (
     <div className="min-h-dvh" style={{ background: wash }}>
-      <StickyStrip watchRef={heroRef} subScores={building.sub_scores} onJump={jump} />
-
       <div className="mx-auto w-full max-w-md px-5 pb-40 pt-12">
         {/* Header */}
         <header className="flex items-start justify-between gap-3">
@@ -361,7 +357,7 @@ export default function HealthCard() {
         </header>
 
         {/* Tier 1 — hero */}
-        <div ref={heroRef} className="flex flex-col items-center pb-6 pt-8">
+        <div className="flex flex-col items-center pb-6 pt-8">
           <ScoreRing score={building.score} size={184} stroke={12} hero animate />
           <p
             className="hc-eyebrow mt-4"
@@ -449,7 +445,6 @@ export default function HealthCard() {
             <div className="mt-4">
               <SpectrumTrack
                 position={pctToPosition(rentPct)}
-                markerColor={rentColor as string}
                 markerLabel={rentPct != null ? `${Math.abs(Math.round(rentPct))}%` : null}
               />
             </div>

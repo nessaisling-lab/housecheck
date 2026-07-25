@@ -5,11 +5,11 @@ import { useTray } from "@/lib/store";
 const tabs = [
   {
     to: "/",
-    label: "Search",
+    label: "Home",
     icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 1.8} strokeLinecap="round">
-        <circle cx="11" cy="11" r="7" />
-        <path d="M20 20l-3.5-3.5" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 9.5V20h4.5v-6h5v6H19V9.5" />
       </svg>
     ),
   },
@@ -33,7 +33,7 @@ const tabs = [
   },
   {
     to: "/more",
-    label: "More",
+    label: "About",
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 1.8} strokeLinecap="round">
         <path d="M4 7h16M4 12h16M4 17h16" />

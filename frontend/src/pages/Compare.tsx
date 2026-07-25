@@ -44,22 +44,36 @@ const ROWS: RowDef[] = [
 export default function Compare() {
   const navigate = useNavigate();
   const tray = useTray();
-  const [cards, setCards] = useState<BuildingCard[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  // Outcome keyed by tray signature — loading/error/cards are all derived,
+  // so the effect only reports results (no sync setState in the effect body).
+  const [outcome, setOutcome] = useState<
+    { key: string; cards: BuildingCard[]; error?: boolean } | null
+  >(null);
+  const key = tray.join(",");
 
   useEffect(() => {
-    if (tray.length < 2) {
-      setCards([]);
-      return;
-    }
-    setLoading(true);
-    setError(false);
+    if (tray.length < 2) return;
+    let cancelled = false;
     compareBuildings(tray)
-      .then(({ data }) => setCards(tray.map((bbl) => data.find((d) => d.bbl === bbl)).filter((b): b is BuildingCard => !!b)))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+      .then(({ data }) => {
+        if (cancelled) return;
+        const cards = tray
+          .map((bbl) => data.find((d) => d.bbl === bbl))
+          .filter((b): b is BuildingCard => !!b);
+        setOutcome({ key: tray.join(","), cards });
+      })
+      .catch(() => {
+        if (!cancelled) setOutcome({ key: tray.join(","), cards: [], error: true });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [tray]);
+
+  const current = useMemo(() => (outcome?.key === key ? outcome : null), [outcome, key]);
+  const cards = useMemo(() => current?.cards ?? [], [current]);
+  const loading = tray.length >= 2 && !current;
+  const error = !!current?.error;
 
   const best = useMemo(() => {
     return ROWS.map((row) => {
@@ -68,6 +82,25 @@ export default function Compare() {
       if (valid.length < 2) return null;
       return row.higherIsBetter ? Math.max(...valid) : Math.min(...valid);
     });
+  }, [cards]);
+
+  // Plain-language takeaway: who leads overall, and any notable trade-off.
+  const summary = useMemo(() => {
+    const short = (a: string) => a.split(",")[0];
+    const scored = cards.filter((c) => c.score != null);
+    if (scored.length < 2) return null;
+    const leader = scored.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
+    const parts = [`${short(leader.address)} leads overall at ${leader.score}/100.`];
+    const cond = cards.filter((c) => c.sub_scores.condition != null);
+    if (cond.length >= 2) {
+      const bestCond = cond.reduce((a, b) =>
+        ((b.sub_scores.condition ?? 0) > (a.sub_scores.condition ?? 0) ? b : a)
+      );
+      if (bestCond.bbl !== leader.bbl) {
+        parts.push(`${short(bestCond.address)} has the best building condition.`);
+      }
+    }
+    return parts.join(" ");
   }, [cards]);
 
   if (tray.length < 2) {
@@ -83,13 +116,22 @@ export default function Compare() {
           <p className="mt-1.5 text-[14px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
             Add 2–4 buildings from Search or Saved, then compare scores, violations, and access side by side.
           </p>
-          <button
-            onClick={() => navigate("/")}
-            className="mt-4 rounded-full px-5 py-2.5 text-[14px] font-semibold text-white"
-            style={{ background: "var(--hc-ink)" }}
-          >
-            Search buildings
-          </button>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <button
+              onClick={() => navigate("/")}
+              className="rounded-full px-5 py-2.5 text-[14px] font-semibold text-white"
+              style={{ background: "var(--hc-ink)" }}
+            >
+              Search a new building
+            </button>
+            <button
+              onClick={() => navigate("/saved")}
+              className="rounded-full px-5 py-2.5 text-[14px] font-semibold"
+              style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}
+            >
+              Pick from Saved
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -124,7 +166,18 @@ export default function Compare() {
       )}
 
       {!loading && !error && cards.length > 0 && (
-        <div className="mt-6 overflow-x-auto">
+        <>
+          {summary && (
+            <div className="hc-card mt-6 p-4">
+              <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--hc-ink-3)" }}>
+                Summary
+              </p>
+              <p className="mt-1 text-[15px] leading-snug" style={{ color: "var(--hc-ink)" }}>
+                {summary}
+              </p>
+            </div>
+          )}
+          <div className="mt-4 overflow-x-auto">
           <table className="w-full border-collapse" style={{ minWidth: 120 + cards.length * 88 }}>
             <thead>
               <tr>
@@ -187,7 +240,8 @@ export default function Compare() {
           <p className="mt-5 text-center text-[13px]" style={{ color: "var(--hc-ink-3)" }}>
             Best value per row in bold · tap a column for the full card
           </p>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

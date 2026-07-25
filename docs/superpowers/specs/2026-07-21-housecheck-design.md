@@ -130,7 +130,7 @@ Building-level LGBTQ+ safety score, real-time crime by address, authoritative re
 
 ---
 
-## Appendix A — Data-integrity ledger (do NOT re-cite the fabricated claims)
+## Appendix A — Data-integrity ledger (verified vs. primary sources; 2026-07-24 corrections noted)
 
 | Original proposal claim | Status | Correct version |
 |---|---|---|
@@ -138,8 +138,8 @@ Building-level LGBTQ+ safety score, real-time crime by address, authoritative re
 | $3,616 / +6.2% (metro) | 🟡 mislabeled | it's **citywide**; metro = $2,968 / +1.7% |
 | 2.91M / 38.3% "NYC metro" | 🟡 mislabeled | that's **NY State, all households**; NYC-metro renters ≈ 52.4% |
 | "1M+ HPD violations" | 🟡 understated | ~**11.1M** records |
-| "761,352 buildings (REBNY 2026)" | 🔴 fabricated source | drop; cite **PLUTO** (~870k lots) |
-| "11% buildings Class C (REBNY 2026)" | 🔴 fabricated | drop; ~450k active Class C violations |
+| "761,352 buildings (REBNY 2026)" | ✅ REAL (corrected 2026-07-24; was wrongly flagged fabricated) | REBNY *Data Over Rhetoric* (Feb 22 2026) — verbatim; cite directly |
+| "11% buildings Class C (REBNY 2026)" | ✅ REAL (corrected 2026-07-24) | ~11% of buildings have ≥1 Class C (complement of REBNY's "89% none, past 24mo") |
 | OpenIgloo "Index Ventures" | 🔴 false | Gutter Capital, MetroCap, Trend Forward |
 | OpenIgloo "$1.37M rev / $4.4M val" | 🔴 unverifiable | drop both |
 | OpenIgloo "100K users" | 🟡 stale | now 1.5–3M+ |
@@ -164,7 +164,7 @@ These supersede earlier pre-decision mentions in the body (React/Tailwind, Mapbo
 - **Curated set:** 250 buildings = all residential buildings in Brooklyn CD3 (Bed-Stuy), capped at 250 (`--cd 303 --limit 250`); scales to the full ~2,000-building CD3 post-grade. Framed as a neighborhood slice, not a hand-picked list.
 - **Rent-stabilization wording:** 3-state honest labels — "Likely rent-stabilized (signal, not a ruling)" / "No record found (lists are incomplete)" / "Unverified (ask for the DHCR rent history)" + footnote "a signal, not a verdict."
 - **Backend hosting:** Fly.io — the read-only SQLite DB baked into the Docker image (no DB service/volume), scale-to-zero. Frontend on Vercel.
-- **Frontend framework:** **Dioxus 0.6** (Rust→WASM over the Axum API), NOT React/Tailwind. Topcoat evaluated, deferred (too early; full-stack).
+- **Frontend framework:** **React + Vite + Tailwind + shadcn/ui** over the Axum API. *(Reconciled 2026-07-25: originally specced Dioxus 0.6; the team shipped React — docs updated to match the delivered build.)*
 - **Serving DB:** plain **bundled SQLite** (not SpatiaLite); geospatial handled at ingest. DuckDB reserved for a *future full-NYC bulk-CSV/Parquet ingest*, never the serving DB.
 - **Map:** **MapLibre GL + Protomaps pmtiles** (free, no key), NOT Mapbox. Geocoding via NYC GeoSearch (keyless).
 - **Cost:** data APIs $0 · hosting < $10/mo — within the $20–50 budget. Secrets: `CENSUS_API_KEY` (required) + `NYC_APP_TOKEN` (free Socrata app token, recommended).

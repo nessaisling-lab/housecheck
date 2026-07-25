@@ -39,4 +39,4 @@ Maps every Day-29 / Day-30 deliverable to the artifact you already have + the ac
 
 ## Not yours
 
-Frontend (Dioxus), map layer, theme pick → **Anthony**. Demo/pitch delivery → **team**.
+Frontend (React), map layer, theme pick → **Anthony**. Demo/pitch delivery → **team**.

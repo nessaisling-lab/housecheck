@@ -46,7 +46,7 @@ Full contract with request/response examples: **[docs/API.md](docs/API.md)**.
 
 ## Stack
 
-Rust · Axum · bundled SQLite (read-only, baked into the Docker image → the deployed API needs **zero secrets**) · `reqwest` ingest over free NYC Open Data + Census APIs. Deployed on Fly.io (scale-to-zero). Frontend: Dioxus (Rust→WASM) — in progress.
+Rust · Axum · bundled SQLite (read-only, baked into the Docker image → the deployed API needs **zero secrets**) · `reqwest` ingest over free NYC Open Data + Census APIs. Deployed on Fly.io (scale-to-zero). Frontend: React + Vite + Tailwind + shadcn/ui (mobile-first), wired to the live API.
 
 - **Deploy:** [docs/DEPLOY.md](docs/DEPLOY.md) · **Design spec:** [docs/superpowers/specs/](docs/superpowers/specs) · **PRD:** [HouseCheck_PRD.docx](HouseCheck_PRD.docx)
 - **CI:** build + test on macOS/Windows/Linux, security scan, smoke + stability — green.
@@ -56,7 +56,7 @@ Rust · Axum · bundled SQLite (read-only, baked into the Docker image → the d
 | Person | Branch | Area |
 |---|---|---|
 | Aisling Leiva-Davila | `aisling-backend` | Backend + data (lead) |
-| Anthony Lesov | `anthony-frontend` | Dioxus frontend |
+| Anthony Lesov | `anthony-frontend` | React frontend |
 | Jagger | `jagger-agent` | Agent |
 | — | `db-analyst` | Data |
 

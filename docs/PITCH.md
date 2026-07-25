@@ -22,7 +22,7 @@ Slide-by-slide outline + talk track. ~40 seconds per slide. Lead with the demo e
 
 ### 5 · Why we're different (0:40)
 **Slide:** "Government data only. Every number sourced. We refuse to fake it."
-**Say:** Competitors use crowdsourced reviews (OpenIgloo) or unusable gov portals. We fact-checked our own pitch and cut fabricated stats. Where data can't prove stabilization, we say "unverified." Honesty is the product.
+**Say:** Competitors use crowdsourced reviews (OpenIgloo) or unusable gov portals. Every number we show traces to a government source — and we stress-test our own claims against those sources, correcting ourselves when we're wrong (we did, twice, and fixed both). Where data can't prove stabilization, we say "unverified." Honesty is the product.
 
 ### 6 · Results (0:40)
 **Slide:** stat row — live URL · 250 buildings · 87 stabilized · 76 tests green · $0 data cost.

@@ -29,7 +29,7 @@ curl https://housecheck.fly.dev/building/3015990007
 
 ## Frontend → Vercel
 
-The Dioxus/WASM app is a static build; point Vercel at the `frontend/` dir. Set the API base
+The React/Vite app is a static build; point Vercel at the `frontend/` dir. Set the API base
 URL (the Fly URL above) as a build env var.
 
 Tighten the API's CORS to the Vercel origin at launch by setting `CORS_ALLOWED_ORIGIN` on the

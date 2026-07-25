@@ -29,11 +29,11 @@ The differentiator isn't any single feature — it's the **trust model**: object
 
 ## How we built it — and where it got interesting
 
-**1. We fact-checked our own pitch first.** Before writing code, we ran every statistic in the original proposal through independent verification. Several were **fabricated** — a "761,352 buildings" figure and an "11% Class C" stat attributed to a REBNY report that contains neither; an investor and revenue figure for a competitor that no database supports. We pulled them. That set the rule for the whole project: *data-backed, full stop.*
+**1. We fact-checked our own pitch — and our own corrections.** Before writing code, we ran every statistic in the original proposal through independent verification against primary sources, and we pulled a competitor's investor and revenue figures that no database supports. The discipline cuts both ways: when a teammate later challenged two of our calls, we re-verified and found we'd been wrong — a "761,352 buildings / ~11% Class C" figure we had dismissed is in fact real REBNY data (*Data Over Rhetoric*, Feb 2026), so we restored and cited it. The rule holds no matter who it embarrasses: *data-backed, full stop.*
 
 **2. A deliberately simple, robust stack.** Rust + Axum + bundled SQLite. All geospatial work happens once at ingest, so the serving database is a **read-only artifact baked into the Docker image** — meaning the deployed API needs *zero secrets*. Every data source is free: NYC Open Data (Socrata), US Census, NYC GeoSearch. **Ingest cost: $0. Hosting: ~$0** (Fly.io, scale-to-zero).
 
-**3. Real data fought back — and we won.** Plumbing eight live datasets (PLUTO, HPD, DOB elevators, 311, DOHMH, MTA, Census, JustFix) surfaced problems the plan didn't anticipate: HPD's violation table has **no BBL column** (we query by borough + tax block and reconstruct it); PLUTO ships the BBL as a float-string; the census tract lives in a different field than documented. We verified each dataset against the live API and fixed the pipeline building-by-building.
+**3. Real data fought back — and we won.** Plumbing eight live datasets (PLUTO, HPD, DOB elevators, 311, DOHMH, MTA, Census, JustFix) surfaced problems the plan didn't anticipate: PLUTO ships the BBL as a float-string; the census tract lives in a different field than documented; and HPD's oldest (pre-2013) records predate BBL geocoding, so a naive single-row schema probe can wrongly suggest the BBL column is missing when it isn't. We verified each dataset against the live API and fixed the pipeline building-by-building.
 
 **4. We refused to fake the hard part.** There is **no official, per-building rent-stabilization list** — DHCR publishes only an incomplete PDF. Rather than guess, we sourced JustFix's DOF-tax-derived dataset and label it honestly: *"Likely rent-stabilized — 192 units on the latest DOF record. A signal, not a legal ruling."* When real 311 volumes made every dense-block score saturate at the same floor, we recalibrated the neighborhood score to a log scale so it actually discriminates.
 
@@ -61,7 +61,7 @@ Two real buildings a few blocks apart score **24 vs 78** — that spread *is* th
 
 ## What's next
 
-A **Dioxus (Rust→WASM)** frontend rendering the card against the live API; a MapLibre + Protomaps map layer; and a path to a real business — a free consumer tool feeding a B2B2C model in the $3.6B property-data adjacent market.
+A **React (Vite + Tailwind + shadcn/ui)** frontend rendering the card against the live API; a map layer to come; and a path to a real business — a free consumer tool feeding a B2B2C model in the $3.6B property-data adjacent market.
 
 ---
 

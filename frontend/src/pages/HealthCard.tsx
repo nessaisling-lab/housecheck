@@ -386,7 +386,8 @@ export default function HealthCard() {
               {building.year_built ? `${building.year_built} ` : ""}
               {building.has_elevator ? "elevator building" : "walk-up"}
               {v.c > 0 ? ` with ${v.c} hazardous violation${v.c > 1 ? "s" : ""} open` : " with a clean hazardous-violation record"}
-              {building.stabilization === "likely" ? "; stabilized with Good Cause" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}.
+              {building.stabilization === "likely" ? "; likely rent-stabilized" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}
+              {building.good_cause ? ", with Good Cause coverage" : ""}.
             </span>
             <span className="mt-1.5 block text-[14px] font-semibold" style={{ color: "var(--hc-ink)" }}>
               Ask the agent ➜

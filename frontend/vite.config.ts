@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   // Backend (Rust/Axum) origin — override in .env.local as VITE_BACKEND_URL
   const backend = env.VITE_BACKEND_URL || "http://localhost:8080"
   return {
-    base: './',
+    base: '/',
     plugins: [inspectAttr(), react()],
     server: {
       port: 3000,

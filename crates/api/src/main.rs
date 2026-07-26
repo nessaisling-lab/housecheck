@@ -563,6 +563,67 @@ honest; do not invent facts.";
 /// OpenRouter's OpenAI-compatible chat-completions endpoint.
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
+/// POST to OpenRouter and return the parsed body, logging the upstream's own explanation.
+///
+/// `error_for_status()` alone discards the response body — and that body is exactly where
+/// OpenRouter puts the reason ("No endpoints found matching your data policy", "invalid api
+/// key", "model not found"). Losing it turns every failure into an opaque 502, which is what
+/// made the first live attempt hard to diagnose. Never swallow an upstream's error text.
+async fn openrouter_post(
+    state: &AppState,
+    api_key: &str,
+    payload: &serde_json::Value,
+    timeout_secs: u64,
+) -> Result<serde_json::Value, ()> {
+    let resp = match state
+        .http
+        .post(OPENROUTER_URL)
+        .bearer_auth(api_key)
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .json(payload)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(error = %e, "openrouter request failed (transport)");
+            return Err(());
+        }
+    };
+
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        tracing::error!(
+            status = %status,
+            model = %state.llm.model,
+            body = %body.chars().take(1000).collect::<String>(),
+            "openrouter returned an error"
+        );
+        return Err(());
+    }
+
+    match serde_json::from_str::<serde_json::Value>(&body) {
+        Ok(j) => {
+            // OpenRouter can return 200 with an error object in the body.
+            if let Some(err) = j.get("error") {
+                tracing::error!(error = %err, "openrouter returned 200 with an error body");
+                return Err(());
+            }
+            Ok(j)
+        }
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                body = %body.chars().take(500).collect::<String>(),
+                "openrouter response was not valid JSON"
+            );
+            Err(())
+        }
+    }
+}
+
 /// Every fact the model is allowed to use about a building, rendered as plain text.
 ///
 /// This is *the* grounding contract: if a statement isn't derivable from this block, the model
@@ -975,26 +1036,10 @@ async fn agent_chat_handler(
             "tools": tools,
         });
 
-        let resp = match state
-            .http
-            .post(OPENROUTER_URL)
-            .bearer_auth(api_key)
-            .timeout(std::time::Duration::from_secs(30))
-            .json(&payload)
-            .send()
-            .await
-            .and_then(|r| r.error_for_status())
-        {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!(error = %e, iteration, "openrouter upstream failed");
-                return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
-            }
-        };
-        let json: serde_json::Value = match resp.json().await {
+        let json = match openrouter_post(&state, api_key, &payload, 30).await {
             Ok(j) => j,
-            Err(e) => {
-                tracing::error!(error = %e, iteration, "openrouter decode failed");
+            Err(()) => {
+                tracing::error!(iteration, "agent upstream failed");
                 return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
             }
         };
@@ -1153,30 +1198,9 @@ async fn summary_handler(
         ],
     });
 
-    let resp = match state
-        .http
-        .post(OPENROUTER_URL)
-        .bearer_auth(api_key)
-        // Per-request override of the shared client's 10s default — LLMs can be slower.
-        .timeout(std::time::Duration::from_secs(20))
-        .json(&payload)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!(error = %e, "openrouter upstream failed");
-            return (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response();
-        }
-    };
-
-    let json: serde_json::Value = match resp.json().await {
+    let json = match openrouter_post(&state, api_key, &payload, 20).await {
         Ok(j) => j,
-        Err(e) => {
-            tracing::error!(error = %e, "openrouter decode failed");
-            return (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response();
-        }
+        Err(()) => return (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response(),
     };
 
     // OpenAI-compatible shape: choices[0].message.content.

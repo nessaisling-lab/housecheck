@@ -290,7 +290,8 @@ Implementation notes:
 | `HOST` / `PORT` | server bind | Listen address; container uses `0.0.0.0:$PORT`. Defaults `127.0.0.1:8787`. |
 | `HOUSECHECK_DB` | startup | Path to the serving SQLite DB. Default `data/housecheck.db`. |
 | `CORS_ALLOWED_ORIGIN` | CORS | If set to an origin (in production: `https://housecheck-wine.vercel.app`), CORS is restricted to exactly that origin for `GET`+`POST` with a JSON `content-type`. If unset (or blank/invalid), falls back to **permissive** for local dev. The active mode is logged at startup. |
-| `OPENROUTER_API_KEY` | `POST /summary` | Enables the optional LLM summary. Unset → `/summary` returns `501`. Never commit it; set it as a deploy secret. |
+| `OPENROUTER_API_KEY` | `POST /summary` | Enables the optional LLM summary. Unset (or blank) → `/summary` returns `501`. Read once at startup, not per request. Never commit it; set it as a deploy secret. |
+| `OPENROUTER_MODEL` | `POST /summary` | Model slug passed to OpenRouter. Defaults to `anthropic/claude-3.5-haiku`. **Do not point this at a `:free` model in production** — OpenRouter logs free-tier prompts, and ours contain a building address and the user's rent. The server logs a warning at startup if the configured model ends in `:free`. |
 
 ---
 

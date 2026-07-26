@@ -24,7 +24,8 @@ Maps every Day-29 / Day-30 deliverable to the artifact you already have + the ac
 |---|---|
 | Type an address → Building Health Card, 0–100 color-coded | ✅ live |
 | Rent-fairness · violations + timeline · works on real data | ✅ live |
-| **Live deployed URL** | ✅ https://housecheck-nessa.fly.dev |
+| **Live deployed app** (show this one) | ✅ https://housecheck-wine.vercel.app |
+| **Live API** | ✅ https://housecheck-nessa.fly.dev |
 | **Case study** | ✅ `docs/CASE-STUDY.md` + polished portfolio page |
 | **Demo video** | ☐ record — script in `docs/DEMO-SCRIPT.md` |
 | 5-min pitch rehearsed | ☐ outline in `docs/PITCH.md` |
@@ -34,9 +35,23 @@ Maps every Day-29 / Day-30 deliverable to the artifact you already have + the ac
 1. ☐ Add your **reflection** to the case study (3–4 sentences → I'll republish).
 2. ☐ **Submit**: problem statement (Pathfinder) · PRD (Google Doc) · repo link — per Pursuit's forms.
 3. ☐ **Record the demo** (script ready) and **rehearse the pitch** (outline ready).
-4. ☐ Confirm Anthony accepted the repo invite; point him at `docs/API.md` + the live URL.
-5. ☐ *(Optional)* add a card on Fly only if you want the `/summary` LLM feature or auto-deploy — not required.
+
+## Engineering status (2026-07-26)
+
+Nothing outstanding. For the record, so nobody re-checks:
+
+| | |
+|---|---|
+| CI | ✅ `ci` · `security` · `smoke` all green, three OSes, 15/15 jobs |
+| Security | ✅ 0 npm vulnerabilities · gitleaks, cargo-audit, cargo-deny, CodeQL all pass |
+| Frontend | ✅ deployed, deep links work, react-router 8 |
+| Backend | ✅ live, real data, CORS locked to the Vercel origin |
+| Deploys | manual and documented — see `docs/DEPLOY.md`. There is deliberately no CD; the reason is written up there rather than left as a gap. |
+| Anthony | ✅ accepted and actively contributing (the whole React frontend is his) |
+| Fly billing | ✅ card added; app runs scale-to-zero |
+
+**`/summary` (the LLM agent) is intentionally disabled** — it returns `501` until `OPENROUTER_API_KEY` is set, and the UI degrades honestly to grounded canned answers. It stays off until a paid zero-data-retention model is configured, because prompts contain a building address and the user's rent. Not required for submission. Full plan in `docs/agent/PRD-AGENT.md`.
 
 ## Not yours
 
-Frontend (React), map layer, theme pick → **Anthony**. Demo/pitch delivery → **team**.
+Frontend (React), map layer, theme pick → **Anthony**. Agent feature → tracked in `docs/agent/`. Demo/pitch delivery → **team**.

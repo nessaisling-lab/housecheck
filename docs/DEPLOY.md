@@ -73,6 +73,10 @@ Data APIs $0 · Fly.io ~$0–5/mo (scale-to-zero) · map tiles via MapLibre + Pr
 Well within the $20–50 budget. See PRD Appendix F.
 
 ## Secrets (only if you add features that need them)
-- `/summary` (optional LLM) → `fly secrets set OPENROUTER_API_KEY=...`
+- `/summary` (optional LLM) → `flyctl secrets set OPENROUTER_API_KEY=... -a housecheck-nessa`
+  - Optionally `OPENROUTER_MODEL=<slug>`; defaults to `anthropic/claude-3.5-haiku`.
+  - **Never a `:free` model in production.** OpenRouter logs free-tier prompts, and these
+    prompts carry a building address and the user's rent. Use a paid, zero-data-retention
+    model. The server warns at startup if the configured model ends in `:free`.
 - Re-ingest inside CI/cloud (not needed today) → `CENSUS_API_KEY`, `NYC_APP_TOKEN`
 Never commit keys; local dev uses the OS keychain / machine env.

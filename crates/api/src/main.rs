@@ -30,6 +30,56 @@ fn http_client() -> reqwest::Client {
 /// Default scoring year for a DB with no `meta` snapshot row (e.g. the fixture DB).
 const DEFAULT_SNAPSHOT_YEAR: i32 = 2026;
 
+/// Fallback model when `OPENROUTER_MODEL` is unset.
+///
+/// Deliberately a **paid** model. The previous hardcoded default ended in `:free`, and
+/// OpenRouter's free tier logs prompts — ours carry a home address and a rent figure, so the
+/// legal audit bars it from production. A wrong-but-safe default beats a cheap-but-leaky one:
+/// an unset env var should cost money, not privacy.
+const DEFAULT_SUMMARY_MODEL: &str = "anthropic/claude-3.5-haiku";
+
+/// LLM configuration, resolved once at startup rather than per request.
+#[derive(Clone)]
+pub struct LlmConfig {
+    /// `None` disables the LLM endpoints, which then answer 501 rather than erroring.
+    api_key: Option<String>,
+    model: String,
+}
+
+impl LlmConfig {
+    /// Resolve from raw values. Pure, so it is testable without mutating process
+    /// environment — env vars are global and would race across parallel tests.
+    /// Blank or whitespace-only values count as unset.
+    fn resolve(raw_key: Option<String>, raw_model: Option<String>) -> Self {
+        let clean = |v: Option<String>| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let api_key = clean(raw_key);
+        let model = clean(raw_model).unwrap_or_else(|| DEFAULT_SUMMARY_MODEL.to_string());
+
+        if api_key.is_some() {
+            tracing::info!(model = %model, "LLM: enabled");
+            if model.ends_with(":free") {
+                tracing::warn!(
+                    model = %model,
+                    "LLM: model is on OpenRouter's free tier, which logs prompts. Prompts \
+                     include a building address and the user's rent — set OPENROUTER_MODEL to a \
+                     paid, zero-data-retention model before serving real users."
+                );
+            }
+        } else {
+            tracing::info!("LLM: disabled (OPENROUTER_API_KEY unset); /summary will answer 501");
+        }
+        Self { api_key, model }
+    }
+
+    /// Read from the environment at startup.
+    fn from_env() -> Self {
+        Self::resolve(
+            std::env::var("OPENROUTER_API_KEY").ok(),
+            std::env::var("OPENROUTER_MODEL").ok(),
+        )
+    }
+}
+
 /// Shared app state: a single SQLite connection behind a mutex, plus the snapshot year the
 /// DB was built for.
 /// (Read-mostly reference data + a curated set → a single connection is fine for the MVP.)
@@ -42,6 +92,8 @@ pub struct AppState {
     snapshot_year: i32,
     /// Async HTTP client for outbound calls (`/search` → NYC GeoSearch). Cloneable + pooled.
     http: reqwest::Client,
+    /// LLM key + model, resolved once at startup instead of re-read on every request.
+    llm: LlmConfig,
 }
 
 impl AppState {
@@ -53,6 +105,7 @@ impl AppState {
             conn: Arc::new(Mutex::new(conn)),
             snapshot_year,
             http: http_client(),
+            llm: LlmConfig::from_env(),
         })
     }
 
@@ -67,6 +120,7 @@ impl AppState {
             conn: Arc::new(Mutex::new(conn)),
             snapshot_year,
             http: http_client(),
+            llm: LlmConfig::from_env(),
         })
     }
 }
@@ -423,8 +477,6 @@ honest; do not invent facts.";
 
 /// OpenRouter's OpenAI-compatible chat-completions endpoint.
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
-/// The team's free model on OpenRouter.
-const SUMMARY_MODEL: &str = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
 #[derive(Deserialize)]
 struct SummaryReq {
@@ -466,9 +518,9 @@ async fn summary_handler(
     };
 
     // Optional feature: no key → advertise it as disabled, don't error the server.
-    let api_key = match std::env::var("OPENROUTER_API_KEY") {
-        Ok(k) if !k.trim().is_empty() => k,
-        _ => {
+    let api_key = match state.llm.api_key.as_deref() {
+        Some(k) => k,
+        None => {
             return (
                 StatusCode::NOT_IMPLEMENTED,
                 Json(serde_json::json!({
@@ -515,7 +567,7 @@ async fn summary_handler(
     );
 
     let payload = serde_json::json!({
-        "model": SUMMARY_MODEL,
+        "model": state.llm.model,
         "messages": [
             { "role": "system", "content": SUMMARY_SYSTEM_PROMPT },
             { "role": "user", "content": user_facts },
@@ -525,7 +577,7 @@ async fn summary_handler(
     let resp = match state
         .http
         .post(OPENROUTER_URL)
-        .bearer_auth(&api_key)
+        .bearer_auth(api_key)
         // Per-request override of the shared client's 10s default — LLMs can be slower.
         .timeout(std::time::Duration::from_secs(20))
         .json(&payload)
@@ -773,6 +825,38 @@ mod tests {
             .get("/compare?bbls=%20")
             .await
             .assert_status_bad_request();
+    }
+
+    #[test]
+    fn llm_model_defaults_to_a_paid_model_when_unset() {
+        let c = LlmConfig::resolve(Some("sk-test".into()), None);
+        assert_eq!(c.model, DEFAULT_SUMMARY_MODEL);
+        // The default must never be free-tier: OpenRouter logs those prompts, and ours
+        // carry a building address and the user's rent.
+        assert!(!c.model.ends_with(":free"));
+    }
+
+    #[test]
+    fn llm_model_comes_from_config_when_set() {
+        let c = LlmConfig::resolve(Some("sk-test".into()), Some("vendor/some-model".into()));
+        assert_eq!(c.model, "vendor/some-model");
+    }
+
+    #[test]
+    fn llm_blank_values_count_as_unset() {
+        let c = LlmConfig::resolve(Some("   ".into()), Some("  ".into()));
+        assert!(
+            c.api_key.is_none(),
+            "whitespace-only key must disable the LLM"
+        );
+        assert_eq!(c.model, DEFAULT_SUMMARY_MODEL);
+    }
+
+    #[test]
+    fn llm_values_are_trimmed() {
+        let c = LlmConfig::resolve(Some("  sk-test\n".into()), Some(" vendor/m ".into()));
+        assert_eq!(c.api_key.as_deref(), Some("sk-test"));
+        assert_eq!(c.model, "vendor/m");
     }
 
     #[tokio::test]

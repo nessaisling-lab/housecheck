@@ -289,7 +289,7 @@ Implementation notes:
 |----------|---------|--------|
 | `HOST` / `PORT` | server bind | Listen address; container uses `0.0.0.0:$PORT`. Defaults `127.0.0.1:8787`. |
 | `HOUSECHECK_DB` | startup | Path to the serving SQLite DB. Default `data/housecheck.db`. |
-| `CORS_ALLOWED_ORIGIN` | CORS | If set to an origin (e.g. `https://housecheck.vercel.app`), CORS is restricted to exactly that origin for `GET`+`POST` with a JSON `content-type`. If unset (or blank/invalid), falls back to **permissive** for local dev. The active mode is logged at startup. |
+| `CORS_ALLOWED_ORIGIN` | CORS | If set to an origin (in production: `https://housecheck-wine.vercel.app`), CORS is restricted to exactly that origin for `GET`+`POST` with a JSON `content-type`. If unset (or blank/invalid), falls back to **permissive** for local dev. The active mode is logged at startup. |
 | `OPENROUTER_API_KEY` | `POST /summary` | Enables the optional LLM summary. Unset → `/summary` returns `501`. Never commit it; set it as a deploy secret. |
 
 ---

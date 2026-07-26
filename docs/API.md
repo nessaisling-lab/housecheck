@@ -283,6 +283,48 @@ Implementation notes:
 
 ---
 
+## `POST /agent/chat`
+
+Multi-turn, grounded Q&A about one building. Conversation only — no tool calling yet
+(slice 2 of `docs/agent/PRD-AGENT.md`).
+
+```jsonc
+// request
+{
+  "bbl": "3014800023",
+  "messages": [                       // full history; server keeps the last 12 turns
+    { "role": "user", "content": "are the violations here serious?" }
+  ]
+}
+// 200
+{
+  "bbl": "3014800023",
+  "answer": "…",
+  "citations": ["NYC HPD violations (wvxf-dwi5)", "…"]   // only sources actually used
+}
+```
+
+**Grounding.** The model receives a system prompt plus a delimited `BUILDING FACTS` block built
+by the same function `/summary` uses, so the two endpoints can never answer from different facts
+about the same building. The prompt states that content inside the block is data, never
+instructions, and forbids legal advice, invented numbers, and speculation about individuals.
+Client-supplied roles other than `assistant` are coerced to `user`, so a caller cannot inject a
+second system turn.
+
+**Limits.** `max_tokens` 400 · last 12 turns · 2,000 characters per message · 30s upstream
+timeout · **10 requests per client per 60s**. The rate limit is a spend control, not just a load
+control: this is the only endpoint that costs money per request. Client identity comes from
+`Fly-Client-IP`, else the first hop of `X-Forwarded-For`.
+
+| Status | Meaning |
+|---|---|
+| `400` | `messages` empty, or the last turn isn't a non-empty user turn |
+| `404` | BBL not in the curated set — checked *before* the key, so probing is free |
+| `413` | message longer than 2,000 characters |
+| `429` | rate limit exceeded |
+| `501` | `OPENROUTER_API_KEY` unset — the agent is optional |
+| `502` | upstream call, decode, or empty completion |
+
 ## Environment variables
 
 | Variable | Used by | Effect |

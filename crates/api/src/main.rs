@@ -36,7 +36,10 @@ const DEFAULT_SNAPSHOT_YEAR: i32 = 2026;
 /// OpenRouter's free tier logs prompts — ours carry a home address and a rent figure, so the
 /// legal audit bars it from production. A wrong-but-safe default beats a cheap-but-leaky one:
 /// an unset env var should cost money, not privacy.
-const DEFAULT_SUMMARY_MODEL: &str = "anthropic/claude-3.5-haiku";
+///
+/// Verified against OpenRouter's public model list — an invalid slug fails only on the first
+/// real call, as an opaque upstream error, long after anyone would connect it to this line.
+const DEFAULT_SUMMARY_MODEL: &str = "anthropic/claude-haiku-4.5";
 
 /// LLM configuration, resolved once at startup rather than per request.
 #[derive(Clone)]
@@ -1078,6 +1081,7 @@ fn citations_for(card: &HealthCard, tract_median: Option<i32>) -> Vec<String> {
 /// - `502 Bad Gateway` if the upstream call/parse fails.
 async fn summary_handler(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<SummaryReq>,
 ) -> impl IntoResponse {
     let snapshot_year = state.snapshot_year;
@@ -1111,6 +1115,24 @@ async fn summary_handler(
                 .into_response();
         }
     };
+
+    // Same spend guard as /agent/chat, and for the same reason: this endpoint calls a paid
+    // model, so an unlimited public route is a way for a stranger to run up the bill. Placed
+    // after the 404/501 checks so probing costs the caller no quota.
+    let key = client_key(&headers);
+    if !state.limiter.check(&key, std::time::Instant::now()) {
+        tracing::warn!(client = %key, "summary rate limit exceeded");
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({
+                "error": format!(
+                    "rate limit: {AGENT_RATE_LIMIT} requests per {}s",
+                    AGENT_RATE_WINDOW.as_secs()
+                )
+            })),
+        )
+            .into_response();
+    }
 
     let user_facts = grounding_block(&card, tract_median);
 

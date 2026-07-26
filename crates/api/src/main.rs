@@ -625,6 +625,200 @@ person. Violation records are facts about a building, not about a person.\n\
 5. Be concise and concrete: a few sentences, plain language, no hedging filler. This is a \
 signal drawn from public data, not a legal ruling — say so when it matters.";
 
+/// Hard stop on the tool-calling loop.
+///
+/// Without a cap, a model that misreads a tool result can call the same tool forever: the
+/// request never returns and every iteration is billed. Five is generous for the three
+/// read-only tools here — a legitimate answer needs one or two.
+const MAX_TOOL_ITERATIONS: usize = 5;
+
+/// Tool definitions advertised to the model, in OpenAI/OpenRouter function-calling format.
+///
+/// The `description` text is load-bearing: it is the only thing the model uses to decide which
+/// tool fits a question, so it reads as instructions to a caller, not as documentation.
+///
+/// All three are read-only and wrap logic that already exists and is already tested. Nothing
+/// here can mutate state — a bug in the loop can waste money but cannot corrupt data.
+fn tool_schemas() -> serde_json::Value {
+    serde_json::json!([
+        {
+            "type": "function",
+            "function": {
+                "name": "get_building",
+                "description": "Get the full verified Health Card for a building by BBL: address, \
+                                year built, unit count, the 0-100 score and its four sub-scores, \
+                                open violation counts, rent-stabilization signal, and \
+                                accessibility likelihood. Use this when asked about a building \
+                                other than the one already in context.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bbl": { "type": "string", "description": "10-digit NYC Borough-Block-Lot identifier" }
+                    },
+                    "required": ["bbl"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_open_violations",
+                "description": "List the individual open HPD violations for a building: class \
+                                (A/B/C, C being immediately hazardous), description, and the year \
+                                opened. Use this when the user asks what the violations actually \
+                                are, rather than how many there are.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bbl": { "type": "string", "description": "10-digit NYC Borough-Block-Lot identifier" }
+                    },
+                    "required": ["bbl"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_address",
+                "description": "Resolve a street address to a BBL using NYC GeoSearch. Returns the \
+                                BBL, a canonical label, and whether the building is in HouseCheck's \
+                                curated set. Use this when the user names an address instead of a \
+                                BBL.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "address": { "type": "string", "description": "Street address, e.g. '1024 Gates Avenue Brooklyn'" }
+                    },
+                    "required": ["address"]
+                }
+            }
+        }
+    ])
+}
+
+/// Execute one tool call. Returns `(json_result, citation)`.
+///
+/// Errors are returned to the model as JSON rather than aborting the request — a tool failing
+/// is information the model can relay honestly ("I couldn't look that up"), not a 500.
+async fn dispatch_tool(
+    state: &AppState,
+    name: &str,
+    args: &serde_json::Value,
+) -> (serde_json::Value, Option<String>) {
+    let bbl_arg = || {
+        args.get("bbl")
+            .and_then(|b| b.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+
+    match name {
+        "get_building" => {
+            let bbl = bbl_arg();
+            // Lock scope ends before any await: the guard must never cross a network call.
+            let out = {
+                let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                card_for(&conn, state.snapshot_year, &bbl)
+            };
+            match out {
+                Ok(Some(card)) => (
+                    serde_json::to_value(&card)
+                        .unwrap_or_else(|_| serde_json::json!({ "error": "serialization failed" })),
+                    Some("NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO".to_string()),
+                ),
+                Ok(None) => (
+                    serde_json::json!({ "error": "building not in HouseCheck's curated set", "bbl": bbl }),
+                    None,
+                ),
+                Err(e) => {
+                    tracing::error!(error = %e, "tool get_building failed");
+                    (serde_json::json!({ "error": "lookup failed" }), None)
+                }
+            }
+        }
+        "get_open_violations" => {
+            let bbl = bbl_arg();
+            let out = {
+                let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                get_open_violations(&conn, &bbl)
+            };
+            match out {
+                Ok(v) => (
+                    serde_json::json!({ "bbl": bbl, "count": v.len(), "violations": v }),
+                    Some("NYC HPD open violations (wvxf-dwi5)".to_string()),
+                ),
+                Err(e) => {
+                    tracing::error!(error = %e, "tool get_open_violations failed");
+                    (serde_json::json!({ "error": "lookup failed" }), None)
+                }
+            }
+        }
+        "search_address" => {
+            let q = args
+                .get("address")
+                .and_then(|a| a.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if q.is_empty() {
+                return (serde_json::json!({ "error": "address required" }), None);
+            }
+            match geosearch_lookup(state, &q).await {
+                Some((bbl, label)) => {
+                    let in_set = {
+                        let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                        get_building(&conn, &bbl).ok().flatten().is_some()
+                    };
+                    (
+                        serde_json::json!({ "bbl": bbl, "label": label, "in_curated_set": in_set }),
+                        Some("NYC GeoSearch (Planning Labs)".to_string()),
+                    )
+                }
+                None => (
+                    serde_json::json!({ "error": "no BBL found for that address" }),
+                    None,
+                ),
+            }
+        }
+        other => {
+            tracing::warn!(tool = %other, "model requested an unknown tool");
+            (
+                serde_json::json!({ "error": format!("unknown tool: {other}") }),
+                None,
+            )
+        }
+    }
+}
+
+/// Address → (BBL, label) via NYC GeoSearch, for the `search_address` tool.
+///
+/// Not shared with `GET /search`: that handler deliberately distinguishes "no match for the
+/// address" from "matched, but the record has no BBL" so the client can tell a typo from an
+/// unmappable lot. A tool result only needs "found" or "not found", so this collapses both.
+async fn geosearch_lookup(state: &AppState, text: &str) -> Option<(String, String)> {
+    let resp = state
+        .http
+        .get("https://geosearch.planninglabs.nyc/v2/search")
+        .query(&[("text", text), ("size", "1")])
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+        .ok()?;
+    let json: serde_json::Value = resp.json().await.ok()?;
+    let props = json
+        .get("features")
+        .and_then(|f| f.as_array())
+        .and_then(|a| a.first())
+        .and_then(|f| f.get("properties"))?;
+    let bbl = geosearch_bbl(props)?;
+    let label = props
+        .get("label")
+        .and_then(|l| l.as_str())
+        .unwrap_or("")
+        .to_string();
+    Some((bbl, label))
+}
+
 #[derive(Deserialize)]
 struct ChatMessage {
     role: String,
@@ -753,52 +947,108 @@ async fn agent_chat_handler(
         msgs.push(serde_json::json!({ "role": role, "content": m.content }));
     }
 
-    let payload = serde_json::json!({
-        "model": state.llm.model,
-        "max_tokens": AGENT_MAX_TOKENS,
-        "messages": msgs,
-    });
+    // Citations accumulate as tools actually run, so the response claims only sources that
+    // genuinely fed the answer.
+    let mut citations = citations_for(&card, tract_median);
+    let tools = tool_schemas();
 
-    let resp = match state
-        .http
-        .post(OPENROUTER_URL)
-        .bearer_auth(api_key)
-        .timeout(std::time::Duration::from_secs(30))
-        .json(&payload)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!(error = %e, "openrouter upstream failed");
-            return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
-        }
-    };
+    // Tool-calling loop. The model may ask for data; *we* execute the call and hand back the
+    // result. The model never touches the database — that separation is what makes grounding
+    // enforceable rather than aspirational.
+    for iteration in 0..MAX_TOOL_ITERATIONS {
+        let payload = serde_json::json!({
+            "model": state.llm.model,
+            "max_tokens": AGENT_MAX_TOKENS,
+            "messages": msgs,
+            "tools": tools,
+        });
 
-    let json: serde_json::Value = match resp.json().await {
-        Ok(j) => j,
-        Err(e) => {
-            tracing::error!(error = %e, "openrouter decode failed");
-            return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
+        let resp = match state
+            .http
+            .post(OPENROUTER_URL)
+            .bearer_auth(api_key)
+            .timeout(std::time::Duration::from_secs(30))
+            .json(&payload)
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!(error = %e, iteration, "openrouter upstream failed");
+                return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
+            }
+        };
+        let json: serde_json::Value = match resp.json().await {
+            Ok(j) => j,
+            Err(e) => {
+                tracing::error!(error = %e, iteration, "openrouter decode failed");
+                return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
+            }
+        };
+
+        let message = &json["choices"][0]["message"];
+        let tool_calls = message["tool_calls"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+
+        if tool_calls.is_empty() {
+            // Final answer.
+            let answer = message["content"].as_str().unwrap_or("").trim().to_string();
+            if answer.is_empty() {
+                tracing::error!(iteration, "openrouter returned an empty completion");
+                return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
+            }
+            citations.dedup();
+            return Json(ChatResp {
+                bbl: card.building.bbl.clone(),
+                answer,
+                citations,
+            })
+            .into_response();
         }
-    };
-    let answer = json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    if answer.is_empty() {
-        tracing::error!("openrouter returned an empty completion");
-        return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
+
+        // Echo the assistant's tool-call turn back verbatim — the protocol requires each
+        // tool result to be paired with the call that requested it.
+        msgs.push(message.clone());
+
+        for call in &tool_calls {
+            let name = call["function"]["name"].as_str().unwrap_or("");
+            // Arguments arrive as a JSON *string*, not an object.
+            let args: serde_json::Value = call["function"]["arguments"]
+                .as_str()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+
+            tracing::info!(tool = %name, iteration, "agent tool call");
+            let (result, citation) = dispatch_tool(&state, name, &args).await;
+            if let Some(c) = citation {
+                if !citations.contains(&c) {
+                    citations.push(c);
+                }
+            }
+
+            msgs.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": call["id"].as_str().unwrap_or(""),
+                "content": result.to_string(),
+            }));
+        }
     }
 
-    Json(ChatResp {
-        bbl: card.building.bbl.clone(),
-        answer,
-        citations: citations_for(&card, tract_median),
-    })
-    .into_response()
+    // Ran out of iterations without the model settling on an answer.
+    tracing::warn!(
+        max = MAX_TOOL_ITERATIONS,
+        "agent hit the tool-iteration cap without producing an answer"
+    );
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(serde_json::json!({
+            "error": "the agent could not finish this request — try asking more specifically"
+        })),
+    )
+        .into_response()
 }
 
 /// Sources that actually fed the grounding block for this card.
@@ -1126,6 +1376,116 @@ mod tests {
             .get("/compare?bbls=%20")
             .await
             .assert_status_bad_request();
+    }
+
+    // ---- tool calling (slice 4) ----
+
+    #[test]
+    fn tool_schemas_declare_three_read_only_tools_with_required_params() {
+        let t = tool_schemas();
+        let arr = t.as_array().expect("tools must be an array");
+        assert_eq!(arr.len(), 3);
+
+        let names: Vec<&str> = arr
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"get_building"));
+        assert!(names.contains(&"get_open_violations"));
+        assert!(names.contains(&"search_address"));
+
+        for tool in arr {
+            let f = &tool["function"];
+            assert_eq!(tool["type"], "function");
+            // The description is what the model uses to pick a tool — an empty one makes the
+            // tool effectively invisible.
+            assert!(
+                f["description"].as_str().is_some_and(|d| d.len() > 40),
+                "tool {} needs a substantive description",
+                f["name"]
+            );
+            assert!(
+                f["parameters"]["required"]
+                    .as_array()
+                    .is_some_and(|r| !r.is_empty()),
+                "tool {} must declare required parameters",
+                f["name"]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_get_building_returns_the_card_for_a_known_bbl() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let (out, citation) = dispatch_tool(
+            &state,
+            "get_building",
+            &serde_json::json!({ "bbl": FIXTURE_BBL }),
+        )
+        .await;
+        assert_eq!(out["building"]["bbl"], FIXTURE_BBL);
+        assert!(out["score"]["total"].is_number());
+        assert!(
+            citation.is_some(),
+            "a successful lookup must yield a citation"
+        );
+    }
+
+    #[tokio::test]
+    async fn tool_get_building_reports_unknown_bbl_as_data_not_an_error() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let (out, citation) = dispatch_tool(
+            &state,
+            "get_building",
+            &serde_json::json!({ "bbl": "9999999999" }),
+        )
+        .await;
+        // The model should be told the building isn't covered so it can say so, rather than
+        // the request failing.
+        assert!(out["error"].is_string());
+        assert!(
+            citation.is_none(),
+            "a failed lookup must not contribute a citation"
+        );
+    }
+
+    #[tokio::test]
+    async fn tool_get_open_violations_returns_a_counted_list() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let (out, citation) = dispatch_tool(
+            &state,
+            "get_open_violations",
+            &serde_json::json!({ "bbl": FIXTURE_BBL }),
+        )
+        .await;
+        assert!(out["violations"].is_array());
+        assert_eq!(
+            out["count"].as_u64().unwrap() as usize,
+            out["violations"].as_array().unwrap().len(),
+            "count must match the list it describes"
+        );
+        assert!(citation.is_some());
+    }
+
+    #[tokio::test]
+    async fn unknown_tool_name_is_reported_back_not_fatal() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let (out, citation) = dispatch_tool(&state, "drop_tables", &serde_json::json!({})).await;
+        assert!(
+            out["error"].as_str().unwrap().contains("unknown tool"),
+            "a hallucinated tool name must be answered, not crash the request"
+        );
+        assert!(citation.is_none());
+    }
+
+    #[tokio::test]
+    async fn tool_missing_required_arg_does_not_panic() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let (out, _) = dispatch_tool(&state, "get_building", &serde_json::json!({})).await;
+        assert!(
+            out["error"].is_string(),
+            "absent bbl must degrade, not panic"
+        );
     }
 
     // ---- rate limiter (pure; time is a parameter so no sleeping) ----

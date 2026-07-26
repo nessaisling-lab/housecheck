@@ -311,8 +311,16 @@ instructions, and forbids legal advice, invented numbers, and speculation about 
 Client-supplied roles other than `assistant` are coerced to `user`, so a caller cannot inject a
 second system turn.
 
+**Tools.** The model may request data instead of answering directly. Three read-only tools are
+offered — `get_building(bbl)`, `get_open_violations(bbl)`, `search_address(address)`. **The model
+never touches the database:** it asks, the server executes, the result is fed back. That
+separation is what makes grounding enforceable rather than aspirational. The loop is capped at
+**5 iterations**; hitting the cap returns `502` rather than looping on a billed call forever. A
+hallucinated tool name is answered as data (`{"error": "unknown tool: …"}`) so the model can
+recover instead of the request failing. `citations[]` grows only as tools actually succeed.
+
 **Limits.** `max_tokens` 400 · last 12 turns · 2,000 characters per message · 30s upstream
-timeout · **10 requests per client per 60s**. The rate limit is a spend control, not just a load
+timeout · 5 tool iterations · **10 requests per client per 60s**. The rate limit is a spend control, not just a load
 control: this is the only endpoint that costs money per request. Client identity comes from
 `Fly-Client-IP`, else the first hop of `X-Forwarded-For`.
 

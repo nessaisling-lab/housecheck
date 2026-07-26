@@ -6,7 +6,7 @@
   :root {
     /* shadcn theme (light) */
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
@@ -27,7 +27,10 @@
     --radius: 0.625rem;
 
     /* HouseCheck design tokens (design-strategy v1.1) */
-    --hc-canvas: #F6F6F8;
+    --hc-canvas: rgb(33, 43, 63);
+    --hc-canvas-ink: rgba(255, 255, 255, 0.94);
+    --hc-canvas-ink-2: rgba(255, 255, 255, 0.68);
+    --hc-canvas-ink-3: rgba(255, 255, 255, 0.46);
     --hc-card: #FFFFFF;
     --hc-sunken: #EFEFF2;
     --hc-ink: #1C1C1E;
@@ -51,13 +54,7 @@
   }
   body {
     @apply text-foreground;
-    /* Apple-style gradient mesh wallpaper (public/apple-glass-bg.jpg) —
-       the color field the Liquid Glass refracts. Pastel so the app stays
-       light-first; a faint canvas veil keeps it airy, never loud. */
-    background:
-      linear-gradient(rgba(246, 246, 248, 0.22), rgba(246, 246, 248, 0.22)),
-      url("/apple-glass-bg.jpg") center / cover no-repeat fixed,
-      var(--hc-canvas);
+    background: var(--hc-canvas);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",
       "Inter", system-ui, sans-serif;
     font-variant-numeric: tabular-nums;

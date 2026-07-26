@@ -92,9 +92,14 @@ impl LlmConfig {
     }
 }
 
-/// Cap on model output for `/agent/chat`. Kept deliberately small: answers render in a mobile
-/// sheet, we do not stream, and every token is billed to a personally funded account.
-const AGENT_MAX_TOKENS: u32 = 400;
+/// Cap on model output for `/agent/chat`.
+///
+/// Was 400, chosen when the only feature was a short violations summary. Slice 6 answers are
+/// legitimately longer — statute text, an evidence checklist, the complaint route, a referral,
+/// and often a drafted question for a lawyer — and 400 truncated them mid-sentence, dropping
+/// exactly the actionable part. Raised to 1200. Still bounded, because we do not stream and
+/// every token is billed.
+const AGENT_MAX_TOKENS: u32 = 1200;
 /// Most recent turns forwarded upstream. History is resent in full on every request, so an
 /// uncapped conversation grows cost quadratically.
 const AGENT_MAX_HISTORY: usize = 12;
@@ -1262,7 +1267,23 @@ async fn agent_chat_handler(
 
         if tool_calls.is_empty() {
             // Final answer.
-            let answer = message["content"].as_str().unwrap_or("").trim().to_string();
+            let mut answer = message["content"].as_str().unwrap_or("").trim().to_string();
+
+            // A response cut off at the token cap reads as complete but is not — and on a legal
+            // answer the tail is where the referral and the drafted question live. Say so rather
+            // than hand back a confident-looking fragment.
+            if json["choices"][0]["finish_reason"].as_str() == Some("length") {
+                tracing::warn!(
+                    max_tokens = AGENT_MAX_TOKENS,
+                    "answer hit the token cap and was truncated"
+                );
+                answer.push_str(
+                    "
+
+_(This answer was cut short by a length limit. Ask a narrower                      follow-up question for the rest.)_",
+                );
+            }
+
             if answer.is_empty() {
                 tracing::error!(iteration, "openrouter returned an empty completion");
                 return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();

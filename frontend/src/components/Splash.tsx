@@ -29,13 +29,13 @@ export function Splash({ onDone }: { onDone: () => void }) {
     >
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EFEFF2" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={stroke} />
           <circle
             cx={size / 2}
             cy={size / 2}
             r={r}
             fill="none"
-            stroke="#1C1C1E"
+            stroke="rgba(255,255,255,0.94)"
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={c}
@@ -53,7 +53,7 @@ export function Splash({ onDone }: { onDone: () => void }) {
           height="40"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#1C1C1E"
+          stroke="rgba(255,255,255,0.94)"
           strokeWidth="1.8"
           strokeLinejoin="round"
         >
@@ -62,10 +62,10 @@ export function Splash({ onDone }: { onDone: () => void }) {
           <path d="M9.5 14.5l2.5 2.5 4.5-4.5" strokeLinecap="round" />
         </svg>
       </div>
-      <h1 className="mt-5 text-[28px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+      <h1 className="mt-5 text-[28px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         HouseCheck
       </h1>
-      <p className="absolute bottom-16 text-[15px]" style={{ color: "var(--hc-ink-2)" }}>
+      <p className="absolute bottom-16 text-[15px]" style={{ color: "var(--hc-canvas-ink-2)" }}>
         Public data. Honest signals.
       </p>
     </div>

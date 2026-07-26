@@ -54,11 +54,13 @@ export default function Saved() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-36 pt-14">
-      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         Saved
       </h1>
 
-      <h2 className="hc-eyebrow mt-8">Recent searches</h2>
+      <h2 className="hc-eyebrow mt-8" style={{ color: "var(--hc-canvas-ink-3)" }}>
+        Recent searches
+      </h2>
       <div className="mt-3 space-y-2.5">
         {recents.length === 0 && (
           <p className="rounded-2xl p-4 text-[14px]" style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}>
@@ -77,7 +79,7 @@ export default function Saved() {
         ))}
       </div>
 
-      <h2 className="hc-eyebrow mt-8">
+      <h2 className="hc-eyebrow mt-8" style={{ color: "var(--hc-canvas-ink-3)" }}>
         Saved for compare · {tray.length} of 4
       </h2>
       <div className="mt-3 space-y-2.5">

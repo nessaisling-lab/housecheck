@@ -62,7 +62,7 @@ export default function Home() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-14 text-center">
       <div className="flex w-full flex-1 flex-col items-center justify-center pb-16">
-        <h1 className="text-[24px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+        <h1 className="text-[24px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
           HouseCheck
         </h1>
 
@@ -88,7 +88,7 @@ export default function Home() {
 
         <p
           className="mt-8 text-[34px] font-semibold leading-[1.12] tracking-tight"
-          style={{ color: "var(--hc-ink)" }}
+          style={{ color: "var(--hc-canvas-ink)" }}
         >
           Know the building
           <br />
@@ -142,7 +142,7 @@ export default function Home() {
         )}
 
         {notFound && (
-          <p className="mt-3 px-2 text-[14px]" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="mt-3 px-2 text-[14px]" style={{ color: "var(--hc-canvas-ink-2)" }}>
             Address not found — try street + house number.
           </p>
         )}

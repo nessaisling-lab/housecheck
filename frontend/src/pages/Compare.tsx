@@ -106,7 +106,7 @@ export default function Compare() {
   if (tray.length < 2) {
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-32 pt-14">
-        <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+        <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
           Compare
         </h1>
         <div className="mt-10 rounded-2xl p-5" style={{ background: "var(--hc-sunken)" }}>
@@ -139,10 +139,10 @@ export default function Compare() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-32 pt-14">
-      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         Compare
       </h1>
-      <p className="mt-1 text-[14px]" style={{ color: "var(--hc-ink-2)" }}>
+      <p className="mt-1 text-[14px]" style={{ color: "var(--hc-canvas-ink-2)" }}>
         {tray.length} buildings
       </p>
 
@@ -190,7 +190,7 @@ export default function Compare() {
                       }}
                       aria-label={`Remove ${c.address} from compare`}
                       className="absolute -top-1 right-0 p-1"
-                      style={{ color: "var(--hc-ink-3)" }}
+                      style={{ color: "var(--hc-canvas-ink-3)" }}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <path d="M6 6l12 12M18 6L6 18" />
@@ -198,7 +198,7 @@ export default function Compare() {
                     </button>
                     <button onClick={() => navigate(`/building/${c.bbl}`)} className="flex flex-col items-center gap-1.5">
                       <MiniRing score={c.score} size={52} stroke={6} />
-                      <span className="max-w-[84px] text-center text-[12px] font-medium leading-tight" style={{ color: "var(--hc-ink)" }}>
+                      <span className="max-w-[84px] text-center text-[12px] font-medium leading-tight" style={{ color: "var(--hc-canvas-ink)" }}>
                         {c.address}
                       </span>
                     </button>
@@ -208,11 +208,11 @@ export default function Compare() {
             </thead>
             <tbody>
               {ROWS.map((row, ri) => (
-                <tr key={row.label} style={{ background: ri % 2 ? "transparent" : "rgba(60,60,67,0.045)" }}>
+                <tr key={row.label} style={{ background: ri % 2 ? "transparent" : "rgba(255,255,255,0.055)" }}>
                   <th
                     scope="row"
                     className="hc-row-label px-2 py-2.5 text-left align-middle font-semibold"
-                    style={{ maxWidth: 104 }}
+                    style={{ maxWidth: 104, color: "var(--hc-canvas-ink-3)" }}
                   >
                     {row.label}
                   </th>
@@ -225,7 +225,7 @@ export default function Compare() {
                         key={c.bbl}
                         className="px-1 py-2.5 text-center text-[15px] tabular-nums"
                         style={{
-                          color: isUnverified ? "var(--hc-ink-3)" : "var(--hc-ink)",
+                          color: isUnverified ? "var(--hc-canvas-ink-3)" : "var(--hc-canvas-ink)",
                           fontWeight: isBest ? 700 : 400,
                         }}
                       >
@@ -237,7 +237,7 @@ export default function Compare() {
               ))}
             </tbody>
           </table>
-          <p className="mt-5 text-center text-[13px]" style={{ color: "var(--hc-ink-3)" }}>
+          <p className="mt-5 text-center text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
             Best value per row in bold · tap a column for the full card
           </p>
           </div>

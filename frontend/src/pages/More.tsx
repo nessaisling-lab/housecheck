@@ -72,7 +72,7 @@ export default function More() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-32 pt-14">
-      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-ink)" }}>
+      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         About
       </h1>
 
@@ -116,7 +116,7 @@ export default function More() {
         </p>
       </div>
 
-      <p className="mt-8 text-center text-[12px]" style={{ color: "var(--hc-ink-3)" }}>
+      <p className="mt-8 text-center text-[12px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
         HouseCheck · a Pursuit fellowship project · Brooklyn, NY
       </p>
 

@@ -30,6 +30,75 @@ export function ScoreRing({
   const offset = c * (1 - filled);
   const color = scoreCircleColor(score);
 
+  if (hero) {
+    const segments = 34;
+    const filledSegments = score == null ? 0 : Math.round(filled * segments);
+    const cx = size / 2;
+    const cy = size * 0.68;
+    const outerR = size * 0.43;
+    const innerR = outerR - stroke * 1.55;
+    const arcStart = 180;
+    const arcEnd = 360;
+    const gradientId = "hero-score-gradient";
+
+    return (
+      <div
+        className="relative inline-flex items-center justify-center"
+        style={{ width: size, height: size }}
+        role="img"
+        aria-label={score == null ? "Score unverified" : `Score ${score} of 100`}
+      >
+        <svg width={size} height={size} aria-hidden>
+          <defs>
+            <linearGradient id={gradientId} x1={0} y1={0} x2={size} y2={0} gradientUnits="userSpaceOnUse">
+              <stop offset="2.7086%" stopColor="rgb(228, 159, 159)" />
+              <stop offset="48.566%" stopColor="rgb(238, 192, 149)" />
+              <stop offset="98.504%" stopColor="rgb(75, 205, 167)" />
+            </linearGradient>
+          </defs>
+          {Array.from({ length: segments }).map((_, i) => {
+            const t = i / (segments - 1);
+            const angle = (arcStart + (arcEnd - arcStart) * t) * (Math.PI / 180);
+            const isFilled = i < filledSegments;
+            return (
+              <line
+                key={i}
+                x1={cx + innerR * Math.cos(angle)}
+                y1={cy + innerR * Math.sin(angle)}
+                x2={cx + outerR * Math.cos(angle)}
+                y2={cy + outerR * Math.sin(angle)}
+                stroke={isFilled ? `url(#${gradientId})` : "rgba(255,255,255,0.18)"}
+                strokeWidth={Math.max(5, stroke * 0.62)}
+                strokeLinecap="round"
+                style={
+                  animate
+                    ? ({
+                        opacity: isFilled ? 0 : 1,
+                        animation: isFilled
+                          ? `hc-fade-in 0.28s ease-out ${i * 18}ms forwards`
+                          : undefined,
+                      } as React.CSSProperties)
+                    : undefined
+                }
+              />
+            );
+          })}
+        </svg>
+        <div className="absolute inset-x-0 top-[42%] flex flex-col items-center">
+          <span
+            className="font-semibold leading-none"
+            style={{ fontSize: 62, letterSpacing: 0, color: "var(--hc-canvas-ink)" }}
+          >
+            {score ?? "—"}
+          </span>
+          <span className="mt-1 text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+            of 100
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative inline-flex items-center justify-center"
@@ -70,19 +139,6 @@ export function ScoreRing({
           />
         )}
       </svg>
-      {hero && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className="font-semibold leading-none"
-            style={{ fontSize: 72, letterSpacing: "-0.02em", color: "var(--hc-ink)" }}
-          >
-            {score ?? "—"}
-          </span>
-          <span className="mt-1 text-[13px]" style={{ color: "var(--hc-ink-3)" }}>
-            of 100
-          </span>
-        </div>
-      )}
     </div>
   );
 }

@@ -183,10 +183,10 @@ export default function HealthCard() {
             <path d="M6 9.5V20h12V9.5" />
           </svg>
         </div>
-        <h1 className="mt-6 text-[24px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        <h1 className="mt-6 text-[24px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
           We don't have this building
         </h1>
-        <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+        <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
           Our pilot covers ~250 buildings in Bed-Stuy. Double-check the address, or explore the
           covered set.
         </p>
@@ -199,10 +199,10 @@ export default function HealthCard() {
   if (state === "error" || !building)
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-28 text-center">
-        <h1 className="text-[24px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        <h1 className="text-[24px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
           Something didn't load
         </h1>
-        <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+        <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
           We couldn't reach the data service. Nothing about the building changed — this is on us.
         </p>
         <button onClick={load} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold text-white" style={{ background: "var(--hc-ink)" }}>
@@ -333,10 +333,10 @@ export default function HealthCard() {
         {/* Header */}
         <header className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-[24px] font-semibold leading-tight tracking-tight" style={{ color: "var(--hc-ink)" }}>
+            <h1 className="text-[24px] font-semibold leading-tight tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
               {building.address}
             </h1>
-            <p className="mt-0.5 text-[13px]" style={{ color: "var(--hc-ink-3)" }}>
+            <p className="mt-0.5 text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
               {building.neighborhood ?? "Bedford-Stuyvesant"} · BBL {building.bbl}
               {source === "demo" && " · demo data"}
             </p>
@@ -361,11 +361,11 @@ export default function HealthCard() {
           <ScoreRing score={building.score} size={184} stroke={12} hero animate />
           <p
             className="hc-eyebrow mt-4"
-            style={{ color: band.color, letterSpacing: "0.18em" }}
+            style={{ color: "var(--hc-canvas-ink)", letterSpacing: "0.18em" }}
           >
             {band.label}
           </p>
-          <p className="mt-2 max-w-[280px] text-center text-[13px]" style={{ color: "var(--hc-ink-3)" }}>
+          <p className="mt-2 max-w-[280px] text-center text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
             Built from public NYC data — a signal, not a legal ruling.
           </p>
         </div>
@@ -399,7 +399,7 @@ export default function HealthCard() {
           <SubScoreTile name="Accessibility" status={subStatus(building, "accessibility")} score={building.sub_scores.accessibility} onClick={() => jump("section-access")} />
         </div>
 
-        <h2 className="mt-8 text-[28px] tracking-tight" style={{ color: "var(--hc-ink)" }}>
+        <h2 className="mt-8 text-[28px] tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
           Building details
         </h2>
 
@@ -575,19 +575,19 @@ export default function HealthCard() {
               setToast(r.ok ? (store.inTray(building.bbl) && tray.includes(building.bbl) ? "Already in compare" : "Added to compare") : r.reason ?? "Couldn't add");
             }}
             className="flex items-center gap-2 text-[15px] font-semibold"
-            style={{ color: "var(--hc-ink)" }}
+            style={{ color: "var(--hc-canvas-ink)" }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M9 3v18M15 3v18M3 9h6M15 15h6" />
             </svg>
             Compare this building
           </button>
-          <button onClick={() => navigate("/more")} className="text-[15px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+          <button onClick={() => navigate("/more")} className="text-[15px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
             How scores work ➜
           </button>
         </div>
 
-        <p className="mt-10 text-center text-[12px]" style={{ color: "var(--hc-ink-3)" }}>
+        <p className="mt-10 text-center text-[12px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
           Every number links to a NYC or Census source · Data from {DATA_MONTH}
         </p>
       </div>

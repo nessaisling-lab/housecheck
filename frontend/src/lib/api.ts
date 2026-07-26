@@ -31,12 +31,15 @@ const BASE =
 /** Default budget for the fast, DB-backed endpoints. */
 const TIMEOUT_MS = 8000;
 /**
- * The LLM-backed endpoint needs its own budget. The backend allows the upstream
- * model 20s (crates/api/src/main.rs), so an 8s client abort would kill a slow but
- * *successful* summary and silently swap in demo text. Always keep this above the
- * server's own timeout, or the client decides the outcome instead of the server.
+ * The LLM-backed endpoints need their own budget, and it must exceed the server's.
+ *
+ * The backend allows the model 30s per attempt and retries once on a transient
+ * failure, so a worst-case round trip is roughly 60s. An 8s client abort would kill
+ * a slow but *successful* answer and silently swap in demo text — letting the client
+ * decide an outcome the server was still working on. Measured live: legal answers
+ * land in 12-27s, with an occasional retry pushing past 60s.
  */
-const LLM_TIMEOUT_MS = 25000;
+const LLM_TIMEOUT_MS = 70000;
 
 export class ApiError extends Error {
   status?: number;
@@ -208,4 +211,35 @@ export async function getSummary(bbl: string): Promise<ApiResult<string>> {
     if (demo) return { data: demo, source: "demo" };
     throw new ApiError("Summary unavailable");
   }
+}
+
+/** One turn of an agent conversation, in the shape POST /agent/chat expects. */
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatReply {
+  answer: string;
+  /** Sources that actually fed the answer — render these, never a hardcoded line. */
+  citations: string[];
+}
+
+/**
+ * Grounded multi-turn Q&A about one building (POST /agent/chat).
+ *
+ * Unlike the other calls this has no demo fallback: a fabricated "agent answer" is
+ * exactly the thing this product must not produce. When the agent is unavailable the
+ * caller falls back to the deterministic canned answers, which are grounded in the
+ * card and honest about being canned.
+ */
+export async function sendChat(bbl: string, messages: ChatTurn[]): Promise<ChatReply> {
+  const raw = await req<{ answer?: string; citations?: string[] }>(
+    "/agent/chat",
+    { method: "POST", body: JSON.stringify({ bbl, messages }) },
+    LLM_TIMEOUT_MS
+  );
+  const answer = (raw.answer ?? "").trim();
+  if (!answer) throw new ApiError("Empty agent answer");
+  return { answer, citations: raw.citations ?? [] };
 }

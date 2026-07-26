@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
-import { getSummary } from "@/lib/api";
+import { getSummary, sendChat, type ChatTurn } from "@/lib/api";
 import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
 
 interface Msg {
@@ -137,25 +137,63 @@ export function AgentSheet() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [msgs, busy]);
 
-  const send = (text: string) => {
+  /**
+   * Deterministic answer used when the agent is unavailable.
+   *
+   * Kept rather than deleted: every number in it comes from the card, so it is honest,
+   * and it is the graceful path when OPENROUTER_API_KEY is unset or the upstream fails.
+   * It is always labelled, so a canned answer is never mistaken for a live one.
+   */
+  const offlineAnswer = (t: string): Msg => {
+    if (!building) {
+      return {
+        role: "agent",
+        text: "Each pillar — condition, legal, neighborhood, accessibility — counts equally toward the 0–100 score. Every number links to its public NYC source; unverified means we couldn't confirm it, not that something is wrong.",
+        source: "Source: HouseCheck methodology",
+      };
+    }
+    const canned = answerChip(CHIPS.includes(t) ? t : CHIPS[0], building, rent);
+    return { ...canned, source: `${canned.source ?? "Source: HouseCheck"} · offline answer` };
+  };
+
+  const send = async (text: string) => {
     const t = text.trim();
     if (!t || busy) return;
     setInput("");
-    setMsgs((m) => [...m, { role: "user", text: t }]);
+    const userMsg: Msg = { role: "user", text: t };
+    setMsgs((m) => [...m, userMsg]);
     setBusy(true);
-    setTimeout(() => {
+
+    // No building in context → nothing to ground an answer in, so don't spend a call.
+    if (!building) {
+      setMsgs((m) => [...m, offlineAnswer(t)]);
+      setBusy(false);
+      return;
+    }
+
+    // Send the conversation so far so the agent can follow up. The server keeps only the
+    // most recent turns; sending the whole thread lets it decide what to keep.
+    const history: ChatTurn[] = [...msgs, userMsg]
+      .filter((m) => m.text.trim().length > 0)
+      .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+
+    try {
+      const { answer, citations } = await sendChat(building.bbl, history);
       setMsgs((m) => [
         ...m,
-        building
-          ? answerChip(CHIPS.includes(t) ? t : CHIPS[0], building, rent)
-          : {
-              role: "agent",
-              text: "Each pillar — condition, legal, neighborhood, accessibility — counts equally toward the 0–100 score. Every number links to its public NYC source; unverified means we couldn't confirm it, not that something is wrong.",
-              source: "Source: HouseCheck methodology",
-            },
+        {
+          role: "agent",
+          text: answer,
+          // Render the sources the server says actually fed the answer, rather than a
+          // hardcoded line — the same honesty rule the rest of the app follows.
+          source: citations.length ? `Source: ${citations.join(" · ")}` : undefined,
+        },
       ]);
+    } catch {
+      setMsgs((m) => [...m, offlineAnswer(t)]);
+    } finally {
       setBusy(false);
-    }, 700);
+    }
   };
 
   return (

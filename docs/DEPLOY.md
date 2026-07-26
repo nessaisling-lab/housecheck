@@ -75,8 +75,9 @@ Well within the $20–50 budget. See PRD Appendix F.
 ## Secrets (only if you add features that need them)
 - `/summary` (optional LLM) → `flyctl secrets set OPENROUTER_API_KEY=... -a housecheck-nessa`
   - Optionally `OPENROUTER_MODEL=<slug>`; defaults to `anthropic/claude-haiku-4.5`.
-  - **Never a `:free` model in production.** OpenRouter logs free-tier prompts, and these
-    prompts carry a building address and the user's rent. Use a paid, zero-data-retention
-    model. The server warns at startup if the configured model ends in `:free`.
+  - A `:free` model is fine here. OpenRouter logs free-tier prompts, but the grounding facts
+    are public NYC building data and the user's own rent never reaches an LLM. Switch to a paid
+    zero-data-retention model before collecting personal data. The server warns at startup when
+    the model ends in `:free`.
 - Re-ingest inside CI/cloud (not needed today) → `CENSUS_API_KEY`, `NYC_APP_TOKEN`
 Never commit keys; local dev uses the OS keychain / machine env.

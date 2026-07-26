@@ -32,10 +32,18 @@ const DEFAULT_SNAPSHOT_YEAR: i32 = 2026;
 
 /// Fallback model when `OPENROUTER_MODEL` is unset.
 ///
-/// Deliberately a **paid** model. The previous hardcoded default ended in `:free`, and
-/// OpenRouter's free tier logs prompts — ours carry a home address and a rent figure, so the
-/// legal audit bars it from production. A wrong-but-safe default beats a cheap-but-leaky one:
-/// an unset env var should cost money, not privacy.
+/// A paid model by default, so an unset env var never *silently* opts into prompt logging.
+///
+/// What the prompt actually contains matters for that choice, and it is narrower than it first
+/// looks: `grounding_block` is entirely **public** NYC data about a building — address, BBL,
+/// scores, violation counts, stabilization signal, Census tract median, 311 counts. The user's
+/// own rent never reaches an LLM (that goes to `/rent-fairness`). The only user-supplied text
+/// is their typed question.
+///
+/// So `OPENROUTER_MODEL=<something>:free` is a defensible choice for this demo, where the
+/// buildings are public records and no accounts or personal data exist. It is **not** defensible
+/// for a product where users supply their own rent or other personal details — see the IP audit.
+/// The default stays paid because a default should be safe for the stricter case.
 ///
 /// Verified against OpenRouter's public model list — an invalid slug fails only on the first
 /// real call, as an opaque upstream error, long after anyone would connect it to this line.
@@ -63,9 +71,10 @@ impl LlmConfig {
             if model.ends_with(":free") {
                 tracing::warn!(
                     model = %model,
-                    "LLM: model is on OpenRouter's free tier, which logs prompts. Prompts \
-                     include a building address and the user's rent — set OPENROUTER_MODEL to a \
-                     paid, zero-data-retention model before serving real users."
+                    "LLM: free tier — OpenRouter logs these prompts. Our grounding facts are \
+                     public NYC building data, so this is acceptable for the demo; the exposure \
+                     is whatever a user types. Switch to a paid zero-data-retention model before \
+                     collecting any personal data."
                 );
             }
         } else {

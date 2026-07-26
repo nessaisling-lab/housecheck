@@ -341,7 +341,7 @@ control: this is the only endpoint that costs money per request. Client identity
 | `HOUSECHECK_DB` | startup | Path to the serving SQLite DB. Default `data/housecheck.db`. |
 | `CORS_ALLOWED_ORIGIN` | CORS | If set to an origin (in production: `https://housecheck-wine.vercel.app`), CORS is restricted to exactly that origin for `GET`+`POST` with a JSON `content-type`. If unset (or blank/invalid), falls back to **permissive** for local dev. The active mode is logged at startup. |
 | `OPENROUTER_API_KEY` | `POST /summary` | Enables the optional LLM summary. Unset (or blank) → `/summary` returns `501`. Read once at startup, not per request. Never commit it; set it as a deploy secret. |
-| `OPENROUTER_MODEL` | `POST /summary`, `POST /agent/chat` | Model slug passed to OpenRouter. Defaults to `anthropic/claude-haiku-4.5`. **Do not point this at a `:free` model in production** — OpenRouter logs free-tier prompts, and ours contain a building address and the user's rent. The server logs a warning at startup if the configured model ends in `:free`. |
+| `OPENROUTER_MODEL` | `POST /summary`, `POST /agent/chat` | Model slug passed to OpenRouter. Defaults to `anthropic/claude-haiku-4.5`. A `:free` model is acceptable for this demo: the grounding facts are entirely **public** NYC building data, and the user's own rent never reaches an LLM (that is `/rent-fairness`). The exposure is whatever a user types. Use a paid zero-data-retention model before collecting any personal data. The server warns at startup when the configured model ends in `:free`. |
 
 ---
 

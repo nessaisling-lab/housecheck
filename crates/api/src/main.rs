@@ -110,10 +110,12 @@ impl LlmConfig {
 /// Was 400, chosen when the only feature was a short violations summary. Slice 6 answers are
 /// legitimately longer — statute text, an evidence checklist, the complaint route, a referral,
 /// and often a drafted question for a lawyer — and 400 truncated them mid-sentence, dropping
-/// exactly the actionable part. 1200 still cut a succession-rights answer off mid-phone-number.
-/// Now 1800. Still bounded, because we do not stream and every token is billed; when it is hit,
-/// the answer says so rather than looking complete.
-const AGENT_MAX_TOKENS: u32 = 1800;
+/// exactly the actionable part. 1200 still cut a succession-rights answer off mid-phone-number
+/// — the worst place to stop an answer someone may be reading in a crisis. Now 3000, which fits
+/// the longest observed answer (law + evidence checklist + process + drafted question +
+/// referrals) with headroom. Still bounded: we do not stream, every token is billed, and when
+/// the cap IS hit the answer says so rather than looking complete.
+const AGENT_MAX_TOKENS: u32 = 3000;
 /// Most recent turns forwarded upstream. History is resent in full on every request, so an
 /// uncapped conversation grows cost quadratically.
 const AGENT_MAX_HISTORY: usize = 12;

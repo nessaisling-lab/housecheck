@@ -12,11 +12,7 @@ primary_region = 'ewr'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  # Keep one machine warm. This URL is presented in Pursuit's lookbook portfolio to
-  # employers and partner companies, so an unknown visitor's first click must not wait
-  # on a cold container start. The second machine still scales to zero, and keeping two
-  # provisioned is what makes deploys and secret changes zero-downtime (rolling update).
-  min_machines_running = 1
+  min_machines_running = 0
 
 [[vm]]
   size = 'shared-cpu-1x'

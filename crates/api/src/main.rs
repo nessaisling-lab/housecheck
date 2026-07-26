@@ -110,9 +110,10 @@ impl LlmConfig {
 /// Was 400, chosen when the only feature was a short violations summary. Slice 6 answers are
 /// legitimately longer — statute text, an evidence checklist, the complaint route, a referral,
 /// and often a drafted question for a lawyer — and 400 truncated them mid-sentence, dropping
-/// exactly the actionable part. Raised to 1200. Still bounded, because we do not stream and
-/// every token is billed.
-const AGENT_MAX_TOKENS: u32 = 1200;
+/// exactly the actionable part. 1200 still cut a succession-rights answer off mid-phone-number.
+/// Now 1800. Still bounded, because we do not stream and every token is billed; when it is hit,
+/// the answer says so rather than looking complete.
+const AGENT_MAX_TOKENS: u32 = 1800;
 /// Most recent turns forwarded upstream. History is resent in full on every request, so an
 /// uncapped conversation grows cost quadratically.
 const AGENT_MAX_HISTORY: usize = 12;
@@ -1473,7 +1474,7 @@ async fn agent_chat_handler(
                 answer.push_str(
                     "
 
-_(This answer was cut short by a length limit. Ask a narrower                      follow-up question for the rest.)_",
+_(This answer was cut short by a length limit. Ask a narrower follow-up question for the rest.)_",
                 );
             }
 

@@ -22,23 +22,51 @@ the data later: re-run step 1, then `fly deploy` again.
 
 ### 3. Verify
 ```bash
-curl https://housecheck.fly.dev/health
-curl https://housecheck.fly.dev/buildings | head
-curl https://housecheck.fly.dev/building/3015990007
+curl https://housecheck-nessa.fly.dev/health
+curl https://housecheck-nessa.fly.dev/buildings | head
+curl https://housecheck-nessa.fly.dev/building/3014800023
 ```
+
+> **Note:** the binary is `flyctl`, not `fly` — `fly` is not on PATH on Windows, and
+> `flyctl apps resume` is deprecated in favour of `flyctl scale count`.
 
 ## Frontend → Vercel
 
-The React/Vite app is a static build; point Vercel at the `frontend/` dir. Set the API base
-URL (the Fly URL above) as a build env var.
+**Live:** https://housecheck-wine.vercel.app
+
+The React/Vite app is a static build; point Vercel at the `frontend/` dir. Vercel is **not**
+connected to git here, so pushing to `main` does not redeploy. Ship it explicitly:
+```bash
+cd frontend && npx vercel --prod
+```
+`vite.config.ts` must keep `base: '/'`. With `base: './'` the emitted asset paths are relative,
+so on a nested route like `/building/{bbl}` the browser requests `/building/assets/*.js`, no
+static file matches, the SPA rewrite returns `index.html`, and the deep link renders blank with
+a MIME-type error.
 
 Tighten the API's CORS to the Vercel origin at launch by setting `CORS_ALLOWED_ORIGIN` on the
 backend to the exact Vercel URL — no code change needed:
 ```bash
-fly secrets set CORS_ALLOWED_ORIGIN=https://housecheck.vercel.app
+flyctl secrets set CORS_ALLOWED_ORIGIN=https://housecheck-wine.vercel.app -a housecheck-nessa
 ```
 When set, the API allows only that origin (GET+POST, JSON `content-type`); when unset it falls
 back to permissive for local dev. The active mode is logged at startup.
+
+Because only one origin is allowed, `localhost` dev falls back to bundled demo data. Route dev
+through the Vite proxy instead, via `frontend/.env.local`:
+```
+VITE_API_URL=/api
+VITE_BACKEND_URL=https://housecheck-nessa.fly.dev
+```
+
+## Continuous deployment (currently blocked)
+
+`.github/workflows/fly-deploy.yml` exists and authenticates correctly, but **cannot build**:
+`Dockerfile:18` does `COPY data/housecheck.db`, and `.gitignore:4` excludes `/data/*.db`. A
+clean CI checkout has no database, so the image build fails at that step. Deploys currently
+have to run from a machine where `data/housecheck.db` exists on disk. Resolve by either
+generating the DB in CI before deploying, or committing it — note that committing publishes
+derived rent-stabilization data to a public repo, which is an open question in the IP audit.
 
 ## Cost
 Data APIs $0 · Fly.io ~$0–5/mo (scale-to-zero) · map tiles via MapLibre + Protomaps $0.

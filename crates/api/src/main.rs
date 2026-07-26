@@ -55,16 +55,24 @@ pub struct LlmConfig {
     /// `None` disables the LLM endpoints, which then answer 501 rather than erroring.
     api_key: Option<String>,
     model: String,
+    /// Small, fast model used only for the web-search step. See DEFAULT_SEARCH_MODEL.
+    search_model: String,
 }
 
 impl LlmConfig {
     /// Resolve from raw values. Pure, so it is testable without mutating process
     /// environment — env vars are global and would race across parallel tests.
     /// Blank or whitespace-only values count as unset.
-    fn resolve(raw_key: Option<String>, raw_model: Option<String>) -> Self {
+    fn resolve(
+        raw_key: Option<String>,
+        raw_model: Option<String>,
+        raw_search_model: Option<String>,
+    ) -> Self {
         let clean = |v: Option<String>| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
         let api_key = clean(raw_key);
         let model = clean(raw_model).unwrap_or_else(|| DEFAULT_SUMMARY_MODEL.to_string());
+        let search_model =
+            clean(raw_search_model).unwrap_or_else(|| DEFAULT_SEARCH_MODEL.to_string());
 
         if api_key.is_some() {
             tracing::info!(model = %model, "LLM: enabled");
@@ -80,7 +88,11 @@ impl LlmConfig {
         } else {
             tracing::info!("LLM: disabled (OPENROUTER_API_KEY unset); /summary will answer 501");
         }
-        Self { api_key, model }
+        Self {
+            api_key,
+            model,
+            search_model,
+        }
     }
 
     /// Read from the environment at startup.
@@ -88,6 +100,7 @@ impl LlmConfig {
         Self::resolve(
             std::env::var("OPENROUTER_API_KEY").ok(),
             std::env::var("OPENROUTER_MODEL").ok(),
+            std::env::var("OPENROUTER_SEARCH_MODEL").ok(),
         )
     }
 }
@@ -763,6 +776,38 @@ legal advice about their situation, and that the organisations listed can advise
 confirm whether it applies. Be concise and concrete. This is a signal drawn from public data, \
 not a legal ruling.";
 
+/// Authoritative legal sources the `search_law` tool is allowed to read.
+///
+/// An allowlist rather than open web search, and it collapses two risks at once. **Prompt
+/// injection** stops being realistic: nysenate.gov does not serve text engineered to hijack an
+/// agent, unlike an arbitrary blog. And the **lead-generation and scam problem** disappears —
+/// there are no predatory "tenant lawyer" funnels on nycourts.gov. Open web search was going to
+/// be the last and warest tool; restricted to government and academic legal sources it becomes
+/// one of the safer ones. Same capability, different threat model, purely from constraining
+/// where it may look.
+const LAW_SEARCH_DOMAINS: [&str; 9] = [
+    "nysenate.gov",    // NY consolidated laws, authoritative text
+    "law.cornell.edu", // Cornell Legal Information Institute
+    "law.justia.com",
+    "nycourts.gov", // court procedure and forms
+    "nyc.gov",      // HPD and other city agencies
+    "hcr.ny.gov",   // NYS Homes and Community Renewal / DHCR
+    "lawhelpny.org",
+    "govinfo.gov", // federal
+    "ecfr.gov",    // federal regulations
+];
+
+/// Model used for the `search_law` step only.
+///
+/// Deliberately a small, fast model rather than the main conversational one. This step does no
+/// reasoning worth the name — it runs the web plugin and hands back citations, which the main
+/// model then uses. Using the 550B here would stack two slow generations in one request, and the
+/// free tier already drops long ones. Override with `OPENROUTER_SEARCH_MODEL`.
+const DEFAULT_SEARCH_MODEL: &str = "nvidia/nemotron-3-nano-30b-a3b:free";
+
+/// Cap on results, and therefore on cost: the web plugin bills per search and per extra result.
+const LAW_SEARCH_MAX_RESULTS: u32 = 6;
+
 /// Legal context per housing issue: the published law, what it requires, what a tenant should
 /// document, and the procedural route.
 ///
@@ -843,6 +888,66 @@ fn legal_context_for(issue: &str) -> serde_json::Value {
             "process": "311 for conditions. A legal-services organisation can identify the right route for a specific situation."
         }),
     }
+}
+
+/// Search authoritative legal sources for law governing a question.
+///
+/// Runs OpenRouter's web plugin with `include_domains` pinned to LAW_SEARCH_DOMAINS, then returns
+/// the `url_citation` annotations the plugin attaches. Those carry title, URL, and an excerpt, so
+/// the calling model can cite something the reader is able to open and check.
+///
+/// Content fetched from the web is untrusted by construction. It is returned to the model as
+/// tool output, and the system prompt already states that tool results are data, never
+/// instructions — the allowlist is what makes that assurance realistic rather than hopeful.
+async fn search_law(state: &AppState, api_key: &str, query: &str) -> Option<serde_json::Value> {
+    let payload = serde_json::json!({
+        "model": state.llm.search_model,
+        "max_tokens": 300,
+        "plugins": [{
+            "id": "web",
+            "max_results": LAW_SEARCH_MAX_RESULTS,
+            "include_domains": LAW_SEARCH_DOMAINS,
+        }],
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a legal research assistant. Find the statute, regulation, or \
+    official guidance that governs the question. Reply with one or two sentences naming what you \
+    found. Do not advise; just identify the law."
+            },
+            { "role": "user", "content": query }
+        ],
+    });
+
+    // Shorter budget than the main call: this is a lookup, and a slow search should not push the
+    // overall request past the client's patience.
+    let json = openrouter_post(state, api_key, &payload, 25).await.ok()?;
+    let msg = &json["choices"][0]["message"];
+
+    let sources: Vec<serde_json::Value> = msg["annotations"]
+        .as_array()
+        .map(|anns| {
+            anns.iter()
+                .filter(|a| a["type"] == "url_citation")
+                .map(|a| {
+                    let c = &a["url_citation"];
+                    serde_json::json!({
+                        "title": c["title"].as_str().unwrap_or(""),
+                        "url": c["url"].as_str().unwrap_or(""),
+                        "excerpt": c["content"].as_str().unwrap_or("").chars().take(600).collect::<String>(),
+                    })
+                })
+                .filter(|r| !r["url"].as_str().unwrap_or("").is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(serde_json::json!({
+        "query": query,
+        "found": msg["content"].as_str().unwrap_or("").trim(),
+        "sources": sources,
+        "searched_domains": LAW_SEARCH_DOMAINS,
+    }))
 }
 
 /// Free and low-cost tenant legal services.
@@ -973,6 +1078,28 @@ fn tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "search_law",
+                "description": "Search authoritative legal sources (NY Senate statutes, Cornell \
+    LII, Justia, NY courts, nyc.gov, DHCR, LawHelpNY, federal govinfo/eCFR) for law governing a \
+    question that legal_context does not already cover. Use this for edge cases: an unusual \
+    situation, a statute you are unsure of, or a question outside heat, repairs, and rent \
+    stabilization. Returns titles, URLs, and excerpts you must cite. Prefer legal_context first — it \
+    is instant and pre-verified; use this when it does not cover the question.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The legal question, phrased for search, e.g. 'New York tenant right to withhold rent for uninhabitable conditions'"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "find_legal_help",
                 "description": "Get free tenant legal-services organisations and hotlines that \
     can give actual legal advice about a specific situation: names, phone numbers, hours, and \
@@ -1008,6 +1135,7 @@ fn tool_schemas() -> serde_json::Value {
 /// is information the model can relay honestly ("I couldn't look that up"), not a 500.
 async fn dispatch_tool(
     state: &AppState,
+    api_key: &str,
     name: &str,
     args: &serde_json::Value,
 ) -> (serde_json::Value, Option<String>) {
@@ -1097,6 +1225,37 @@ async fn dispatch_tool(
                 .unwrap_or("published New York law")
                 .to_string();
             (ctx, Some(cite))
+        }
+        "search_law" => {
+            let q = args
+                .get("query")
+                .and_then(|q| q.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if q.is_empty() {
+                return (serde_json::json!({ "error": "query required" }), None);
+            }
+            match search_law(state, api_key, &q).await {
+                Some(res) => {
+                    let n = res["sources"].as_array().map(|a| a.len()).unwrap_or(0);
+                    tracing::info!(query = %q, results = n, "law search");
+                    // Only claim the citation if the search actually returned sources.
+                    let cite = (n > 0).then(|| {
+                        "Authoritative legal sources (NY Senate · Cornell LII · nyc.gov · DHCR)"
+                            .to_string()
+                    });
+                    (res, cite)
+                }
+                None => (
+                    serde_json::json!({
+                        "error": "legal search is unavailable right now",
+                        "advice_for_model": "Say the search failed, answer from legal_context if \
+                    you can, and offer find_legal_help."
+                    }),
+                    None,
+                ),
+            }
         }
         "find_legal_help" => (
             serde_json::json!({ "organisations": legal_help_directory() }),
@@ -1344,7 +1503,7 @@ _(This answer was cut short by a length limit. Ask a narrower                   
                 .unwrap_or_else(|| serde_json::json!({}));
 
             tracing::info!(tool = %name, iteration, "agent tool call");
-            let (result, citation) = dispatch_tool(&state, name, &args).await;
+            let (result, citation) = dispatch_tool(&state, api_key, name, &args).await;
             if let Some(c) = citation {
                 if !citations.contains(&c) {
                     citations.push(c);
@@ -1715,10 +1874,11 @@ mod tests {
             "search_address",
             "legal_context",
             "find_legal_help",
+            "search_law",
         ] {
             assert!(names.contains(&expected), "missing tool: {expected}");
         }
-        assert_eq!(arr.len(), 5);
+        assert_eq!(arr.len(), 6);
 
         for tool in arr {
             let f = &tool["function"];
@@ -1736,6 +1896,69 @@ mod tests {
                 f["name"]
             );
         }
+    }
+
+    // ---- law search (slice 7) ----
+
+    #[test]
+    fn law_search_domains_are_authoritative_only() {
+        // The allowlist IS the security control: it is what makes "web content is data, not
+        // instructions" a realistic assurance rather than a hopeful one, and it is what keeps
+        // lead-generation and scam sites out of a crisis-time answer. Guard it.
+        for d in LAW_SEARCH_DOMAINS {
+            let ok = d.ends_with(".gov")
+                || d.ends_with(".edu")
+                || d == "law.justia.com"
+                || d == "lawhelpny.org";
+            assert!(
+                ok,
+                "{d} is not a government, academic, or vetted legal-reference source"
+            );
+            assert!(
+                !d.starts_with("http"),
+                "{d} should be a bare host, not a URL"
+            );
+            assert!(!d.contains('/'), "{d} should be a bare host, not a path");
+        }
+        // The statute text and the city agency are the two we cannot do without.
+        assert!(LAW_SEARCH_DOMAINS.contains(&"nysenate.gov"));
+        assert!(LAW_SEARCH_DOMAINS.contains(&"nyc.gov"));
+    }
+
+    #[test]
+    fn search_model_defaults_separately_from_the_chat_model() {
+        let c = LlmConfig::resolve(Some("k".into()), None, None);
+        assert_eq!(c.search_model, DEFAULT_SEARCH_MODEL);
+        assert_ne!(
+            c.search_model, c.model,
+            "the search step should not reuse the large chat model — it stacks two slow \
+             generations into one request"
+        );
+
+        let c2 = LlmConfig::resolve(Some("k".into()), None, Some("vendor/fast".into()));
+        assert_eq!(c2.search_model, "vendor/fast");
+    }
+
+    #[tokio::test]
+    async fn search_law_requires_a_query_and_does_not_call_out_on_an_empty_one() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        // Empty query must short-circuit before any paid search request.
+        let (out, cite) =
+            dispatch_tool(&state, "test-key", "search_law", &serde_json::json!({})).await;
+        assert!(out["error"].is_string());
+        assert!(cite.is_none());
+
+        let (out2, _) = dispatch_tool(
+            &state,
+            "test-key",
+            "search_law",
+            &serde_json::json!({ "query": "   " }),
+        )
+        .await;
+        assert!(
+            out2["error"].is_string(),
+            "whitespace-only query must not search"
+        );
     }
 
     // ---- legal information layer (slice 6) ----
@@ -1824,6 +2047,7 @@ mod tests {
 
         let (ctx, cite) = dispatch_tool(
             &state,
+            "test-key",
             "legal_context",
             &serde_json::json!({ "issue": "heat_hot_water" }),
         )
@@ -1831,7 +2055,13 @@ mod tests {
         assert_eq!(ctx["issue"], "heat_hot_water");
         assert!(cite.is_some_and(|c| c.contains("235-b")));
 
-        let (help, cite2) = dispatch_tool(&state, "find_legal_help", &serde_json::json!({})).await;
+        let (help, cite2) = dispatch_tool(
+            &state,
+            "test-key",
+            "find_legal_help",
+            &serde_json::json!({}),
+        )
+        .await;
         assert!(help["organisations"]
             .as_array()
             .is_some_and(|a| !a.is_empty()));
@@ -1843,6 +2073,7 @@ mod tests {
         let state = AppState::in_memory_fixture().expect("fixture");
         let (ctx, _) = dispatch_tool(
             &state,
+            "test-key",
             "legal_context",
             &serde_json::json!({ "issue": "spontaneous combustion" }),
         )
@@ -1877,6 +2108,7 @@ mod tests {
         let state = AppState::in_memory_fixture().expect("fixture");
         let (out, citation) = dispatch_tool(
             &state,
+            "test-key",
             "get_building",
             &serde_json::json!({ "bbl": FIXTURE_BBL }),
         )
@@ -1894,6 +2126,7 @@ mod tests {
         let state = AppState::in_memory_fixture().expect("fixture");
         let (out, citation) = dispatch_tool(
             &state,
+            "test-key",
             "get_building",
             &serde_json::json!({ "bbl": "9999999999" }),
         )
@@ -1912,6 +2145,7 @@ mod tests {
         let state = AppState::in_memory_fixture().expect("fixture");
         let (out, citation) = dispatch_tool(
             &state,
+            "test-key",
             "get_open_violations",
             &serde_json::json!({ "bbl": FIXTURE_BBL }),
         )
@@ -1928,7 +2162,8 @@ mod tests {
     #[tokio::test]
     async fn unknown_tool_name_is_reported_back_not_fatal() {
         let state = AppState::in_memory_fixture().expect("fixture");
-        let (out, citation) = dispatch_tool(&state, "drop_tables", &serde_json::json!({})).await;
+        let (out, citation) =
+            dispatch_tool(&state, "test-key", "drop_tables", &serde_json::json!({})).await;
         assert!(
             out["error"].as_str().unwrap().contains("unknown tool"),
             "a hallucinated tool name must be answered, not crash the request"
@@ -1939,7 +2174,8 @@ mod tests {
     #[tokio::test]
     async fn tool_missing_required_arg_does_not_panic() {
         let state = AppState::in_memory_fixture().expect("fixture");
-        let (out, _) = dispatch_tool(&state, "get_building", &serde_json::json!({})).await;
+        let (out, _) =
+            dispatch_tool(&state, "test-key", "get_building", &serde_json::json!({})).await;
         assert!(
             out["error"].is_string(),
             "absent bbl must degrade, not panic"
@@ -2088,7 +2324,7 @@ mod tests {
 
     #[test]
     fn llm_model_defaults_to_a_paid_model_when_unset() {
-        let c = LlmConfig::resolve(Some("sk-test".into()), None);
+        let c = LlmConfig::resolve(Some("sk-test".into()), None, None);
         assert_eq!(c.model, DEFAULT_SUMMARY_MODEL);
         // The default must never be free-tier: OpenRouter logs those prompts, and ours
         // carry a building address and the user's rent.
@@ -2097,13 +2333,17 @@ mod tests {
 
     #[test]
     fn llm_model_comes_from_config_when_set() {
-        let c = LlmConfig::resolve(Some("sk-test".into()), Some("vendor/some-model".into()));
+        let c = LlmConfig::resolve(
+            Some("sk-test".into()),
+            Some("vendor/some-model".into()),
+            None,
+        );
         assert_eq!(c.model, "vendor/some-model");
     }
 
     #[test]
     fn llm_blank_values_count_as_unset() {
-        let c = LlmConfig::resolve(Some("   ".into()), Some("  ".into()));
+        let c = LlmConfig::resolve(Some("   ".into()), Some("  ".into()), None);
         assert!(
             c.api_key.is_none(),
             "whitespace-only key must disable the LLM"
@@ -2113,7 +2353,7 @@ mod tests {
 
     #[test]
     fn llm_values_are_trimmed() {
-        let c = LlmConfig::resolve(Some("  sk-test\n".into()), Some(" vendor/m ".into()));
+        let c = LlmConfig::resolve(Some("  sk-test\n".into()), Some(" vendor/m ".into()), None);
         assert_eq!(c.api_key.as_deref(), Some("sk-test"));
         assert_eq!(c.model, "vendor/m");
     }

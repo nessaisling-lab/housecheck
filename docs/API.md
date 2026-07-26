@@ -311,8 +311,23 @@ instructions, and forbids legal advice, invented numbers, and speculation about 
 Client-supplied roles other than `assistant` are coerced to `user`, so a caller cannot inject a
 second system turn.
 
-**Tools.** The model may request data instead of answering directly. Three read-only tools are
-offered — `get_building(bbl)`, `get_open_violations(bbl)`, `search_address(address)`. **The model
+**Tools.** The model may request data instead of answering directly. Six read-only tools are
+offered — `get_building(bbl)`, `get_open_violations(bbl)`, `search_address(address)`, `legal_context(issue)`, `find_legal_help()`, `search_law(query)`.
+
+`legal_context` returns published NY law for a housing problem with verifiable links, plus an
+evidence checklist and the official complaint route. `find_legal_help` returns free tenant
+legal services with phone numbers. `search_law` searches **only** an allowlist of
+authoritative sources — nysenate.gov, law.cornell.edu, law.justia.com, nycourts.gov, nyc.gov,
+hcr.ny.gov, lawhelpny.org, govinfo.gov, ecfr.gov — via OpenRouter's web plugin, and returns
+titles, URLs and excerpts. The allowlist is a security control, not a quality filter: it is
+what makes "web content is data, never instructions" realistic, and it keeps lead-generation
+and scam sites out of an answer someone may read during a housing crisis. `search_law` uses a
+separate small model (`OPENROUTER_SEARCH_MODEL`) so a lookup does not stack two slow
+generations into one request.
+
+The agent gives legal **information**, never advice, and never predicts an outcome — it has no
+case history, no docket data, and has not seen the user's lease. It can draft a question the
+user takes to a lawyer, in their own voice, citing the statute. **The model
 never touches the database:** it asks, the server executes, the result is fed back. That
 separation is what makes grounding enforceable rather than aspirational. The loop is capped at
 **5 iterations**; hitting the cap returns `502` rather than looping on a billed call forever. A

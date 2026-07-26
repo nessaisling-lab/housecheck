@@ -580,6 +580,36 @@ async fn openrouter_post(
     payload: &serde_json::Value,
     timeout_secs: u64,
 ) -> Result<serde_json::Value, ()> {
+    // Free-tier endpoints drop long generations intermittently — observed repeatedly against
+    // nemotron:free, where the same request fails at ~22s and then succeeds on retry. Retry
+    // once on a transport error or a 5xx, never on a 4xx: a 401 or 429 will fail identically
+    // the second time and retrying only wastes the caller's quota.
+    match openrouter_attempt(state, api_key, payload, timeout_secs).await {
+        Ok(j) => Ok(j),
+        Err(Transient) => {
+            tracing::warn!("openrouter transient failure, retrying once");
+            tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+            openrouter_attempt(state, api_key, payload, timeout_secs)
+                .await
+                .map_err(|_| ())
+        }
+        Err(Permanent) => Err(()),
+    }
+}
+
+/// Why an attempt failed: worth retrying, or not.
+enum AttemptErr {
+    Transient,
+    Permanent,
+}
+use AttemptErr::{Permanent, Transient};
+
+async fn openrouter_attempt(
+    state: &AppState,
+    api_key: &str,
+    payload: &serde_json::Value,
+    timeout_secs: u64,
+) -> Result<serde_json::Value, AttemptErr> {
     let resp = match state
         .http
         .post(OPENROUTER_URL)
@@ -592,7 +622,7 @@ async fn openrouter_post(
         Ok(r) => r,
         Err(e) => {
             tracing::error!(error = %e, "openrouter request failed (transport)");
-            return Err(());
+            return Err(Transient);
         }
     };
 
@@ -606,7 +636,11 @@ async fn openrouter_post(
             body = %body.chars().take(1000).collect::<String>(),
             "openrouter returned an error"
         );
-        return Err(());
+        return Err(if status.is_server_error() {
+            Transient
+        } else {
+            Permanent
+        });
     }
 
     match serde_json::from_str::<serde_json::Value>(&body) {
@@ -614,7 +648,7 @@ async fn openrouter_post(
             // OpenRouter can return 200 with an error object in the body.
             if let Some(err) = j.get("error") {
                 tracing::error!(error = %err, "openrouter returned 200 with an error body");
-                return Err(());
+                return Err(Transient);
             }
             Ok(j)
         }
@@ -624,7 +658,7 @@ async fn openrouter_post(
                 body = %body.chars().take(500).collect::<String>(),
                 "openrouter response was not valid JSON"
             );
-            Err(())
+            Err(Transient)
         }
     }
 }

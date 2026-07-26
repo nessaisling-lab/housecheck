@@ -28,7 +28,15 @@ import {
 const BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ??
   "https://housecheck-nessa.fly.dev";
+/** Default budget for the fast, DB-backed endpoints. */
 const TIMEOUT_MS = 8000;
+/**
+ * The LLM-backed endpoint needs its own budget. The backend allows the upstream
+ * model 20s (crates/api/src/main.rs), so an 8s client abort would kill a slow but
+ * *successful* summary and silently swap in demo text. Always keep this above the
+ * server's own timeout, or the client decides the outcome instead of the server.
+ */
+const LLM_TIMEOUT_MS = 25000;
 
 export class ApiError extends Error {
   status?: number;
@@ -38,9 +46,9 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+async function req<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${BASE}${path}`, {
       ...init,
@@ -187,10 +195,11 @@ export async function compareBuildings(bbls: string[]): Promise<ApiResult<Buildi
 
 export async function getSummary(bbl: string): Promise<ApiResult<string>> {
   try {
-    const raw = await req<{ summary?: string; text?: string } | string>(`/summary`, {
-      method: "POST",
-      body: JSON.stringify({ bbl }),
-    });
+    const raw = await req<{ summary?: string; text?: string } | string>(
+      `/summary`,
+      { method: "POST", body: JSON.stringify({ bbl }) },
+      LLM_TIMEOUT_MS
+    );
     const text = typeof raw === "string" ? raw : raw.summary ?? raw.text ?? "";
     if (!text) throw new ApiError("Empty summary");
     return { data: text, source: "live" };

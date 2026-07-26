@@ -13,7 +13,11 @@ interface Msg {
 const CHIPS = ["Explain this score", "Is it rent stabilized?", "Negotiate the rent?"];
 
 /** Deterministic, data-derived answers — every claim traces to the card. */
-function answerChip(chip: string, b: NonNullable<ReturnType<typeof useAgent>["building"]>): Msg {
+function answerChip(
+  chip: string,
+  b: NonNullable<ReturnType<typeof useAgent>["building"]>,
+  rent: ReturnType<typeof useAgent>["rent"]
+): Msg {
   const band = bandMeta(b.score);
   if (chip === CHIPS[0]) {
     return {
@@ -35,14 +39,16 @@ function answerChip(chip: string, b: NonNullable<ReturnType<typeof useAgent>["bu
       source: "Source: HPD · DHCR-HCR",
     };
   }
-  const median = b.rent?.tract_median;
-  const pct = b.rent?.pct_vs_median;
+  // Prefer a rent check the user actually ran (live tract median from
+  // POST /rent-fairness); fall back to the demo fixture's embedded rent context.
+  const median = rent?.tract_median ?? b.rent?.tract_median;
+  const pct = rent?.pct_vs_median ?? b.rent?.pct_vs_median;
   return {
     role: "agent",
     text:
       median != null && pct != null
         ? `The asking pattern here runs ${fmtPct(pct)} the tract median (${fmtMoney(median)}). Concrete levers: cite the ${b.open_violations.c} open Class C violation${b.open_violations.c === 1 ? "" : "s"}, ask for a longer lease in exchange for a lower ask, or negotiate a free month instead of a rent cut.`
-        : "We don't have tract rent data for this building, so I can't benchmark the ask. Check the Rent fairness section once tract data is available.",
+        : "I don't have a tract rent benchmark for this building yet. Enter your rent in the Rent fairness section and I'll compare it against the Census tract median.",
     source: "Source: US Census B25064 · HUD FMR",
   };
 }
@@ -69,7 +75,7 @@ function Typing() {
  * Opens from the orb on ANY screen, carrying building context when available.
  */
 export function AgentSheet() {
-  const { open, closeAgent, building } = useAgent();
+  const { open, closeAgent, building, rent } = useAgent();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
@@ -83,12 +89,18 @@ export function AgentSheet() {
     const t = setTimeout(() => {
       setBusy(true);
       getSummary(building.bbl)
-        .then(({ data }) =>
+        .then(({ data, source }) =>
           setMsgs([
             {
               role: "agent",
               text: data,
-              source: "Source: HPD · DHCR · Census B25064",
+              // Honour the demo/live flag. Labelling bundled demo text with a real
+              // source line is the one place this app was claiming provenance it
+              // did not have — every other surface reports `source` truthfully.
+              source:
+                source === "demo"
+                  ? "Demo data · live summary unavailable"
+                  : "Source: HPD · DHCR · Census B25064",
             },
           ])
         )
@@ -135,7 +147,7 @@ export function AgentSheet() {
       setMsgs((m) => [
         ...m,
         building
-          ? answerChip(CHIPS.includes(t) ? t : CHIPS[0], building)
+          ? answerChip(CHIPS.includes(t) ? t : CHIPS[0], building, rent)
           : {
               role: "agent",
               text: "Each pillar — condition, legal, neighborhood, accessibility — counts equally toward the 0–100 score. Every number links to its public NYC source; unverified means we couldn't confirm it, not that something is wrong.",
@@ -237,16 +249,9 @@ export function AgentSheet() {
           send(input);
         }}
       >
-        <button
-          type="button"
-          aria-label="Attach"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-          style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+        {/* An "Attach" affordance was here with no handler — it looked interactive,
+            focused like a control, and did nothing. Removed rather than stubbed;
+            there is no attachment feature to wire it to. */}
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

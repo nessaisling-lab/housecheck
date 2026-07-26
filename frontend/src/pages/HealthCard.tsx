@@ -91,7 +91,7 @@ function subStatus(b: Building, key: "condition" | "legal" | "neighborhood" | "a
 export default function HealthCard() {
   const { bbl = "" } = useParams();
   const navigate = useNavigate();
-  const { setBuilding: setAgentBuilding, openAgent } = useAgent();
+  const { setBuilding: setAgentBuilding, setRent: setAgentRent, openAgent } = useAgent();
   const tray = useTray();
 
   const [building, setBuilding] = useState<Building | null>(null);
@@ -154,6 +154,14 @@ export default function HealthCard() {
     setAgentBuilding(building);
     return () => setAgentBuilding(null);
   }, [building, setAgentBuilding]);
+
+  // Hand the agent the rent check the user actually ran. The API's HealthCard has
+  // no rent context, so without this the agent can never answer a rent question
+  // on live data — it could only ever see the demo fixtures' embedded values.
+  useEffect(() => {
+    setAgentRent(rentResult);
+    return () => setAgentRent(null);
+  }, [rentResult, setAgentRent]);
 
   useEffect(() => {
     if (!toast) return;

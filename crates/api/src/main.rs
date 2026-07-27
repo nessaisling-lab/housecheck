@@ -1109,29 +1109,37 @@ async fn search_law(state: &AppState, api_key: &str, query: &str) -> Option<serd
 /// operations that target exactly that desperation. A hallucinated firm is worse than no answer.
 /// Every entry here is an established nonprofit or a government service.
 ///
-/// Retrieved from published listings 2026-07-26 — re-verify before demoing.
+/// **Verified 2026-07-26** against each organisation's own published page, not against a
+/// third-party listing. Three errors were caught doing so: Housing Court Answers is open
+/// Mon-Fri (a listing said Tue/Wed/Thu), Met Council's Friday hotline opens at 1:30 not 1:00,
+/// and `hcanswers.org` is a 301 to `housingcourtanswers.org`. Legal Aid's central access line
+/// was missing entirely.
+///
+/// What this does NOT prove: that someone picks up. Nobody dialled these. Re-verify
+/// periodically — a stale hotline number for a person with no heat is a real harm, not a
+/// broken link.
 fn legal_help_directory() -> serde_json::Value {
     serde_json::json!([
         {
             "name": "Housing Court Answers",
             "what": "Information about NYC Housing Court for people without an attorney; hotline and in-court information tables.",
             "phone": "212-962-4795",
-            "hours": "Tue/Wed/Thu 9am-5pm, NYC only",
-            "url": "https://www.hcanswers.org",
+            "hours": "Mon-Fri 9am-5pm. English and Spanish.",
+            "url": "https://housingcourtanswers.org/contact-us/",
             "free": true
         },
         {
             "name": "Met Council on Housing — Tenants Rights Hotline",
             "what": "Free phone advice for tenants advocating for themselves; one of the few places to call with a single question and get an answer.",
             "phone": "212-979-0611",
-            "hours": "Mon/Wed 1:30pm-8pm, Fri 1pm-5pm",
+            "hours": "Mon/Wed 1:30-8pm, Fri 1:30-5pm. Volunteer-staffed; may close unexpectedly.",
             "url": "https://www.metcouncilonhousing.org/program/tenants-rights-hotline/",
             "free": true
         },
         {
             "name": "The Legal Aid Society — Housing",
             "what": "Free legal advice and representation on housing, eviction, and conditions.",
-            "phone": "Manhattan 212-426-3000 · Brooklyn 718-722-3100 · Bronx 718-991-4600 · Queens 718-286-2450 · Staten Island 347-422-5333",
+            "phone": "Central 212-577-3300 · Manhattan 212-426-3000 · Brooklyn 718-722-3100 · Bronx 718-991-4600 · Queens 718-286-2450 · Staten Island 347-422-5333",
             "hours": "See website",
             "url": "https://legalaidnyc.org/get-help/housing-problems/",
             "free": true

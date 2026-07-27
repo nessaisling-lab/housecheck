@@ -243,3 +243,34 @@ export async function sendChat(bbl: string, messages: ChatTurn[]): Promise<ChatR
   if (!answer) throw new ApiError("Empty agent answer");
   return { answer, citations: raw.citations ?? [] };
 }
+
+export interface RankedBuilding {
+  bbl: string;
+  address: string;
+  weighted_score: number;
+  card_score: number | null;
+  sub_scores: {
+    condition: number | null;
+    legal: number | null;
+    neighborhood: number | null;
+    accessibility: number | null;
+  };
+}
+
+/**
+ * Rank buildings by the renter's stated priorities (GET /rank).
+ *
+ * The weighting deliberately lives on the server, shared with the agent's
+ * rank_by_priorities tool. Computing it here would be a second scoring engine,
+ * and a compare view that disagrees with the Health Card it links to is the
+ * exact defect this replaces.
+ */
+export async function rankByPriorities(
+  bbls: string[],
+  priorities: string[]
+): Promise<RankedBuilding[]> {
+  const qs = new URLSearchParams({ bbls: bbls.join(",") });
+  if (priorities.length) qs.set("priorities", priorities.join(","));
+  const raw = await req<{ ranked?: RankedBuilding[] }>("/rank?" + qs.toString());
+  return raw.ranked ?? [];
+}

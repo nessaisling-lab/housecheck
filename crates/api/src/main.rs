@@ -236,6 +236,7 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/building/{bbl}", get(building_handler))
         .route("/buildings", get(buildings_handler))
         .route("/compare", get(compare_handler))
+        .route("/rank", get(rank_handler))
         .route("/search", get(search_handler))
         .route("/rent-fairness", axum::routing::post(rent_fairness_handler))
         .route("/summary", axum::routing::post(summary_handler))
@@ -999,6 +1000,46 @@ fn rank_by_priorities(
         "method": "Rank-descending weights over the same sub-scores the Health Card shows. \
     Computed in code, not by the model. With no priorities given, this is the card's own score.",
     })
+}
+
+#[derive(Deserialize)]
+struct RankParams {
+    bbls: String,
+    /// Comma-separated, most important first. Absent means "no stated priorities".
+    priorities: Option<String>,
+}
+
+/// `GET /rank?bbls=a,b,c&priorities=condition,rent`
+///
+/// The HTTP face of `rank_by_priorities`. Exists so the Compare screen and the agent share one
+/// implementation of the weighting — a comparison computed in the browser would be a second
+/// scoring engine, and two engines that disagree is the precise defect this feature replaces.
+async fn rank_handler(
+    State(state): State<AppState>,
+    Query(params): Query<RankParams>,
+) -> impl IntoResponse {
+    let bbls: Vec<String> = params
+        .bbls
+        .split(',')
+        .map(|b| b.trim().to_string())
+        .filter(|b| !b.is_empty())
+        .collect();
+    if bbls.is_empty() {
+        return (StatusCode::BAD_REQUEST, "bbls query param required").into_response();
+    }
+    let priorities: Vec<String> = params
+        .priorities
+        .unwrap_or_default()
+        .split(',')
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect();
+
+    let out = {
+        let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+        rank_by_priorities(&conn, state.snapshot_year, &bbls, &priorities)
+    };
+    Json(out).into_response()
 }
 
 /// Search authoritative legal sources for law governing a question.
@@ -2132,6 +2173,30 @@ mod tests {
     }
 
     // ---- priority ranking (slice 5) ----
+    #[tokio::test]
+    async fn rank_endpoint_shares_the_agent_tools_weighting() {
+        let server = test_server();
+        let res = server
+            .get("/rank?bbls=3000010001,3000020002&priorities=condition,legal")
+            .await;
+        res.assert_status_ok();
+        let body: serde_json::Value = res.json();
+        let ranked = body["ranked"].as_array().expect("ranked");
+        assert_eq!(ranked.len(), 2);
+        assert!(
+            ranked[0]["weighted_score"].as_i64().unwrap()
+                >= ranked[1]["weighted_score"].as_i64().unwrap()
+        );
+        // Same shape the tool returns, so the screen and the agent cannot drift.
+        assert!(ranked[0]["sub_scores"]["condition"].is_number());
+        assert_eq!(body["priorities"][0], "condition");
+    }
+
+    #[tokio::test]
+    async fn rank_endpoint_rejects_missing_bbls() {
+        let server = test_server();
+        server.get("/rank?bbls=").await.assert_status_bad_request();
+    }
 
     #[test]
     fn priority_axis_maps_five_renter_priorities_onto_four_score_axes() {

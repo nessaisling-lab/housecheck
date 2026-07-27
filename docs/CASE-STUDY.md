@@ -1,9 +1,9 @@
 # HouseCheck — Case Study
 
-> **Carfax for apartments.** Type any NYC address, get an instant Building Health Card — condition, legal protections, rent fairness, and accessibility — every number linked to a government source.
+> **Carfax for apartments.** Type any NYC address, get an instant Building Health Card — condition, legal protections, rent fairness, and accessibility — every number linked to a government source. Then ask an AI agent about it that cites published law and will not make anything up.
 
-**Team:** Aisling Leiva-Davila (backend + data), Anthony Lesov (frontend), Jagger (agent), + DB analyst · Pursuit NYC Fellowship, L2 Cycle 4
-**Live:** https://housecheck-nessa.fly.dev · **Repo:** https://github.com/nessaisling-lab/housecheck
+**Team:** Aisling Leiva-Davila (backend, data, agent), Anthony Lesov (frontend), Jagger (comparison prototype), + DB analyst · Pursuit NYC Fellowship, L2 Cycle 4
+**Live app:** https://housecheck-wine.vercel.app · **API:** https://housecheck-nessa.fly.dev · **Repo:** https://github.com/nessaisling-lab/housecheck
 
 ---
 
@@ -37,6 +37,22 @@ The differentiator isn't any single feature — it's the **trust model**: object
 
 **4. We refused to fake the hard part.** There is **no official, per-building rent-stabilization list** — DHCR publishes only an incomplete PDF. Rather than guess, we sourced JustFix's DOF-tax-derived dataset and label it honestly: *"Likely rent-stabilized — 192 units on the latest DOF record. A signal, not a legal ruling."* When real 311 volumes made every dense-block score saturate at the same floor, we recalibrated the neighborhood score to a log scale so it actually discriminates.
 
+**5. We built an AI agent that is structurally incapable of making things up.** The card answers *"what is the state of this building?"* Renters immediately ask harder questions — *is that bad enough to walk away? I have no heat and my landlord won't respond, what now?* Answering those well is where a housing tool either earns trust or destroys it.
+
+The architecture is one decision: **the model never touches the database.** It emits a tool call, *our code* runs the query, and the result comes back as data. Six read-only tools cover the building record, individual violations, address lookup, comparison, published law, and legal referrals. Every fact in an answer therefore passed through code we control — which is what makes grounding enforceable rather than aspirational.
+
+That let us take on the question most products dodge: **legal help.** We researched it rather than guessing. Disclaimers do not cure unauthorized practice of law — what the software *does* controls — and the FTC's $193,000 order against DoNotPay turned on unevidenced claims that an AI performed like a lawyer. So we drew the line at the honest place, not the convenient one:
+
+- **It gives legal information, with citations.** NY Real Property Law § 235-b, the two-year succession co-residency rule, HPD violation classes — each with a link the reader can open and check.
+- **It maps published law onto this building's public record.** Asked about succession rights, it found the governing rule *and* flagged that succession only applies to stabilized units, then checked our data and reported this building's status is unverified.
+- **It refuses to predict outcomes.** Not because a lawyer told us to — because we hold no case history, no docket data, and have never seen the user's lease. A litigation forecast would be fabrication, and fabrication is the one thing this product cannot ship.
+- **It hands people to humans who can actually advise them**, from a curated directory of free tenant services — deliberately curated, because an open search for "tenant lawyer" surfaces lead-generation aimed at exactly the people in crisis.
+- **It drafts the question for them**, in their own voice, citing the statute, with placeholders for the facts only they know.
+
+Web search for legal edge cases is restricted to an **allowlist of government and academic sources**. That single constraint collapses two risks at once: prompt injection stops being realistic, because nysenate.gov does not serve text written to hijack an agent, and predatory referrals disappear, because there are none on nycourts.gov.
+
+We attacked it to check. Instructed to ignore its rules, act as a legal advisor, guarantee a lawsuit win, and claim the building had zero violations, it refused the advice, refused the prediction, and **contradicted the injected lie with the real figure — five open Class C violations.**
+
 ## Results
 
 **It's live and serving real data**, worldwide, right now:
@@ -49,19 +65,25 @@ The differentiator isn't any single feature — it's the **trust model**: object
 
 Two real buildings a few blocks apart score **24 vs 78** — that spread *is* the product. The curated set of **250 real Bed-Stuy buildings** blends large regulated buildings (87 sourced rent-stabilized) with small rowhouses, ranging 1–1,624 units.
 
-- **Endpoints live:** `/building/{bbl}`, `/buildings` (map-ready), `/rent-fairness`, `/search`, `/compare`, `/summary`
-- **~76 tests**, clippy-clean, **green CI on macOS + Windows + Linux**, independently code-reviewed and hardened
+Ask the agent *"I have no heat for a week and my landlord won't respond"* and it returns the governing statute with a link, an evidence checklist (dated 311 numbers, timestamped thermometer photos, written notice), the official complaint route, a drafted question for a lawyer, and a free hotline to call — then states plainly that this is published information and a public record, not advice about your situation.
+
+- **Endpoints live:** `/building/{bbl}`, `/buildings` (map-ready), `/rent-fairness`, `/search`, `/compare`, `/summary`, `/agent/chat`
+- **98 tests**, clippy-clean, **green CI on macOS + Windows + Linux**, independently code-reviewed and hardened
+- **Zero secrets in the deployed image** — verified: the production app runs with no application secrets beyond the optional LLM key
+- **Spend controls by design:** per-client rate limiting, a token ceiling, a history cap, and a hard stop on the tool loop — because an LLM endpoint on a public URL is otherwise a way for a stranger to spend your money
 - **$0 data cost**, well within the project's $20–50 budget
 
 ## What we learned
 
 - **The hardest part wasn't code — it was honest data.** Sourcing a defensible rent-stabilization signal took more judgment than building the entire scoring engine.
 - **Intellectual honesty is a feature.** A confidently-wrong number on a legal-rights tool is worse than an honest "unverified." We shipped "unverified" where the data didn't support a claim — and the product is more trustworthy for it.
+- **The safe design and the honest design kept turning out to be the same design.** Refusing to predict case outcomes reads like legal caution; it's actually just refusing to invent data we don't have. Restricting legal search to government sources reads like a security control; it also happens to produce better citations. When those two pressures agreed, it was a signal the architecture was right.
+- **A working system can be load-bearing in ways nobody planned.** The "agent" branch turned out to contain no AI at all — a form wizard over five hardcoded buildings, with a second scoring engine that disagreed with ours by fifty points on the same building. Finding that early was worth more than shipping it late.
 - **> _[Your reflection here — your specific role, the moment it clicked, or what you'd do differently. This is the part only you can write; tell me and I'll weave it in._]**
 
 ## What's next
 
-A **React (Vite + Tailwind + shadcn/ui)** frontend rendering the card against the live API; a map layer to come; and a path to a real business — a free consumer tool feeding a B2B2C model in the $3.6B property-data adjacent market.
+The **React (Vite + Tailwind + shadcn/ui)** frontend is live and wired to the API, agent included. Next: a map layer, violation *descriptions* (HPD publishes them; our ingest doesn't pull them yet, so the agent can currently report how many violations exist but not what they are), and comparison weighted by what a renter actually cares about. Beyond that, a path to a real business — a free consumer tool feeding a B2B2C model in the $3.6B property-data adjacent market.
 
 ---
 

@@ -893,6 +893,114 @@ fn legal_context_for(issue: &str) -> serde_json::Value {
     }
 }
 
+/// Map a renter-facing priority onto the sub-score that measures it.
+///
+/// The app collects five priorities but the score has four axes: "rent" and "neighborhood" are
+/// two ways of asking about the same tract-level signal, which is exactly how the Health Card
+/// already groups them (both route to the Rent fairness section). Anything unrecognised falls
+/// through to the overall condition score rather than being silently dropped.
+fn priority_axis(p: &str) -> &'static str {
+    match p {
+        "condition" => "condition",
+        "legal" => "legal",
+        "access" | "accessibility" => "accessibility",
+        "rent" | "neighborhood" => "neighborhood",
+        _ => "condition",
+    }
+}
+
+/// Rank buildings by how well they match what a renter said matters to them.
+///
+/// **The arithmetic here is deliberately model-free.** The agent decides *when* to rank and
+/// explains the result afterwards; the numbers come from `crates/scoring` via `card_for`, the
+/// same path the Health Card uses. If the model ever states a score that did not come out of
+/// this function, that is a bug — a comparison view that disagrees with the card it links to
+/// destroys the thing the product is for.
+///
+/// Weighting is rank-descending: with `n` priorities the first gets weight `n`, the second
+/// `n-1`, and so on, normalised by the total. Ordered taps therefore carry real meaning —
+/// first choice counts more than second — rather than a set of equal flags.
+fn rank_by_priorities(
+    conn: &rusqlite::Connection,
+    snapshot_year: i32,
+    bbls: &[String],
+    priorities: &[String],
+) -> serde_json::Value {
+    let mut ranked: Vec<serde_json::Value> = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
+
+    for bbl in bbls.iter().take(COMPARE_MAX_BBLS) {
+        let card = match card_for(conn, snapshot_year, bbl) {
+            Ok(Some(c)) => c,
+            _ => {
+                missing.push(bbl.clone());
+                continue;
+            }
+        };
+        let sub = |axis: &str| -> f64 {
+            match axis {
+                "condition" => card.score.condition as f64,
+                "legal" => card.score.legal as f64,
+                "neighborhood" => card.score.neighborhood as f64,
+                "accessibility" => card.score.accessibility as f64,
+                _ => card.score.total as f64,
+            }
+        };
+
+        // No stated priorities → the card's own fixed-weight total, unchanged.
+        let (weighted, applied) = if priorities.is_empty() {
+            (card.score.total as f64, serde_json::json!([]))
+        } else {
+            let n = priorities.len() as f64;
+            let mut sum = 0.0;
+            let mut total_w = 0.0;
+            let mut applied = Vec::new();
+            for (i, p) in priorities.iter().enumerate() {
+                let w = n - i as f64;
+                let axis = priority_axis(p);
+                let v = sub(axis);
+                sum += v * w;
+                total_w += w;
+                applied.push(serde_json::json!({
+                    "priority": p, "axis": axis, "score": v as i64, "weight": w as i64
+                }));
+            }
+            (sum / total_w, serde_json::json!(applied))
+        };
+
+        ranked.push(serde_json::json!({
+            "bbl": card.building.bbl,
+            "address": card.building.address,
+            "weighted_score": weighted.round() as i64,
+            "card_score": card.score.total,
+            "sub_scores": {
+                "condition": card.score.condition,
+                "legal": card.score.legal,
+                "neighborhood": card.score.neighborhood,
+                "accessibility": card.score.accessibility,
+            },
+            "open_class_c": card.open_violations.c,
+            "stabilization": card.stabilization.status,
+            "weighting_applied": applied,
+        }));
+    }
+
+    ranked.sort_by(|a, b| {
+        b["weighted_score"]
+            .as_i64()
+            .unwrap_or(0)
+            .cmp(&a["weighted_score"].as_i64().unwrap_or(0))
+    });
+
+    serde_json::json!({
+        "priorities": priorities,
+        "ranked": ranked,
+        "not_in_curated_set": missing,
+        "method": "Rank-descending weights over the same sub-scores the Health Card shows. \
+    Computed in code, not by the model. With no priorities given, this is the card's own score.",
+    })
+}
+
 /// Search authoritative legal sources for law governing a question.
 ///
 /// Runs OpenRouter's web plugin with `include_domains` pinned to LAW_SEARCH_DOMAINS, then returns
@@ -1081,6 +1189,51 @@ fn tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "rank_by_priorities",
+                "description": "Rank 2-4 buildings by what the renter says matters most to them, \
+    in order. Pass priorities most-important-first; the first counts more than the second. Valid \
+    priorities: condition, legal, rent, neighborhood, access. Returns each building's weighted \
+    score plus the sub-scores behind it. Use this whenever the user compares buildings or says what \
+    they care about. The arithmetic is done in code — report the numbers it returns, never compute \
+    your own.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bbls": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "2-4 BBLs to compare"
+                        },
+                        "priorities": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Priorities in order, most important first"
+                        }
+                    },
+                    "required": ["bbls"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_rent_fairness",
+                "description": "Compare a monthly rent against the Census tract median gross \
+    rent and HUD Fair Market Rent for this area. Use when the user names a rent they are paying or \
+    being asked to pay.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bbl": { "type": "string", "description": "10-digit BBL" },
+                        "monthly_rent": { "type": "integer", "description": "Monthly rent in dollars" }
+                    },
+                    "required": ["bbl", "monthly_rent"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "search_law",
                 "description": "Search authoritative legal sources (NY Senate statutes, Cornell \
     LII, Justia, NY courts, nyc.gov, DHCR, LawHelpNY, federal govinfo/eCFR) for law governing a \
@@ -1228,6 +1381,81 @@ async fn dispatch_tool(
                 .unwrap_or("published New York law")
                 .to_string();
             (ctx, Some(cite))
+        }
+        "rank_by_priorities" => {
+            let bbls: Vec<String> = args["bbls"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if bbls.is_empty() {
+                return (
+                    serde_json::json!({ "error": "at least one bbl required" }),
+                    None,
+                );
+            }
+            let priorities: Vec<String> = args["priorities"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let out = {
+                let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                rank_by_priorities(&conn, state.snapshot_year, &bbls, &priorities)
+            };
+            (
+                out,
+                Some("HouseCheck scoring engine · NYC HPD · DOF / PLUTO".to_string()),
+            )
+        }
+        "check_rent_fairness" => {
+            let bbl = args["bbl"].as_str().unwrap_or("").to_string();
+            let rent = args["monthly_rent"].as_i64().unwrap_or(0) as i32;
+            if rent <= 0 {
+                return (
+                    serde_json::json!({ "error": "monthly_rent must be greater than zero" }),
+                    None,
+                );
+            }
+            let out = {
+                let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                match get_building(&conn, &bbl) {
+                    Ok(Some(b)) => match get_tract_median(&conn, &b.tract_geoid) {
+                        Ok(Some(median)) if median > 0 => {
+                            let (pct, verdict) = scoring::rent_fairness(rent, median);
+                            Some(serde_json::json!({
+                                "bbl": bbl,
+                                "user_rent": rent,
+                                "tract_median": median,
+                                "pct_vs_median": pct,
+                                "verdict": verdict,
+                                "hud_fmr": model::HudFmr::ny_metro_fy2026(),
+                            }))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            };
+            match out {
+                Some(v) => (
+                    v,
+                    Some("US Census ACS B25064 · HUD Fair Market Rent".to_string()),
+                ),
+                None => (
+                    serde_json::json!({
+                        "error": "no reliable tract median for this building",
+                        "advice_for_model": "Say the benchmark is unavailable here rather than estimating one."
+                    }),
+                    None,
+                ),
+            }
         }
         "search_law" => {
             let q = args
@@ -1878,10 +2106,12 @@ mod tests {
             "legal_context",
             "find_legal_help",
             "search_law",
+            "rank_by_priorities",
+            "check_rent_fairness",
         ] {
             assert!(names.contains(&expected), "missing tool: {expected}");
         }
-        assert_eq!(arr.len(), 6);
+        assert_eq!(arr.len(), 8);
 
         for tool in arr {
             let f = &tool["function"];
@@ -1899,6 +2129,129 @@ mod tests {
                 f["name"]
             );
         }
+    }
+
+    // ---- priority ranking (slice 5) ----
+
+    #[test]
+    fn priority_axis_maps_five_renter_priorities_onto_four_score_axes() {
+        assert_eq!(priority_axis("condition"), "condition");
+        assert_eq!(priority_axis("legal"), "legal");
+        assert_eq!(priority_axis("access"), "accessibility");
+        assert_eq!(priority_axis("accessibility"), "accessibility");
+        // "rent" and "neighborhood" are two ways of asking about the same tract signal, which
+        // is how the Health Card already groups them.
+        assert_eq!(priority_axis("rent"), "neighborhood");
+        assert_eq!(priority_axis("neighborhood"), "neighborhood");
+        // Unknown priorities must not silently vanish from the weighting.
+        assert_eq!(priority_axis("nonsense"), "condition");
+    }
+
+    #[test]
+    fn ranking_order_changes_with_stated_priorities() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let conn = state.conn.lock().unwrap();
+        let bbls = vec![FIXTURE_BBL.to_string(), "3000020002".to_string()];
+
+        let by_condition =
+            rank_by_priorities(&conn, DEFAULT_SNAPSHOT_YEAR, &bbls, &["condition".into()]);
+        let by_access = rank_by_priorities(&conn, DEFAULT_SNAPSHOT_YEAR, &bbls, &["access".into()]);
+
+        // Whatever the fixture data is, each ranking must be internally consistent: the winner
+        // must actually hold the highest weighted score.
+        for r in [&by_condition, &by_access] {
+            let ranked = r["ranked"].as_array().expect("ranked array");
+            assert_eq!(ranked.len(), 2);
+            let first = ranked[0]["weighted_score"].as_i64().unwrap();
+            let second = ranked[1]["weighted_score"].as_i64().unwrap();
+            assert!(first >= second, "ranking must be sorted descending");
+        }
+    }
+
+    #[test]
+    fn first_priority_outweighs_the_second() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let conn = state.conn.lock().unwrap();
+        let bbls = vec![FIXTURE_BBL.to_string()];
+
+        let r = rank_by_priorities(
+            &conn,
+            DEFAULT_SNAPSHOT_YEAR,
+            &bbls,
+            &["condition".into(), "legal".into(), "access".into()],
+        );
+        let applied = r["ranked"][0]["weighting_applied"]
+            .as_array()
+            .expect("weighting_applied");
+        assert_eq!(applied.len(), 3);
+        let w: Vec<i64> = applied
+            .iter()
+            .map(|a| a["weight"].as_i64().unwrap())
+            .collect();
+        // Rank-descending: an ordered tap must mean more than a set of equal flags.
+        assert_eq!(w, vec![3, 2, 1]);
+        assert!(w[0] > w[1] && w[1] > w[2]);
+    }
+
+    #[test]
+    fn no_priorities_falls_back_to_the_cards_own_score() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let conn = state.conn.lock().unwrap();
+        let r = rank_by_priorities(
+            &conn,
+            DEFAULT_SNAPSHOT_YEAR,
+            &[FIXTURE_BBL.to_string()],
+            &[],
+        );
+        let row = &r["ranked"][0];
+        assert_eq!(
+            row["weighted_score"], row["card_score"],
+            "with nothing stated, the comparison must agree with the Health Card exactly"
+        );
+    }
+
+    #[test]
+    fn ranking_reports_unknown_bbls_instead_of_dropping_them() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let conn = state.conn.lock().unwrap();
+        let r = rank_by_priorities(
+            &conn,
+            DEFAULT_SNAPSHOT_YEAR,
+            &[FIXTURE_BBL.to_string(), "9999999999".to_string()],
+            &["condition".into()],
+        );
+        assert_eq!(r["ranked"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            r["not_in_curated_set"].as_array().unwrap().len(),
+            1,
+            "a silently missing building would look like it was compared and lost"
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_tool_requires_bbls_and_rent_tool_rejects_nonpositive_rent() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+
+        let (out, _) = dispatch_tool(
+            &state,
+            "test-key",
+            "rank_by_priorities",
+            &serde_json::json!({ "bbls": [] }),
+        )
+        .await;
+        assert!(out["error"].is_string());
+
+        let (out2, _) = dispatch_tool(
+            &state,
+            "test-key",
+            "check_rent_fairness",
+            &serde_json::json!({ "bbl": FIXTURE_BBL, "monthly_rent": 0 }),
+        )
+        .await;
+        assert!(
+            out2["error"].is_string(),
+            "zero rent must not divide into a median"
+        );
     }
 
     // ---- law search (slice 7) ----

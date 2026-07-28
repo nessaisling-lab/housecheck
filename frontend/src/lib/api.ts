@@ -28,7 +28,18 @@ import {
 const BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ??
   "https://housecheck-nessa.fly.dev";
+/** Default budget for the fast, DB-backed endpoints. */
 const TIMEOUT_MS = 8000;
+/**
+ * The LLM-backed endpoints need their own budget, and it must exceed the server's.
+ *
+ * The backend allows the model 30s per attempt and retries once on a transient
+ * failure, so a worst-case round trip is roughly 60s. An 8s client abort would kill
+ * a slow but *successful* answer and silently swap in demo text — letting the client
+ * decide an outcome the server was still working on. Measured live: legal answers
+ * land in 12-27s, with an occasional retry pushing past 60s.
+ */
+const LLM_TIMEOUT_MS = 70000;
 
 export class ApiError extends Error {
   status?: number;
@@ -38,9 +49,9 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+async function req<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${BASE}${path}`, {
       ...init,
@@ -187,10 +198,11 @@ export async function compareBuildings(bbls: string[]): Promise<ApiResult<Buildi
 
 export async function getSummary(bbl: string): Promise<ApiResult<string>> {
   try {
-    const raw = await req<{ summary?: string; text?: string } | string>(`/summary`, {
-      method: "POST",
-      body: JSON.stringify({ bbl }),
-    });
+    const raw = await req<{ summary?: string; text?: string } | string>(
+      `/summary`,
+      { method: "POST", body: JSON.stringify({ bbl }) },
+      LLM_TIMEOUT_MS
+    );
     const text = typeof raw === "string" ? raw : raw.summary ?? raw.text ?? "";
     if (!text) throw new ApiError("Empty summary");
     return { data: text, source: "live" };
@@ -199,4 +211,66 @@ export async function getSummary(bbl: string): Promise<ApiResult<string>> {
     if (demo) return { data: demo, source: "demo" };
     throw new ApiError("Summary unavailable");
   }
+}
+
+/** One turn of an agent conversation, in the shape POST /agent/chat expects. */
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatReply {
+  answer: string;
+  /** Sources that actually fed the answer — render these, never a hardcoded line. */
+  citations: string[];
+}
+
+/**
+ * Grounded multi-turn Q&A about one building (POST /agent/chat).
+ *
+ * Unlike the other calls this has no demo fallback: a fabricated "agent answer" is
+ * exactly the thing this product must not produce. When the agent is unavailable the
+ * caller falls back to the deterministic canned answers, which are grounded in the
+ * card and honest about being canned.
+ */
+export async function sendChat(bbl: string, messages: ChatTurn[]): Promise<ChatReply> {
+  const raw = await req<{ answer?: string; citations?: string[] }>(
+    "/agent/chat",
+    { method: "POST", body: JSON.stringify({ bbl, messages }) },
+    LLM_TIMEOUT_MS
+  );
+  const answer = (raw.answer ?? "").trim();
+  if (!answer) throw new ApiError("Empty agent answer");
+  return { answer, citations: raw.citations ?? [] };
+}
+
+export interface RankedBuilding {
+  bbl: string;
+  address: string;
+  weighted_score: number;
+  card_score: number | null;
+  sub_scores: {
+    condition: number | null;
+    legal: number | null;
+    neighborhood: number | null;
+    accessibility: number | null;
+  };
+}
+
+/**
+ * Rank buildings by the renter's stated priorities (GET /rank).
+ *
+ * The weighting deliberately lives on the server, shared with the agent's
+ * rank_by_priorities tool. Computing it here would be a second scoring engine,
+ * and a compare view that disagrees with the Health Card it links to is the
+ * exact defect this replaces.
+ */
+export async function rankByPriorities(
+  bbls: string[],
+  priorities: string[]
+): Promise<RankedBuilding[]> {
+  const qs = new URLSearchParams({ bbls: bbls.join(",") });
+  if (priorities.length) qs.set("priorities", priorities.join(","));
+  const raw = await req<{ ranked?: RankedBuilding[] }>("/rank?" + qs.toString());
+  return raw.ranked ?? [];
 }

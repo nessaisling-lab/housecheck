@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { MiniRing } from "@/components/ScoreRing";
-import { compareBuildings } from "@/lib/api";
+import { compareBuildings, rankByPriorities, type RankedBuilding } from "@/lib/api";
 import { fmtDistance } from "@/lib/score";
-import { store, useTray } from "@/lib/store";
+import { store, useOnboarding, useTray } from "@/lib/store";
 import type { BuildingCard } from "@/types/building";
 
 interface RowDef {
@@ -69,6 +69,33 @@ export default function Compare() {
       cancelled = true;
     };
   }, [tray]);
+
+  // Rank the tray by what the renter said matters, in the order they said it.
+  // The weighting runs on the server so this view and the agent can never disagree.
+  const { priorities } = useOnboarding();
+  const [ranked, setRanked] = useState<{ key: string; rows: RankedBuilding[] } | null>(null);
+  const rankKey = `${key}|${priorities.join(",")}`;
+
+  useEffect(() => {
+    if (tray.length < 2 || priorities.length === 0) return;
+    let cancelled = false;
+    rankByPriorities(tray, priorities)
+      .then((rows) => {
+        if (!cancelled) setRanked({ key: rankKey, rows });
+      })
+      .catch(() => {
+        // Ranking is an enhancement; the comparison table stands on its own.
+        if (!cancelled) setRanked({ key: rankKey, rows: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tray, priorities, rankKey]);
+
+  const rankRows = useMemo(
+    () => (ranked?.key === rankKey ? ranked.rows : []),
+    [ranked, rankKey]
+  );
 
   const current = useMemo(() => (outcome?.key === key ? outcome : null), [outcome, key]);
   const cards = useMemo(() => current?.cards ?? [], [current]);
@@ -163,6 +190,50 @@ export default function Compare() {
             Check your connection and try again — your tray is kept.
           </p>
         </div>
+      )}
+
+      {!loading && !error && rankRows.length >= 2 && (
+        <section
+          className="mx-auto mb-4 w-full max-w-md rounded-2xl px-5 py-4"
+          style={{ background: "var(--hc-sunken)" }}
+          aria-label="Ranked for your priorities"
+        >
+          <p
+            className="text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--hc-ink-3)" }}
+          >
+            Ranked for your priorities
+          </p>
+          <p className="mt-1 text-[13px]" style={{ color: "var(--hc-ink-2)" }}>
+            Weighted by what you picked, in order:{" "}
+            <strong style={{ color: "var(--hc-ink)" }}>{priorities.join(" › ")}</strong>
+          </p>
+          <ol className="mt-3 space-y-2">
+            {rankRows.map((r, i) => (
+              <li key={r.bbl} className="flex items-baseline gap-3">
+                <span
+                  className="text-[13px] font-semibold tabular-nums"
+                  style={{ color: "var(--hc-ink-3)" }}
+                >
+                  {i + 1}
+                </span>
+                <button
+                  onClick={() => navigate(`/building/${r.bbl}`)}
+                  className="flex-1 text-left text-[14px] underline-offset-2 hover:underline"
+                  style={{ color: "var(--hc-ink)" }}
+                >
+                  {r.address.split(",")[0]}
+                </button>
+                <span className="text-[14px] font-semibold tabular-nums" style={{ color: "var(--hc-ink)" }}>
+                  {r.weighted_score}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-3 text-[12px]" style={{ color: "var(--hc-ink-3)" }}>
+            Same sub-scores as each Health Card — only the weighting differs.
+          </p>
+        </section>
       )}
 
       {!loading && !error && cards.length > 0 && (

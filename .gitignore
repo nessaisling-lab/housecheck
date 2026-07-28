@@ -3,3 +3,4 @@
 .env
 /data/*.db
 /data/raw/
+.gstack/

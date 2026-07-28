@@ -195,10 +195,11 @@ export default function HealthCard() {
   if (state === "notfound")
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-28 text-center">
-        <div className="flex h-24 w-24 items-center justify-center rounded-full" style={{ background: "var(--hc-sunken)" }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--hc-ink-3)" strokeWidth="1.6" strokeLinejoin="round">
+        <div className="spectrum-orb flex h-24 w-24 items-center justify-center rounded-full" aria-hidden>
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--hc-canvas-ink)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 11l9-7 9 7" />
             <path d="M6 9.5V20h12V9.5" />
+            <path d="M9.5 14.5l2.5 2.5 4.5-4.5" />
           </svg>
         </div>
         <h1 className="mt-6 text-[24px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
@@ -208,7 +209,7 @@ export default function HealthCard() {
           Our pilot covers ~250 buildings in Bed-Stuy. Double-check the address, or explore the
           covered set.
         </p>
-        <button onClick={() => navigate("/")} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold text-white" style={{ background: "var(--hc-ink)" }}>
+        <button onClick={() => navigate("/")} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold" style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}>
           Back to search
         </button>
       </div>
@@ -223,7 +224,7 @@ export default function HealthCard() {
         <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
           We couldn't reach the data service. Nothing about the building changed — this is on us.
         </p>
-        <button onClick={load} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold text-white" style={{ background: "var(--hc-ink)" }}>
+        <button onClick={load} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold" style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}>
           Try again
         </button>
       </div>
@@ -366,7 +367,7 @@ export default function HealthCard() {
             aria-label={saved ? "Remove from saved" : "Save building"}
             aria-pressed={saved}
             className="glass-nav mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-            style={{ color: saved ? "#3A3A3C" : "rgba(58, 58, 60, 0.5)" }}
+            style={{ color: saved ? "#3A3A3C" : "var(--hc-canvas-ink-2)" }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
               <path d="M6 3h12v18l-6-4.5L6 21V3z" />
@@ -476,7 +477,7 @@ export default function HealthCard() {
               }}
             >
               <div className="flex h-11 flex-1 items-center rounded-full px-4" style={{ background: "#E2E2E4" }}>
-                <span className="text-[15px]" style={{ color: "rgba(58,58,60,0.55)" }}>$</span>
+                <span className="text-[15px]" style={{ color: "var(--hc-canvas-ink-2)" }}>$</span>
                 <input
                   value={rentInput}
                   onChange={(e) => setRentInput(e.target.value)}

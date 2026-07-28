@@ -38,7 +38,7 @@ export function SpectrumTrack({
               className="absolute -top-1 -bottom-1 w-px"
               style={{
                 left: `calc(${reference * 100}% )`,
-                background: "rgba(47, 109, 124, 0.35)",
+                background: "rgba(28, 28, 30, 0.35)",
               }}
               title={referenceLabel}
             />
@@ -55,7 +55,7 @@ export function SpectrumTrack({
           )}
         </div>
       </div>
-      <div className="mt-2 flex justify-between text-[11px] font-medium" style={{ color: "rgba(47, 109, 124, 0.6)" }}>
+      <div className="mt-2 flex justify-between text-[11px] font-medium" style={{ color: "var(--hc-canvas-ink-2)" }}>
         <span>{leftLabel}</span>
         {referenceLabel && reference != null && <span>{referenceLabel}</span>}
         <span>{rightLabel}</span>

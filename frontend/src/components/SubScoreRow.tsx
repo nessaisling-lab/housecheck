@@ -1,5 +1,5 @@
 import { MiniRing } from "@/components/ScoreRing";
-import { bandColor } from "@/lib/score";
+import { scoreCircleColor } from "@/lib/score";
 
 interface SubScoreRowProps {
   name: string;
@@ -13,7 +13,7 @@ interface SubScoreRowProps {
  * mini ring + name + one-line status + score-md number + chevron.
  */
 export function SubScoreRow({ name, status, score, onClick }: SubScoreRowProps) {
-  const color = bandColor(score);
+  const color = scoreCircleColor(score);
   return (
     <button
       onClick={onClick}
@@ -49,7 +49,7 @@ interface SubScoreTileProps extends SubScoreRowProps {
  * Condition · Legal on the first row, Neighborhood · Accessibility beneath.
  */
 export function SubScoreTile({ name, status, score, onClick, borderR, borderB }: SubScoreTileProps) {
-  const color = bandColor(score);
+  const color = scoreCircleColor(score);
   return (
     <button
       onClick={onClick}

@@ -31,7 +31,7 @@
     --hc-canvas: rgb(215, 215, 217);
     --hc-canvas-ink: rgba(28, 28, 30, 0.94);
     --hc-canvas-ink-2: rgba(28, 28, 30, 0.62);
-    --hc-canvas-ink-3: rgba(28, 28, 30, 0.42);
+    --hc-canvas-ink-3: rgba(28, 28, 30, 0.66);
     --hc-card: #3A3A3C;
     --hc-sunken: #48484A;
     --hc-ink: #F5F5F7;
@@ -59,6 +59,19 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro",
       "Inter", system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
+  }
+  /* Global keyboard focus ring — inputs use outline-none, this restores
+     visibility for keyboard users (WCAG 2.4.7). */
+  :focus-visible {
+    outline: 2px solid var(--hc-canvas-ink);
+    outline-offset: 2px;
+  }
+  .glass-sheet :focus-visible,
+  .glass-card :focus-visible,
+  .hc-card :focus-visible,
+  .glass-field :focus-visible,
+  .glass-dark :focus-visible {
+    outline-color: #f5f5f7;
   }
 }
 
@@ -101,6 +114,17 @@
       0 0 28px rgba(125, 166, 41, 0.22),
       inset 0 1px 0 rgba(255, 255, 255, 0.95),
       inset 0 -0.5px 0 rgba(120, 120, 128, 0.08);
+  }
+
+  .spectrum-orb {
+    /* logo orb — flat fill of the app's rent-fairness spectrum, like the track */
+    background: linear-gradient(
+      40deg,
+      rgb(228, 159, 159) 4%,
+      rgb(238, 192, 149) 50%,
+      rgb(75, 205, 167) 96%
+    );
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
   }
 
   .glass-sheet {

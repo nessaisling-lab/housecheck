@@ -146,8 +146,8 @@ export default function Compare() {
           <div className="mt-4 flex flex-wrap gap-2.5">
             <button
               onClick={() => navigate("/")}
-              className="rounded-full px-5 py-2.5 text-[14px] font-semibold text-white"
-              style={{ background: "var(--hc-ink)" }}
+              className="rounded-full px-5 py-2.5 text-[14px] font-semibold"
+              style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}
             >
               Search a new building
             </button>

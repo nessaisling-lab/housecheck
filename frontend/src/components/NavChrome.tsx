@@ -83,12 +83,12 @@ export function NavChrome({ onOpenAgent }: { onOpenAgent: () => void }) {
           >
             {({ isActive }) => (
               <>
-                <span style={{ color: isActive ? "#3A3A3C" : "rgba(58, 58, 60, 0.5)" }}>
+                <span style={{ color: isActive ? "#3A3A3C" : "var(--hc-canvas-ink-2)" }}>
                   {t.icon(isActive)}
                 </span>
                 <span
                   className="text-[11px] font-medium"
-                  style={{ color: isActive ? "#3A3A3C" : "rgba(58, 58, 60, 0.5)" }}
+                  style={{ color: isActive ? "#3A3A3C" : "var(--hc-canvas-ink-2)" }}
                 >
                   {t.label}
                 </span>

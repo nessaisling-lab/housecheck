@@ -2,16 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { Sheet } from "@/components/Sheet";
 import { searchAddress } from "@/lib/api";
-import { useRecents } from "@/lib/store";
 import type { SearchResult } from "@/types/building";
-
-// Real buildings in the ~250-building Bed-Stuy pilot set (verified in /buildings).
-// Chosen to tell a story: one strong record, one middling, one to avoid.
-const DEFAULT_SUGGESTIONS = ["1024 Gates Avenue", "633 Marcy Avenue", "1754 Fulton Street"];
 
 export default function Home() {
   const navigate = useNavigate();
-  const recents = useRecents();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -55,9 +49,7 @@ export default function Home() {
     navigate(`/building/${r.bbl}`);
   };
 
-  const chips = recents.length
-    ? recents.slice(0, 3).map((r) => ({ label: r.address, bbl: r.bbl }))
-    : DEFAULT_SUGGESTIONS.map((label) => ({ label, bbl: null as string | null }));
+  // Only surface the user's own recent lookups — no canned sample addresses.
 
   return (
     <div
@@ -77,29 +69,8 @@ export default function Home() {
         style={{ background: "linear-gradient(to bottom, transparent 44%, rgb(215, 215, 217) 94%)" }}
       />
       <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center pb-16">
-        <h1 className="text-[24px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
-          HouseCheck
-        </h1>
-
-        <div
-          className="glass-orb mt-8 flex h-24 w-24 items-center justify-center rounded-full"
-          aria-hidden
-        >
-          <svg
-            width="44"
-            height="44"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--hc-ink)"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 11l9-7 9 7" />
-            <path d="M6 9.5V20h12V9.5" />
-            <path d="M9.5 14.5l2.5 2.5 4.5-4.5" />
-          </svg>
-        </div>
+        <h1 className="sr-only">HouseCheck</h1>
+        <img src="/housecheck-logo.svg" alt="HouseCheck" className="h-auto w-52" />
 
         <p
           className="mt-8 text-[34px] font-semibold leading-[1.12] tracking-tight"
@@ -162,19 +133,6 @@ export default function Home() {
             Address not found — try street + house number.
           </p>
         )}
-        </div>
-
-        <div className="mt-6 flex flex-col items-center gap-2.5">
-          {chips.map((c) => (
-            <button
-              key={c.label}
-              onClick={() => (c.bbl ? navigate(`/building/${c.bbl}`) : setQ(c.label))}
-              className="rounded-full px-4 py-2 text-[14px] font-medium"
-              style={{ background: "#3A3A3C", color: "#F5F5F7" }}
-            >
-              {c.label}
-            </button>
-          ))}
         </div>
       </div>
 

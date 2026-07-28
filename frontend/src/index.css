@@ -26,22 +26,23 @@
     --ring: 240 5.9% 10%;
     --radius: 0.625rem;
 
-    /* HouseCheck design tokens (design-strategy v1.1) */
-    --hc-canvas: rgb(33, 43, 63);
-    --hc-canvas-ink: rgba(255, 255, 255, 0.94);
-    --hc-canvas-ink-2: rgba(255, 255, 255, 0.68);
-    --hc-canvas-ink-3: rgba(255, 255, 255, 0.46);
-    --hc-card: #FFFFFF;
-    --hc-sunken: #EFEFF2;
-    --hc-ink: #1C1C1E;
-    --hc-ink-2: rgba(60, 60, 67, 0.6);
-    --hc-ink-3: rgba(60, 60, 67, 0.38);
-    --hc-strong: #248A3D;
-    --hc-solid: #7DA629;
-    --hc-mixed: #B7791F;
-    --hc-concern: #D04A1E;
-    --hc-critical: #C7272B;
-    --hc-unverified: #8E8E93;
+    /* HouseCheck design tokens — inverted theme: light grey page, dark grey
+       cards, white text on cards. Score colours brightened to read on dark. */
+    --hc-canvas: rgb(215, 215, 217);
+    --hc-canvas-ink: rgba(28, 28, 30, 0.94);
+    --hc-canvas-ink-2: rgba(28, 28, 30, 0.62);
+    --hc-canvas-ink-3: rgba(28, 28, 30, 0.42);
+    --hc-card: #3A3A3C;
+    --hc-sunken: #48484A;
+    --hc-ink: #F5F5F7;
+    --hc-ink-2: rgba(255, 255, 255, 0.66);
+    --hc-ink-3: rgba(255, 255, 255, 0.44);
+    --hc-strong: #4CC66A;
+    --hc-solid: #A6D65E;
+    --hc-mixed: #E0A83E;
+    --hc-concern: #F0743E;
+    --hc-critical: #F0595C;
+    --hc-unverified: #A0A0A6;
   }
 }
 
@@ -103,52 +104,47 @@
   }
 
   .glass-sheet {
-    /* sheets & agent panel carry text → most opaque variant */
+    /* sheets & agent panel: dark grey, white text (matches cards) */
     background: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.88),
-      rgba(255, 255, 255, 0.74)
+      rgba(60, 60, 62, 0.97),
+      rgba(48, 48, 50, 0.97)
     );
-    backdrop-filter: blur(30px) saturate(190%) brightness(1.04);
-    -webkit-backdrop-filter: blur(30px) saturate(190%) brightness(1.04);
-    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(30px) saturate(160%);
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
     box-shadow:
-      0 -8px 48px rgba(0, 0, 0, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+      0 -8px 48px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .glass-card,
   .hc-card {
-    /* content cards: near-opaque so text contrast is guaranteed,
-       but visibly lenses the wallpaper while scrolling */
+    /* content cards: dark grey, white text. Subtle top highlight keeps the
+       glassy edge; sits on the light-grey page. */
     background: linear-gradient(
       170deg,
-      rgba(255, 255, 255, 0.76),
-      rgba(255, 255, 255, 0.58)
+      rgba(64, 64, 66, 0.94),
+      rgba(52, 52, 54, 0.94)
     );
-    backdrop-filter: blur(22px) saturate(180%) brightness(1.05);
-    -webkit-backdrop-filter: blur(22px) saturate(180%) brightness(1.05);
-    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px;
     box-shadow:
-      0 10px 32px rgba(0, 0, 0, 0.07),
-      inset 0 1px 0 rgba(255, 255, 255, 0.85);
+      0 12px 32px rgba(0, 0, 0, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .glass-field {
-    /* input capsules: slightly recessed — inner shade + top highlight */
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.66),
-      rgba(255, 255, 255, 0.5)
-    );
-    backdrop-filter: blur(22px) saturate(190%);
-    -webkit-backdrop-filter: blur(22px) saturate(190%);
-    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    /* input capsules: dark grey, recessed, white text */
+    background: rgba(44, 44, 46, 0.92);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 0.5px solid rgba(255, 255, 255, 0.09);
     box-shadow:
-      0 10px 32px rgba(0, 0, 0, 0.08),
-      inset 0 2px 6px rgba(0, 0, 0, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      inset 0 2px 6px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .glass-dark {

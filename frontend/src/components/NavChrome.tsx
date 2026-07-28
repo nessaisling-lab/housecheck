@@ -83,12 +83,12 @@ export function NavChrome({ onOpenAgent }: { onOpenAgent: () => void }) {
           >
             {({ isActive }) => (
               <>
-                <span style={{ color: isActive ? "var(--hc-ink)" : "var(--hc-ink-3)" }}>
+                <span style={{ color: isActive ? "#3A3A3C" : "rgba(58, 58, 60, 0.5)" }}>
                   {t.icon(isActive)}
                 </span>
                 <span
                   className="text-[11px] font-medium"
-                  style={{ color: isActive ? "var(--hc-ink)" : "var(--hc-ink-3)" }}
+                  style={{ color: isActive ? "#3A3A3C" : "rgba(58, 58, 60, 0.5)" }}
                 >
                   {t.label}
                 </span>
@@ -111,7 +111,7 @@ export function NavChrome({ onOpenAgent }: { onOpenAgent: () => void }) {
         aria-label="Open HouseCheck agent"
         className="glass-orb pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full"
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--hc-ink)" aria-hidden>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#3A3A3C" aria-hidden>
           <path d="M12 2l2.1 7.9L22 12l-7.9 2.1L12 22l-2.1-7.9L2 12l7.9-2.1L12 2z" />
         </svg>
       </button>

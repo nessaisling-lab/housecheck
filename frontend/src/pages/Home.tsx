@@ -60,8 +60,23 @@ export default function Home() {
     : DEFAULT_SUGGESTIONS.map((label) => ({ label, bbl: null as string | null }));
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-14 text-center">
-      <div className="flex w-full flex-1 flex-col items-center justify-center pb-16">
+    <div
+      className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-14 text-center"
+      style={{ background: "rgb(215, 215, 217)" }}
+    >
+      <img
+        src="/city-hero.jpg"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[52dvh] w-full object-cover"
+      />
+      {/* Fade the city into the page canvas so text above stays readable */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[52dvh]"
+        style={{ background: "linear-gradient(to bottom, transparent 44%, rgb(215, 215, 217) 94%)" }}
+      />
+      <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center pb-16">
         <h1 className="text-[24px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
           HouseCheck
         </h1>
@@ -97,9 +112,10 @@ export default function Home() {
 
         <div className="relative mt-8 w-full">
         <div
-          className="glass-field flex h-14 items-center gap-3 rounded-full px-5"
+          className="flex h-14 items-center gap-3 rounded-full px-5"
+          style={{ background: "#3A3A3C" }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--hc-ink-3)" strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" aria-hidden>
             <circle cx="11" cy="11" r="7" />
             <path d="M20 20l-3.5-3.5" />
           </svg>
@@ -107,8 +123,8 @@ export default function Home() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="look up a building"
-            className="w-full bg-transparent text-[17px] outline-none"
-            style={{ color: "var(--hc-ink)" }}
+            className="w-full bg-transparent text-[17px] outline-none placeholder:text-white/40"
+            style={{ color: "#F5F5F7" }}
             aria-label="Look up a building by address"
             enterKeyHint="search"
           />
@@ -154,7 +170,7 @@ export default function Home() {
               key={c.label}
               onClick={() => (c.bbl ? navigate(`/building/${c.bbl}`) : setQ(c.label))}
               className="rounded-full px-4 py-2 text-[14px] font-medium"
-              style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
+              style={{ background: "#3A3A3C", color: "#F5F5F7" }}
             >
               {c.label}
             </button>

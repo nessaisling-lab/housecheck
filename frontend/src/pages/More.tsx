@@ -145,8 +145,8 @@ export default function More() {
               <button
                 key={b.bbl}
                 onClick={() => navigate(`/building/${b.bbl}`)}
-                className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left"
-                style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }}
+                className="flex w-full items-center gap-3 rounded-2xl p-3 text-left"
+                style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
               >
                 <MiniRing score={b.score} size={36} stroke={4.5} />
                 <span className="flex-1 text-[15px] font-medium" style={{ color: "var(--hc-ink)" }}>

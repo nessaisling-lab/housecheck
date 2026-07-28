@@ -1,5 +1,3 @@
-import { gradientScaleColor } from "@/lib/score";
-
 interface SpectrumTrackProps {
   /** marker position 0..1 (null = no marker yet) */
   position: number | null;
@@ -24,9 +22,6 @@ export function SpectrumTrack({
   leftLabel = "Below median",
   rightLabel = "Above median",
 }: SpectrumTrackProps) {
-  const resolvedMarkerColor =
-    markerColor ?? (position != null ? gradientScaleColor(position) : "#717182");
-
   return (
     <div className="w-full">
       <div className="relative">
@@ -51,7 +46,11 @@ export function SpectrumTrack({
           {position != null && (
             <div
               className="hc-anim absolute -top-1.5 -bottom-1.5 w-[4px] rounded-full transition-[left] duration-500"
-              style={{ left: `calc(${position * 100}% - 2px)`, background: resolvedMarkerColor }}
+              style={{
+                left: `calc(${position * 100}% - 2px)`,
+                background: markerColor ?? "#FFFFFF",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+              }}
             />
           )}
         </div>

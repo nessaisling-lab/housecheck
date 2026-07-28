@@ -348,7 +348,7 @@ export default function HealthCard() {
             aria-label={saved ? "Remove from saved" : "Save building"}
             aria-pressed={saved}
             className="glass-nav mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-            style={{ color: saved ? "var(--hc-ink)" : "var(--hc-ink-3)" }}
+            style={{ color: saved ? "#3A3A3C" : "rgba(58, 58, 60, 0.5)" }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
               <path d="M6 3h12v18l-6-4.5L6 21V3z" />
@@ -357,15 +357,17 @@ export default function HealthCard() {
         </header>
 
         {/* Tier 1 — hero */}
-        <div className="flex flex-col items-center pb-6 pt-8">
-          <ScoreRing score={building.score} size={184} stroke={12} hero animate />
+        <div className="flex flex-col items-center pb-6 pt-6">
+          <div style={{ marginBottom: -44 }}>
+            <ScoreRing score={building.score} size={320} stroke={16} hero animate />
+          </div>
           <p
-            className="hc-eyebrow mt-4"
+            className="hc-eyebrow"
             style={{ color: "var(--hc-canvas-ink)", letterSpacing: "0.18em" }}
           >
             {band.label}
           </p>
-          <p className="mt-2 max-w-[280px] text-center text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+          <p className="mt-1.5 max-w-[280px] text-center text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
             Built from public NYC data — a signal, not a legal ruling.
           </p>
         </div>
@@ -455,8 +457,8 @@ export default function HealthCard() {
                 runRentCheck();
               }}
             >
-              <div className="flex h-11 flex-1 items-center rounded-full px-4" style={{ background: "var(--hc-sunken)" }}>
-                <span className="text-[15px]" style={{ color: "var(--hc-ink-3)" }}>$</span>
+              <div className="flex h-11 flex-1 items-center rounded-full px-4" style={{ background: "#E2E2E4" }}>
+                <span className="text-[15px]" style={{ color: "rgba(58,58,60,0.55)" }}>$</span>
                 <input
                   value={rentInput}
                   onChange={(e) => setRentInput(e.target.value)}
@@ -464,14 +466,18 @@ export default function HealthCard() {
                   placeholder="Your monthly rent"
                   aria-label="Your monthly rent"
                   className="w-full bg-transparent px-2 text-[15px] tabular-nums outline-none"
-                  style={{ color: "var(--hc-ink)" }}
+                  style={{ color: "#2C2C2E" }}
                 />
               </div>
               <button
                 type="submit"
                 disabled={!rentInput.replace(/[^0-9]/g, "") || rentBusy}
-                className="h-11 rounded-full px-5 text-[14px] font-semibold text-white disabled:opacity-40"
-                style={{ background: "var(--hc-ink)" }}
+                className="glass-orb h-11 shrink-0 rounded-full px-5 text-[14px] font-semibold disabled:opacity-40"
+                style={{
+                  color: "#2C2C2E",
+                  background:
+                    "linear-gradient(160deg, rgba(255,255,255,0.98), rgba(255,255,255,0.92))",
+                }}
               >
                 {rentBusy ? "…" : "Check"}
               </button>

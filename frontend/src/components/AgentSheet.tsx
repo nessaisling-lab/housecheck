@@ -184,8 +184,8 @@ export function AgentSheet() {
           m.role === "agent" ? (
             <div
               key={i}
-              className="max-w-[88%] rounded-2xl bg-white p-3.5"
-              style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }}
+              className="max-w-[88%] rounded-2xl p-3.5"
+              style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
             >
               <p className="text-[15px] leading-snug" style={{ color: "var(--hc-ink)" }}>
                 {m.text}
@@ -199,8 +199,8 @@ export function AgentSheet() {
           ) : (
             <div
               key={i}
-              className="ml-auto max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[15px] text-white"
-              style={{ background: "var(--hc-ink)" }}
+              className="ml-auto max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[15px]"
+              style={{ background: "#F5F5F7", color: "#2C2C2E" }}
             >
               {m.text}
             </div>
@@ -208,8 +208,8 @@ export function AgentSheet() {
         )}
         {busy && (
           <div
-            className="inline-block rounded-2xl bg-white px-3.5 py-1.5"
-            style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }}
+            className="inline-block rounded-2xl px-3.5 py-1.5"
+            style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
           >
             <Typing />
           </div>
@@ -223,7 +223,7 @@ export function AgentSheet() {
             onClick={() => send(c)}
             disabled={busy}
             className="glass-nav rounded-full px-3.5 py-2 text-[13px] font-medium disabled:opacity-50"
-            style={{ color: "var(--hc-ink)" }}
+            style={{ color: "#3A3A3C" }}
           >
             {c}
           </button>
@@ -259,8 +259,8 @@ export function AgentSheet() {
           type="submit"
           aria-label="Send"
           disabled={!input.trim() || busy}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
-          style={{ background: "var(--hc-ink)" }}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+          style={{ background: "#F5F5F7", color: "#2C2C2E" }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <path d="M12 19V5M5 12l7-7 7 7" />

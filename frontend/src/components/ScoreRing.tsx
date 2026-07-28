@@ -31,12 +31,12 @@ export function ScoreRing({
   const color = scoreCircleColor(score);
 
   if (hero) {
-    const segments = 34;
+    const segments = 40;
     const filledSegments = score == null ? 0 : Math.round(filled * segments);
     const cx = size / 2;
     const cy = size * 0.68;
-    const outerR = size * 0.43;
-    const innerR = outerR - stroke * 1.55;
+    const outerR = size * 0.46;
+    const innerR = outerR - stroke * 2.6;
     const arcStart = 180;
     const arcEnd = 360;
     const gradientId = "hero-score-gradient";
@@ -67,8 +67,8 @@ export function ScoreRing({
                 y1={cy + innerR * Math.sin(angle)}
                 x2={cx + outerR * Math.cos(angle)}
                 y2={cy + outerR * Math.sin(angle)}
-                stroke={isFilled ? `url(#${gradientId})` : "rgba(255,255,255,0.18)"}
-                strokeWidth={Math.max(5, stroke * 0.62)}
+                stroke={isFilled ? `url(#${gradientId})` : "rgba(60,60,67,0.16)"}
+                strokeWidth={Math.max(2.5, stroke * 0.3)}
                 strokeLinecap="round"
                 style={
                   animate
@@ -87,7 +87,7 @@ export function ScoreRing({
         <div className="absolute inset-x-0 top-[42%] flex flex-col items-center">
           <span
             className="font-semibold leading-none"
-            style={{ fontSize: 62, letterSpacing: 0, color: "var(--hc-canvas-ink)" }}
+            style={{ fontSize: size * 0.275, letterSpacing: 0, color: "var(--hc-canvas-ink)" }}
           >
             {score ?? "—"}
           </span>

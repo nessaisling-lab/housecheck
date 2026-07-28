@@ -1,8 +1,122 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
 import { getSummary, sendChat, type ChatTurn } from "@/lib/api";
 import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
+
+// ── Markdown rendering for agent replies (spec: SPEC-agent-readability) ──
+// Emits real headings/lists/strong so replies are scannable AND screen-reader
+// navigable (fixes literal ** and collapsed table pipes). Tables stack into
+// blocks so they never force horizontal scroll on a phone.
+const mdEyebrow: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "var(--hc-ink-3)",
+  margin: "12px 0 4px",
+};
+const mdComponents: Components = {
+  h1: ({ children }) => <div style={mdEyebrow}>{children}</div>,
+  h2: ({ children }) => <div style={mdEyebrow}>{children}</div>,
+  h3: ({ children }) => <div style={mdEyebrow}>{children}</div>,
+  p: ({ children }) => (
+    <p style={{ color: "var(--hc-ink-2)", lineHeight: 1.6, margin: "0 0 10px" }}>{children}</p>
+  ),
+  strong: ({ children }) => (
+    <strong style={{ color: "var(--hc-ink)", fontWeight: 600 }}>{children}</strong>
+  ),
+  em: ({ children }) => <em style={{ color: "var(--hc-ink-2)" }}>{children}</em>,
+  ul: ({ children }) => (
+    <ul style={{ margin: "0 0 10px", paddingLeft: 18, listStyleType: "disc" }}>{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol style={{ margin: "0 0 10px", paddingLeft: 18, listStyleType: "decimal" }}>{children}</ol>
+  ),
+  li: ({ children }) => (
+    <li style={{ color: "var(--hc-ink-2)", lineHeight: 1.55, margin: "2px 0" }}>{children}</li>
+  ),
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: "var(--hc-strong)", textDecoration: "underline", textUnderlineOffset: 2 }}
+    >
+      {children} ↗
+    </a>
+  ),
+  hr: () => <div style={{ height: 1, background: "var(--hc-sunken)", margin: "12px 0" }} />,
+  code: ({ children }) => (
+    <code
+      style={{
+        fontFamily: "ui-monospace, monospace",
+        fontSize: "0.9em",
+        background: "rgba(255,255,255,0.08)",
+        padding: "1px 5px",
+        borderRadius: 4,
+      }}
+    >
+      {children}
+    </code>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote
+      style={{
+        borderLeft: "2px solid var(--hc-sunken)",
+        paddingLeft: 10,
+        margin: "0 0 10px",
+        color: "var(--hc-ink-2)",
+      }}
+    >
+      {children}
+    </blockquote>
+  ),
+  // Task 2 — tables degrade to stacked bordered blocks (never horizontal scroll)
+  table: ({ children }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "4px 0 12px" }}>
+      {children}
+    </div>
+  ),
+  thead: ({ children }) => <>{children}</>,
+  tbody: ({ children }) => <>{children}</>,
+  tr: ({ children }) => (
+    <div style={{ border: "0.5px solid rgba(255,255,255,0.14)", borderRadius: 12, padding: "8px 12px" }}>
+      {children}
+    </div>
+  ),
+  th: ({ children }) => (
+    <div
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        color: "var(--hc-ink-3)",
+        marginBottom: 2,
+      }}
+    >
+      {children}
+    </div>
+  ),
+  td: ({ children }) => (
+    <div style={{ color: "var(--hc-ink-2)", fontSize: 14, lineHeight: 1.5, margin: "2px 0" }}>
+      {children}
+    </div>
+  ),
+};
+
+function MarkdownMessage({ text }: { text: string }) {
+  return (
+    <div className="text-[15px]">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 interface Msg {
   role: "agent" | "user";
@@ -237,9 +351,7 @@ export function AgentSheet() {
               className="max-w-[88%] rounded-2xl p-3.5"
               style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
             >
-              <p className="text-[15px] leading-snug" style={{ color: "var(--hc-ink)" }}>
-                {m.text}
-              </p>
+              <MarkdownMessage text={m.text} />
               {m.source && (
                 <p className="mt-2 text-[11px]" style={{ color: "var(--hc-ink-3)" }}>
                   {m.source}

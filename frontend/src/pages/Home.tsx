@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { CoverageMap } from "@/components/CoverageMap";
+import { COVERAGE_POINTS } from "@/lib/coverage-points";
 import { Sheet } from "@/components/Sheet";
 import { searchAddress } from "@/lib/api";
 import type { SearchResult } from "@/types/building";
@@ -29,11 +30,15 @@ export default function Home() {
         setSearching(true);
         const { data } = await searchAddress(query);
         setSearching(false);
-        const inSet = data.filter((r) => r.in_curated_set);
-        const outSet = data.find((r) => !r.in_curated_set);
-        setResults(inSet.length ? inSet : null);
-        setNotFound(!inSet.length && !outSet);
-        if (!inSet.length && outSet) setCoverage(outSet);
+        // Show every match, in-pilot or not, and let the user choose.
+        //
+        // This used to filter to in-pilot results and open the out-of-coverage
+        // sheet automatically. Because it runs on a 300ms debounce, the sheet
+        // fired mid-typing: "450" geocodes to 450 Broadway, Manhattan, so the
+        // modal interrupted you before you had finished the address. A partial
+        // query is not a decision. The sheet now opens only from pick().
+        setResults(data.length ? data : null);
+        setNotFound(data.length === 0);
       },
       query.length < 3 ? 0 : 300
     );
@@ -117,13 +122,32 @@ export default function Home() {
                 aria-selected="false"
                 onClick={() => pick(r)}
                 className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-[1rem] hover:bg-black/[0.03]"
-                style={{ color: "var(--hc-ink)" }}
+                style={{ color: r.in_curated_set ? "var(--hc-ink)" : "var(--hc-ink-2)" }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hc-ink-3)" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={r.in_curated_set ? "var(--hc-strong)" : "var(--hc-ink-3)"}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden
+                >
                   <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" />
                   <circle cx="12" cy="10" r="2.5" />
                 </svg>
-                {r.label}
+                <span className="flex-1">{r.label}</span>
+                {/* Say which results we actually hold data for, rather than
+                    hiding them and springing a modal on the user. */}
+                {!r.in_curated_set && (
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold"
+                    style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-3)" }}
+                  >
+                    Outside pilot
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -135,6 +159,20 @@ export default function Home() {
           </p>
         )}
         </div>
+
+        {/* Browsing beats guessing. Without this the only way to reach the
+            covered set was to search something outside it and read the modal,
+            or to go hunting in About. */}
+        <button
+          onClick={() => navigate("/more", { state: { openList: true } })}
+          className="mt-5 flex items-center gap-2 rounded-full px-5 py-3 text-[0.9375rem] font-semibold"
+          style={{ background: "var(--hc-ink)", color: "#1C1C1E" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M4 6h16M4 12h16M4 18h10" />
+          </svg>
+          Browse all {COVERAGE_POINTS.length} covered buildings
+        </button>
       </div>
 
       {/* Out-of-coverage sheet (flow 1 edge state) */}
@@ -151,7 +189,7 @@ export default function Home() {
           <button
             onClick={() => {
               setCoverage(null);
-              navigate("/more");
+              navigate("/more", { state: { openList: true } });
             }}
             // Was text-white on --hc-ink. The theme inversion turned --hc-ink
             // near-white (#F5F5F7), so the label vanished into the button.

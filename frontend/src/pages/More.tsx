@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
+import { CoverageMap } from "@/components/CoverageMap";
+import { COVERAGE_POINTS } from "@/lib/coverage-points";
 import { MiniRing } from "@/components/ScoreRing";
 import { Sheet } from "@/components/Sheet";
 import { listBuildings } from "@/lib/api";
@@ -178,10 +180,13 @@ function Methodology() {
 
 export default function More() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Home and the out-of-coverage sheet both deep-link straight to the list.
+  const openListOnArrival = (location.state as { openList?: boolean } | null)?.openList === true;
   const [buildings, setBuildings] = useState<BuildingSummary[]>([]);
   const [source, setSource] = useState<DataSource>("live");
   const [sortDesc, setSortDesc] = useState(false);
-  const [showList, setShowList] = useState(false);
+  const [showList, setShowList] = useState(openListOnArrival);
 
   useEffect(() => {
     listBuildings().then(({ data, source }) => {
@@ -209,6 +214,29 @@ export default function More() {
         </p>
       )}
 
+      <div className="hc-card mt-6 p-5">
+        <h2 className="text-[1.0625rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
+          Covered buildings
+        </h2>
+        <p className="mt-2 text-[0.875rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+          Every address HouseCheck holds a full record for. Outside this area we say so
+          rather than guess.
+        </p>
+        <CoverageMap height={132} caption={null} />
+        <button
+          onClick={() => setShowList(true)}
+          className="mt-4 w-full rounded-full py-3.5 text-[0.9375rem] font-semibold"
+          style={{ background: "var(--hc-ink)", color: "#1C1C1E" }}
+        >
+          {/* The pilot size comes from the shipped dataset, not from whatever
+              the list call returned. If the API is unreachable the list falls
+              back to a 4-building fixture, and "Browse all 4" sitting under a
+              250-point map would misstate our coverage. The demo banner above
+              already says the data is stale; the coverage claim stays true. */}
+          Browse all {COVERAGE_POINTS.length} buildings
+        </button>
+      </div>
+
       <div className="mt-6">
         <Methodology />
       </div>
@@ -216,23 +244,6 @@ export default function More() {
       <PrioritiesCard />
 
       <TextSizeControl />
-
-      <button
-        onClick={() => setShowList(true)}
-        className="hc-card mt-8 flex w-full items-center gap-3 p-4 text-left"
-      >
-        <span className="flex-1">
-          <span className="block text-[1.0625rem] font-medium" style={{ color: "var(--hc-ink)" }}>
-            Covered buildings
-          </span>
-          <span className="mt-0.5 block text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
-            {buildings.length} in the Bed-Stuy pilot
-          </span>
-        </span>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hc-ink-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-      </button>
 
       <div className="hc-card mt-8 p-5">
         <h2 className="text-[1.0625rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
@@ -255,8 +266,13 @@ export default function More() {
               <h2 id="covered-title" className="text-[1.375rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
                 Covered buildings
               </h2>
+              {/* Both numbers, so the line stays true when the API is
+                  unreachable and the list is the 4-building fixture. */}
               <p className="mt-0.5 text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
-                {buildings.length} in the Bed-Stuy pilot · links to public NYC data
+                {buildings.length === COVERAGE_POINTS.length
+                  ? `${buildings.length} in the Bed-Stuy pilot`
+                  : `Showing ${buildings.length} of ${COVERAGE_POINTS.length} in the Bed-Stuy pilot`}{" "}
+                · links to public NYC data
               </p>
             </div>
             <button

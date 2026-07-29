@@ -7,14 +7,73 @@ import { BANDS, scoreCircleColor, type Band } from "@/lib/score";
 import {
   applyTextSize,
   store,
+  useOnboarding,
   useTextSize,
   TEXT_SIZE_LABEL,
   TEXT_SCALE,
+  type Priority,
   type TextSize,
 } from "@/lib/store";
 import type { BuildingSummary, DataSource } from "@/types/building";
 
 const SIZES = Object.keys(TEXT_SCALE) as TextSize[];
+
+const PRIORITY_LABEL: Record<Priority, string> = {
+  rent: "Rent fairness",
+  condition: "Building condition",
+  legal: "Legal protection",
+  access: "Accessibility",
+  neighborhood: "Neighborhood",
+};
+
+/**
+ * Current priorities, and a way back into the picker.
+ *
+ * Onboarding was a one-shot: once answered or skipped it never returned, so
+ * there was no way to change your mind, and no way to replay the intro before
+ * a demo without clearing site data in devtools. Reset puts the sheet back up
+ * immediately — App renders it whenever onboarding is not done.
+ */
+function PrioritiesCard() {
+  const { priorities, skipped } = useOnboarding();
+
+  return (
+    <div className="hc-card mt-8 p-5">
+      <h2 className="text-[1.0625rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        What matters to you
+      </h2>
+      <p className="mt-2 text-[0.875rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+        These sections move to the top of every Building Health Card. Nothing is ever hidden.
+      </p>
+
+      {priorities.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {priorities.map((p) => (
+            <span
+              key={p}
+              className="rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold"
+              style={{ background: "var(--hc-ink)", color: "#1C1C1E" }}
+            >
+              {PRIORITY_LABEL[p]}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-[0.875rem]" style={{ color: "var(--hc-ink-3)" }}>
+          {skipped ? "Skipped — every section is shown in its default order." : "None picked yet."}
+        </p>
+      )}
+
+      <button
+        onClick={() => store.resetOnboarding()}
+        className="mt-5 w-full rounded-full py-3.5 text-[0.9375rem] font-semibold"
+        style={{ background: "var(--hc-ink)", color: "#1C1C1E" }}
+      >
+        {priorities.length > 0 ? "Change priorities" : "Choose priorities"}
+      </button>
+    </div>
+  );
+}
 
 /**
  * Reader text size (WCAG 2.2 AA 1.4.4).
@@ -153,6 +212,8 @@ export default function More() {
       <div className="mt-6">
         <Methodology />
       </div>
+
+      <PrioritiesCard />
 
       <TextSizeControl />
 

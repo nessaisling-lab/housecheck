@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
+import { CoverageMap } from "@/components/CoverageMap";
 import { Sheet } from "@/components/Sheet";
 import { searchAddress } from "@/lib/api";
 import type { SearchResult } from "@/types/building";
@@ -146,32 +147,16 @@ export default function Home() {
             HouseCheck currently covers ~250 buildings in Bedford-Stuyvesant for our pilot.
             {coverage?.label ? ` “${coverage.label}” is outside that area.` : ""}
           </p>
-          <div
-            className="relative mt-5 h-32 overflow-hidden rounded-2xl"
-            style={{ background: "var(--hc-sunken)" }}
-            aria-hidden
-          >
-            {[
-              [18, 40], [32, 66], [46, 30], [58, 58], [70, 36], [82, 62],
-              [26, 78], [64, 82], [88, 30], [40, 50],
-            ].map(([x, y], i) => (
-              <span
-                key={i}
-                className="absolute h-2 w-2 rounded-full"
-                style={{ left: `${x}%`, top: `${y}%`, background: "rgba(60,60,67,0.35)" }}
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-center text-[0.75rem]" style={{ color: "var(--hc-ink-3)" }}>
-            Coverage: Bed-Stuy pilot area
-          </p>
+          <CoverageMap />
           <button
             onClick={() => {
               setCoverage(null);
               navigate("/more");
             }}
-            className="mt-5 w-full rounded-full py-4 text-[1rem] font-semibold text-white"
-            style={{ background: "var(--hc-ink)" }}
+            // Was text-white on --hc-ink. The theme inversion turned --hc-ink
+            // near-white (#F5F5F7), so the label vanished into the button.
+            className="mt-5 w-full rounded-full py-4 text-[1rem] font-semibold"
+            style={{ background: "var(--hc-ink)", color: "#1C1C1E" }}
           >
             Explore covered buildings
           </button>

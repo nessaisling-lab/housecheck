@@ -26,6 +26,16 @@
     --ring: 240 5.9% 10%;
     --radius: 0.625rem;
 
+    /* iOS safe areas. index.html sets viewport-fit=cover, which extends the
+       layout viewport under the notch and the home indicator. Without these
+       insets everything anchored to the bottom — the nav bar, the agent orb,
+       a sheet's primary button — renders inside the home-indicator strip,
+       where taps are swallowed by system chrome and the app reads as
+       "the touchscreen doesn't work". The 0px fallback keeps desktop
+       unchanged, since env() is undefined there. */
+    --hc-safe-top: env(safe-area-inset-top, 0px);
+    --hc-safe-bottom: env(safe-area-inset-bottom, 0px);
+
     /* HouseCheck design tokens — inverted theme: light grey page, dark grey
        cards, white text on cards. Score colours brightened to read on dark. */
     --hc-canvas: rgb(215, 215, 217);
@@ -197,28 +207,38 @@
   }
 
   .hc-eyebrow {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--hc-ink-3);
   }
   .hc-row-label {
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--hc-ink-3);
   }
 
+  /* No-backdrop-filter fallback.
+     These two blocks predate the theme inversion, when every glass surface was
+     light with dark text and one white fallback was correct for all of them.
+     Since the inversion, sheets, cards and fields are DARK with near-white
+     text, and only the nav capsule and the agent orb are still light. Painting
+     all six white left white text on white — invisible for anyone with iOS
+     Reduce Transparency on, or on a browser without backdrop-filter. Keep the
+     two groups apart. */
   @supports not (backdrop-filter: blur(1px)) {
     .glass-nav,
+    .glass-orb {
+      background: rgba(255, 255, 255, 0.94);
+    }
     .glass-sheet,
-    .glass-orb,
     .glass-card,
     .hc-card,
     .glass-field {
-      background: rgba(255, 255, 255, 0.94);
+      background: var(--hc-card);
     }
     .glass-dark {
       background: rgba(28, 28, 30, 0.94);
@@ -228,12 +248,16 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .glass-nav,
+  .glass-orb {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   .glass-sheet,
-  .glass-orb,
   .glass-card,
   .hc-card,
   .glass-field {
-    background: rgba(255, 255, 255, 0.97);
+    background: var(--hc-card);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

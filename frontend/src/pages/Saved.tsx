@@ -106,7 +106,8 @@ export default function Saved() {
       {tray.length >= 2 && (
         <button
           onClick={() => navigate("/compare")}
-          className="hc-anim glass-dark fixed inset-x-0 bottom-24 z-30 mx-auto w-[calc(100%-2.5rem)] max-w-md rounded-full py-4 text-center text-[1rem] font-semibold text-white"
+          className="hc-anim glass-dark fixed inset-x-0 z-30 mx-auto w-[calc(100%-2.5rem)] max-w-md rounded-full py-4 text-center text-[1rem] font-semibold text-white"
+          style={{ bottom: "calc(6rem + var(--hc-safe-bottom))" }}
         >
           Compare {tray.length} buildings →
         </button>

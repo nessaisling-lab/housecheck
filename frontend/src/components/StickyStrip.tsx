@@ -45,7 +45,10 @@ export function StickyStrip({ watchRef, subScores, onJump }: StickyStripProps) {
   return (
     <div
       className="hc-anim pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center transition-all duration-300"
+      // Mirrors the bottom fix: viewport-fit=cover extends the layout under
+      // the notch, so a top-anchored strip renders behind the status bar.
       style={{
+        paddingTop: "var(--hc-safe-top)",
         opacity: visible ? 1 : 0,
         transform: visible ? "translateY(0)" : "translateY(-110%)",
       }}

@@ -91,7 +91,13 @@ export function Sheet({ open, onClose, children, className = "", labelledBy }: S
       <div
         ref={panelRef}
         className={`glass-sheet absolute inset-x-0 bottom-0 mx-auto flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl ${className}`}
-        style={{ animation: "hc-sheet-up 0.32s cubic-bezier(0.22,1,0.36,1)" }}
+        // A sheet is flush to the bottom edge, so its last control — usually
+        // the primary action — landed under the home indicator and could not
+        // be tapped at all on an iPhone.
+        style={{
+          paddingBottom: "var(--hc-safe-bottom)",
+          animation: "hc-sheet-up 0.32s cubic-bezier(0.22,1,0.36,1)",
+        }}
       >
         <button
           className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full"

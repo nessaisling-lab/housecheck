@@ -126,6 +126,57 @@ interface Msg {
 
 const CHIPS = ["Explain this score", "Is it rent stabilized?", "Negotiate the rent?"];
 
+/**
+ * Chips shown before a building is picked.
+ *
+ * With no building there is nothing to ground a model call in, so /agent/chat
+ * is not called at all — these are answered from constants in this file and
+ * the shipped dataset. Previously this state offered the building chips and a
+ * single "search a building first" reply, so the agent appeared broken to
+ * anyone who opened it from the home screen.
+ */
+const GENERAL_CHIPS = [
+  "What does HouseCheck check?",
+  "Which buildings are covered?",
+  "What can't it tell me?",
+];
+
+const GENERAL_ANSWERS: Record<string, Msg> = {
+  [GENERAL_CHIPS[0]]: {
+    role: "agent",
+    text: `Four things, weighted equally into one 0–100 score:
+
+- **Condition** — open HPD violations, weighted by class, plus 311 complaint history
+- **Legal** — DHCR rent-stabilization status and Good Cause eviction coverage
+- **Neighborhood** — asking rent against the Census tract median
+- **Accessibility** — elevator on record, and distance to an ADA subway station
+
+A pillar we can't verify is marked *unverified*. It is never scored as a zero — that would punish a building for a gap in the city's own records.`,
+    source: "Source: HouseCheck methodology · equal pillar weights",
+  },
+  [GENERAL_CHIPS[1]]: {
+    role: "agent",
+    text: `**250 buildings in Bedford-Stuyvesant**, Brooklyn — the pilot area, on a 2026 data snapshot.
+
+Type any address into the search box. If it's outside the pilot you'll get a map of what we do cover rather than a wrong answer. **About → Covered buildings** lists all 250, sorted by score.
+
+The pipeline is city-wide; the pilot is scoped to Bed-Stuy, not limited to it.`,
+    source: "Source: HouseCheck coverage · snapshot 2026",
+  },
+  [GENERAL_CHIPS[2]]: {
+    role: "agent",
+    text: `Worth being straight about:
+
+- **It is not legal advice.** It can explain what a statute says and cite it. It can't tell you what to do about your situation, and it won't predict how a case would go.
+- **It is not an inspection.** Everything here is the paper record. A building with a clean record can still be badly run.
+- **It is a snapshot.** Filings lag reality, and older records predate the city's own geocoding.
+- **Absence isn't innocence.** No violations on file can mean a well-kept building, or one nobody has reported.
+
+Every number on a card links to the public source it came from, so you can check the original.`,
+    source: "Source: HouseCheck methodology · scope and limits",
+  },
+};
+
 /** Deterministic, data-derived answers — every claim traces to the card. */
 function answerChip(
   chip: string,
@@ -239,7 +290,9 @@ export function AgentSheet() {
         setMsgs([
           {
             role: "agent",
-            text: "Search a building first and I'll answer questions with its data attached. I can still explain how scores work meanwhile.",
+            text: `Search an address and I'll answer with that building's own record attached.
+
+Right now I can tell you **what HouseCheck checks**, **which buildings are covered**, and **what it can't tell you**.`,
           },
         ]),
       0
@@ -260,9 +313,19 @@ export function AgentSheet() {
    */
   const offlineAnswer = (t: string): Msg => {
     if (!building) {
+      // Exact chip match first, then a keyword nudge so a typed question lands
+      // somewhere useful instead of on the same generic paragraph every time.
+      if (GENERAL_ANSWERS[t]) return GENERAL_ANSWERS[t];
+      const q = t.toLowerCase();
+      if (/cover|area|which building|bed.?stuy|neighborhood|where/.test(q))
+        return GENERAL_ANSWERS[GENERAL_CHIPS[1]];
+      if (/can'?t|cannot|limit|legal advice|lawyer|accurate|trust|wrong/.test(q))
+        return GENERAL_ANSWERS[GENERAL_CHIPS[2]];
+      if (/score|work|calculat|pillar|rating|check/.test(q))
+        return GENERAL_ANSWERS[GENERAL_CHIPS[0]];
       return {
         role: "agent",
-        text: "Each pillar — condition, legal, neighborhood, accessibility — counts equally toward the 0–100 score. Every number links to its public NYC source; unverified means we couldn't confirm it, not that something is wrong.",
+        text: "Search an address and I'll answer with that building's own record attached. Until then I can explain **what HouseCheck checks**, **which buildings are covered**, and **what it can't tell you** — tap one below.",
         source: "Source: HouseCheck methodology",
       };
     }
@@ -405,7 +468,7 @@ export function AgentSheet() {
       </div>
 
       <div className="flex flex-wrap gap-2 px-4 pb-2">
-        {CHIPS.map((c) => (
+        {(building ? CHIPS : GENERAL_CHIPS).map((c) => (
           <button
             key={c}
             onClick={() => send(c)}

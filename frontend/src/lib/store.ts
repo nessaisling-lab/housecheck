@@ -169,6 +169,19 @@ export const store = {
       write(KEYS.priorityCounts, counts);
     }
   },
+  /**
+   * Put the first-launch picker back. Used by "Change priorities" in About,
+   * and to replay the intro before a demo — onboarding was previously a
+   * one-shot with no way back short of clearing site data in devtools.
+   *
+   * Deliberately leaves priorityCounts alone: those are an aggregate of what
+   * people picked, not current state, and resetting the picker twice should
+   * not look like two more users.
+   */
+  resetOnboarding() {
+    write(KEYS.onboarding, ONBOARDING_EMPTY);
+  },
+
   /** Local aggregate of priority picks (this device only). */
   priorityCounts(): Partial<Record<Priority, number>> {
     return read<Partial<Record<Priority, number>>>(KEYS.priorityCounts, {});

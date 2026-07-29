@@ -70,8 +70,13 @@ export function NavChrome({ onOpenAgent }: { onOpenAgent: () => void }) {
   return (
     <nav
       aria-label="Primary"
-      className="hc-anim pointer-events-none fixed inset-x-0 bottom-4 z-40 flex items-center justify-center gap-2.5 px-4 transition-transform duration-300"
-      style={{ transform: hidden ? "translateY(120%)" : "translateY(0)" }}
+      className="hc-anim pointer-events-none fixed inset-x-0 z-40 flex items-center justify-center gap-2.5 px-4 transition-transform duration-300"
+      // bottom-4 put the nav and the orb inside the iPhone home-indicator
+      // strip, where the system eats the tap. Lift by the safe-area inset.
+      style={{
+        bottom: "calc(1rem + var(--hc-safe-bottom))",
+        transform: hidden ? "translateY(150%)" : "translateY(0)",
+      }}
     >
       <div className="glass-nav pointer-events-auto flex h-16 items-stretch rounded-full px-2">
         {tabs.map((t) => (
@@ -94,8 +99,10 @@ export function NavChrome({ onOpenAgent }: { onOpenAgent: () => void }) {
                 </span>
                 {t.to === "/compare" && tray.length > 0 && (
                   <span
-                    className="absolute right-2.5 top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-semibold text-white"
-                    style={{ background: "var(--hc-ink)" }}
+                    // --hc-ink is near-white since the theme inversion, so
+                    // text-white on it was invisible.
+                    className="absolute right-2.5 top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-semibold"
+                    style={{ background: "var(--hc-ink)", color: "#1C1C1E" }}
                   >
                     {tray.length}
                   </span>

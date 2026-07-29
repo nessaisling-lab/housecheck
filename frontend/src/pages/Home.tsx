@@ -104,6 +104,13 @@ export default function Home() {
             style={{ color: "#F5F5F7" }}
             aria-label="Look up a building by address"
             enterKeyHint="search"
+            // Type the address, press Enter, you are in the building. Without
+            // this the only way through was to notice the dropdown and tap it.
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !results?.length) return;
+              e.preventDefault();
+              pick(results[0]);
+            }}
           />
           {searching && (
             <span

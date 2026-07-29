@@ -510,6 +510,91 @@ fn geosearch_bbl(props: &serde_json::Value) -> Option<String> {
 /// `GET /search?address=<text>` — live-geocode free-text via NYC GeoSearch, return the top
 /// match's BBL, label, and whether it's in our curated DB. 404 when GeoSearch finds nothing;
 /// 502 when the upstream call/parse fails.
+/// Canonical form for comparing a typed address to a stored one.
+///
+/// Uppercases, drops punctuation, collapses runs of whitespace, and expands the
+/// street-type and compass abbreviations people actually type, so "464 Madison
+/// St", "464 madison street" and "464 MADISON STREET" all reduce to one string.
+fn normalize_address(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                ' '
+            }
+        })
+        .collect();
+    cleaned
+        .split_whitespace()
+        .map(|w| match w {
+            "ST" | "STR" => "STREET",
+            "AVE" | "AV" | "AVEN" => "AVENUE",
+            "PL" => "PLACE",
+            "RD" => "ROAD",
+            "BLVD" | "BLV" => "BOULEVARD",
+            "DR" => "DRIVE",
+            "CT" => "COURT",
+            "LN" => "LANE",
+            "PKWY" | "PKY" => "PARKWAY",
+            "TER" | "TERR" => "TERRACE",
+            "SQ" => "SQUARE",
+            "HWY" => "HIGHWAY",
+            "N" => "NORTH",
+            "S" => "SOUTH",
+            "E" => "EAST",
+            "W" => "WEST",
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Buildings we hold whose address matches `query`, best match first.
+///
+/// Ranked exact > prefix > substring, so typing a full address lands on that
+/// building rather than on whichever of its neighbours sorts first.
+fn search_curated(
+    conn: &rusqlite::Connection,
+    query: &str,
+    limit: usize,
+) -> anyhow::Result<Vec<SearchResult>> {
+    let needle = normalize_address(query);
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut scored: Vec<(u8, String, SearchResult)> = get_all_buildings(conn)?
+        .into_iter()
+        .filter_map(|b| {
+            let hay = normalize_address(&b.address);
+            let rank = if hay == needle {
+                0
+            } else if hay.starts_with(&needle) {
+                1
+            } else if hay.contains(&needle) {
+                2
+            } else {
+                return None;
+            };
+            Some((
+                rank,
+                hay,
+                SearchResult {
+                    bbl: b.bbl,
+                    label: b.address,
+                    in_curated_set: true,
+                },
+            ))
+        })
+        .collect();
+    scored.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    Ok(scored.into_iter().take(limit).map(|(_, _, r)| r).collect())
+}
+
+/// Maximum suggestions returned for a curated-set match.
+const SEARCH_LIMIT: usize = 8;
+
 async fn search_handler(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
@@ -519,6 +604,28 @@ async fn search_handler(
         return (StatusCode::BAD_REQUEST, "address query param required").into_response();
     }
 
+    // Our own buildings first.
+    //
+    // This used to geocode before checking the database, which handed the
+    // upstream veto over whether a building we hold exists. NYC GeoSearch is
+    // not deterministic: the same query intermittently 502s, and intermittently
+    // resolves to a different building on the same street — so "464 Madison
+    // Street", which IS in the pilot, would sometimes report as out of
+    // coverage. Answering from our own rows removes the network from the path
+    // that matters, and is exact rather than fuzzy.
+    let local = {
+        let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+        match search_curated(&conn, text, SEARCH_LIMIT) {
+            Ok(v) => v,
+            Err(e) => return internal_error("database query failed", e),
+        }
+    };
+    if !local.is_empty() {
+        return (StatusCode::OK, Json(local)).into_response();
+    }
+
+    // Nothing of ours matches. Ask the geocoder whether it is a real address at
+    // all, so the client can say "outside the pilot" instead of "not found".
     let resp = match state
         .http
         .get("https://geosearch.planninglabs.nyc/v2/search")
@@ -557,7 +664,9 @@ async fn search_handler(
         .unwrap_or("")
         .to_string();
 
-    // Membership check against our DB. Locked AFTER the awaits — the guard never crosses one.
+    // The geocoder can resolve to a BBL we do hold even when the text did not
+    // match any stored address, so this membership check stays.
+    // Locked AFTER the awaits — the guard never crosses one.
     let in_curated_set = {
         let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
         match get_building(&conn, &bbl) {
@@ -566,13 +675,15 @@ async fn search_handler(
         }
     };
 
+    // An array here too, so the response shape does not depend on which path
+    // answered. Clients get a list of candidates either way.
     (
         StatusCode::OK,
-        Json(SearchResult {
+        Json(vec![SearchResult {
             bbl,
             label,
             in_curated_set,
-        }),
+        }]),
     )
         .into_response()
 }
@@ -1402,6 +1513,26 @@ async fn dispatch_tool(
             if q.is_empty() {
                 return (serde_json::json!({ "error": "address required" }), None);
             }
+            // Same order as /search: our own rows before the network. Otherwise
+            // the agent can be told a building it holds data for does not
+            // exist, purely because the geocoder had a bad second.
+            let local = {
+                let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                search_curated(&conn, &q, 3).unwrap_or_default()
+            };
+            if let Some(hit) = local.first() {
+                return (
+                    serde_json::json!({
+                        "bbl": hit.bbl,
+                        "label": hit.label,
+                        "in_curated_set": true,
+                        "other_matches": local.iter().skip(1)
+                            .map(|r| serde_json::json!({ "bbl": r.bbl, "label": r.label }))
+                            .collect::<Vec<_>>(),
+                    }),
+                    Some("HouseCheck curated set".to_string()),
+                );
+            }
             match geosearch_lookup(state, &q).await {
                 Some((bbl, label)) => {
                     let in_set = {
@@ -2096,6 +2227,74 @@ mod tests {
         // Whitespace-only address trims to empty → 400 before any upstream call.
         let res = server.get("/search?address=%20%20").await;
         res.assert_status_bad_request();
+    }
+
+    #[test]
+    fn normalize_address_folds_case_punctuation_and_abbreviations() {
+        // The three spellings a person actually types for one building.
+        let canon = normalize_address("464 MADISON STREET");
+        assert_eq!(normalize_address("464 Madison Street"), canon);
+        assert_eq!(normalize_address("464 madison st"), canon);
+        assert_eq!(normalize_address("  464   Madison St.  "), canon);
+        // Compass and other street types.
+        assert_eq!(normalize_address("12 E 5th Ave"), "12 EAST 5TH AVENUE");
+        assert_eq!(normalize_address("9 Oak Blvd"), "9 OAK BOULEVARD");
+        // Distinct buildings must not collapse together.
+        assert_ne!(
+            normalize_address("464 Madison St"),
+            normalize_address("829 Madison St")
+        );
+    }
+
+    #[tokio::test]
+    async fn search_finds_a_curated_building_without_geocoding() {
+        // The regression a teammate hit: typing the full address of a building
+        // we hold reported it as outside coverage, because the flaky geocoder
+        // ran before the membership check. This test has no network at all —
+        // if it passes, the answer came from our own rows.
+        let server = test_server();
+        let res = server.get("/search?address=1%20Fixture%20Ave").await;
+        res.assert_status_ok();
+        let body: serde_json::Value = res.json();
+        let hits = body.as_array().expect("array of results");
+        assert_eq!(hits.len(), 1, "one fixture matches that number");
+        assert_eq!(hits[0]["bbl"], "3000010001");
+        assert_eq!(hits[0]["in_curated_set"], true);
+    }
+
+    #[tokio::test]
+    async fn search_matches_an_abbreviated_spelling() {
+        // Stored as "1 Fixture Ave"; typed the long way round.
+        let server = test_server();
+        let res = server.get("/search?address=1%20fixture%20avenue").await;
+        res.assert_status_ok();
+        let body: serde_json::Value = res.json();
+        assert_eq!(body[0]["bbl"], "3000010001");
+        assert_eq!(body[0]["in_curated_set"], true);
+    }
+
+    #[tokio::test]
+    async fn search_returns_every_curated_match_for_a_partial_street() {
+        // A street name alone should suggest, not resolve to one arbitrary hit.
+        let server = test_server();
+        let res = server.get("/search?address=Fixture%20Ave").await;
+        res.assert_status_ok();
+        let body: serde_json::Value = res.json();
+        let hits = body.as_array().expect("array of results");
+        assert_eq!(hits.len(), 2, "both fixtures sit on Fixture Ave");
+        assert!(hits.iter().all(|h| h["in_curated_set"] == true));
+    }
+
+    #[test]
+    fn search_curated_ranks_an_exact_match_above_a_substring() {
+        let state = AppState::in_memory_fixture().unwrap();
+        let conn = state.conn.lock().unwrap();
+        let hits = search_curated(&conn, "2 Fixture Ave", 8).unwrap();
+        assert_eq!(
+            hits.first().map(|h| h.bbl.as_str()),
+            Some("3000020002"),
+            "the building whose address matches exactly comes first"
+        );
     }
 
     #[tokio::test]

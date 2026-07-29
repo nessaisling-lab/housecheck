@@ -214,32 +214,50 @@ Field notes:
 
 ## `GET /search?address=<text>`
 
-Live-geocode free-text via NYC GeoSearch and return the top match's BBL, so the frontend can jump
-straight to a building and tell whether it's in the curated set.
+Resolve free text to buildings, so the frontend can jump straight to one and tell whether it is in
+the curated set.
 
-- **Query param:** `address` — free-text address (required, non-blank).
-- **Success:** `200 OK` with the object below.
-- **Errors:** `400 Bad Request` if `address` is missing/blank; `404 Not Found` if GeoSearch has no
-  match (or the match has no BBL); `502 Bad Gateway` if the GeoSearch upstream fails or is
-  unparseable.
+**Two passes, in this order:**
+
+1. **Our own rows.** The text is normalised (case, punctuation, and street-type/compass
+   abbreviations — `464 Madison St` ≡ `464 MADISON STREET`) and matched against every stored
+   address. Matches rank exact → prefix → substring, capped at 8. No network involved.
+2. **NYC GeoSearch**, only when pass 1 finds nothing — to distinguish "a real address outside the
+   pilot" from "not an address".
+
+The order matters. Geocoding first meant a flaky upstream could veto a building we hold: NYC
+GeoSearch is not deterministic, and the same query intermittently returns `502` or resolves to a
+different building on the same street, so an address inside the pilot would sometimes report as out
+of coverage.
+
+- **Query param:** `address` — free text (required, non-blank).
+- **Success:** `200 OK` with a **JSON array** of matches, best first. Always an array, whichever
+  pass answered.
+- **Errors:** `400 Bad Request` if `address` is missing/blank. If pass 1 finds nothing and GeoSearch
+  also fails: `404 Not Found` (no match, or no BBL on the match) or `502 Bad Gateway` (upstream
+  unreachable/unparseable). A curated match never reaches these.
 
 ```bash
-curl -s 'http://127.0.0.1:8787/search?address=123%20Macon%20Street%20Brooklyn'
+curl -s 'http://127.0.0.1:8787/search?address=464%20Madison%20St'
 ```
 ```json
-{
-  "bbl": "3018420001",
-  "label": "123 Macon Street, Brooklyn, NY, USA",
-  "in_curated_set": true
-}
+[
+  {
+    "bbl": "3018260029",
+    "label": "464 MADISON STREET",
+    "in_curated_set": true
+  }
+]
 ```
 
 Field notes:
 
-- `bbl` — canonical 10-digit BBL from the GeoSearch feature (handles both
-  `properties.addendum.pad.bbl` and `properties.pad_bbl`, string or number).
-- `label` — GeoSearch's human-readable label for the match.
+- `bbl` — the stored BBL for a curated match; otherwise the canonical 10-digit BBL from the
+  GeoSearch feature (handles both `properties.addendum.pad.bbl` and `properties.pad_bbl`, string or
+  number).
+- `label` — our stored address for a curated match; GeoSearch's label otherwise.
 - `in_curated_set` — `true` if that BBL exists in our DB (so `/building/{bbl}` will resolve).
+  Always `true` for pass-1 results.
 
 ---
 

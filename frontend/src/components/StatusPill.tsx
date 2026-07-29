@@ -6,7 +6,7 @@ interface StatusPillProps {
 }
 
 /** Capsule status chip — semantic color at 15% bg, full-strength text (Whoop pills). */
-export function StatusPill({ text, color = "#8E8E93", trend = null }: StatusPillProps) {
+export function StatusPill({ text, color = "#6C6C70", trend = null }: StatusPillProps) {
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium whitespace-nowrap"

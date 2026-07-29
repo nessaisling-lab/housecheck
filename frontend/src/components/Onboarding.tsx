@@ -124,8 +124,8 @@ export function Onboarding() {
                   className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold"
                   style={
                     active
-                      ? { background: "var(--hc-ink)", color: "#fff" }
-                      : { border: "1.5px solid rgba(60,60,67,0.25)", color: "transparent" }
+                      ? { background: "#F5F5F7", color: "#2C2C2E" }
+                      : { border: "1.5px solid rgba(255,255,255,0.3)", color: "transparent" }
                   }
                   aria-hidden
                 >

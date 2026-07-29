@@ -1,8 +1,122 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
 import { getSummary, sendChat, type ChatTurn } from "@/lib/api";
 import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
+
+// ── Markdown rendering for agent replies (spec: SPEC-agent-readability) ──
+// Emits real headings/lists/strong so replies are scannable AND screen-reader
+// navigable (fixes literal ** and collapsed table pipes). Tables stack into
+// blocks so they never force horizontal scroll on a phone.
+const mdEyebrow: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "var(--hc-ink-3)",
+  margin: "12px 0 4px",
+};
+const mdComponents: Components = {
+  h1: ({ children }) => <div style={mdEyebrow}>{children}</div>,
+  h2: ({ children }) => <div style={mdEyebrow}>{children}</div>,
+  h3: ({ children }) => <div style={mdEyebrow}>{children}</div>,
+  p: ({ children }) => (
+    <p style={{ color: "var(--hc-ink-2)", lineHeight: 1.6, margin: "0 0 10px" }}>{children}</p>
+  ),
+  strong: ({ children }) => (
+    <strong style={{ color: "var(--hc-ink)", fontWeight: 600 }}>{children}</strong>
+  ),
+  em: ({ children }) => <em style={{ color: "var(--hc-ink-2)" }}>{children}</em>,
+  ul: ({ children }) => (
+    <ul style={{ margin: "0 0 10px", paddingLeft: 18, listStyleType: "disc" }}>{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol style={{ margin: "0 0 10px", paddingLeft: 18, listStyleType: "decimal" }}>{children}</ol>
+  ),
+  li: ({ children }) => (
+    <li style={{ color: "var(--hc-ink-2)", lineHeight: 1.55, margin: "2px 0" }}>{children}</li>
+  ),
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: "var(--hc-strong)", textDecoration: "underline", textUnderlineOffset: 2 }}
+    >
+      {children} ↗
+    </a>
+  ),
+  hr: () => <div style={{ height: 1, background: "var(--hc-sunken)", margin: "12px 0" }} />,
+  code: ({ children }) => (
+    <code
+      style={{
+        fontFamily: "ui-monospace, monospace",
+        fontSize: "0.9em",
+        background: "rgba(255,255,255,0.08)",
+        padding: "1px 5px",
+        borderRadius: 4,
+      }}
+    >
+      {children}
+    </code>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote
+      style={{
+        borderLeft: "2px solid var(--hc-sunken)",
+        paddingLeft: 10,
+        margin: "0 0 10px",
+        color: "var(--hc-ink-2)",
+      }}
+    >
+      {children}
+    </blockquote>
+  ),
+  // Task 2 — tables degrade to stacked bordered blocks (never horizontal scroll)
+  table: ({ children }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "4px 0 12px" }}>
+      {children}
+    </div>
+  ),
+  thead: ({ children }) => <>{children}</>,
+  tbody: ({ children }) => <>{children}</>,
+  tr: ({ children }) => (
+    <div style={{ border: "0.5px solid rgba(255,255,255,0.14)", borderRadius: 12, padding: "8px 12px" }}>
+      {children}
+    </div>
+  ),
+  th: ({ children }) => (
+    <div
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        color: "var(--hc-ink-3)",
+        marginBottom: 2,
+      }}
+    >
+      {children}
+    </div>
+  ),
+  td: ({ children }) => (
+    <div style={{ color: "var(--hc-ink-2)", fontSize: 14, lineHeight: 1.5, margin: "2px 0" }}>
+      {children}
+    </div>
+  ),
+};
+
+function MarkdownMessage({ text }: { text: string }) {
+  return (
+    <div className="text-[15px]">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 interface Msg {
   role: "agent" | "user";
@@ -234,12 +348,10 @@ export function AgentSheet() {
           m.role === "agent" ? (
             <div
               key={i}
-              className="max-w-[88%] rounded-2xl bg-white p-3.5"
-              style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }}
+              className="max-w-[88%] rounded-2xl p-3.5"
+              style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
             >
-              <p className="text-[15px] leading-snug" style={{ color: "var(--hc-ink)" }}>
-                {m.text}
-              </p>
+              <MarkdownMessage text={m.text} />
               {m.source && (
                 <p className="mt-2 text-[11px]" style={{ color: "var(--hc-ink-3)" }}>
                   {m.source}
@@ -249,8 +361,8 @@ export function AgentSheet() {
           ) : (
             <div
               key={i}
-              className="ml-auto max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[15px] text-white"
-              style={{ background: "var(--hc-ink)" }}
+              className="ml-auto max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[15px]"
+              style={{ background: "#F5F5F7", color: "#2C2C2E" }}
             >
               {m.text}
             </div>
@@ -258,8 +370,8 @@ export function AgentSheet() {
         )}
         {busy && (
           <div
-            className="inline-block rounded-2xl bg-white px-3.5 py-1.5"
-            style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }}
+            className="inline-block rounded-2xl px-3.5 py-1.5"
+            style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
           >
             <Typing />
           </div>
@@ -273,7 +385,7 @@ export function AgentSheet() {
             onClick={() => send(c)}
             disabled={busy}
             className="glass-nav rounded-full px-3.5 py-2 text-[13px] font-medium disabled:opacity-50"
-            style={{ color: "var(--hc-ink)" }}
+            style={{ color: "#3A3A3C" }}
           >
             {c}
           </button>
@@ -302,8 +414,8 @@ export function AgentSheet() {
           type="submit"
           aria-label="Send"
           disabled={!input.trim() || busy}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
-          style={{ background: "var(--hc-ink)" }}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+          style={{ background: "#F5F5F7", color: "#2C2C2E" }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <path d="M12 19V5M5 12l7-7 7 7" />

@@ -1,5 +1,3 @@
-import { gradientScaleColor } from "@/lib/score";
-
 interface SpectrumTrackProps {
   /** marker position 0..1 (null = no marker yet) */
   position: number | null;
@@ -24,9 +22,6 @@ export function SpectrumTrack({
   leftLabel = "Below median",
   rightLabel = "Above median",
 }: SpectrumTrackProps) {
-  const resolvedMarkerColor =
-    markerColor ?? (position != null ? gradientScaleColor(position) : "#717182");
-
   return (
     <div className="w-full">
       <div className="relative">
@@ -43,7 +38,7 @@ export function SpectrumTrack({
               className="absolute -top-1 -bottom-1 w-px"
               style={{
                 left: `calc(${reference * 100}% )`,
-                background: "rgba(47, 109, 124, 0.35)",
+                background: "rgba(28, 28, 30, 0.35)",
               }}
               title={referenceLabel}
             />
@@ -51,12 +46,16 @@ export function SpectrumTrack({
           {position != null && (
             <div
               className="hc-anim absolute -top-1.5 -bottom-1.5 w-[4px] rounded-full transition-[left] duration-500"
-              style={{ left: `calc(${position * 100}% - 2px)`, background: resolvedMarkerColor }}
+              style={{
+                left: `calc(${position * 100}% - 2px)`,
+                background: markerColor ?? "#FFFFFF",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+              }}
             />
           )}
         </div>
       </div>
-      <div className="mt-2 flex justify-between text-[11px] font-medium" style={{ color: "rgba(47, 109, 124, 0.6)" }}>
+      <div className="mt-2 flex justify-between text-[11px] font-medium" style={{ color: "var(--hc-ink-2)" }}>
         <span>{leftLabel}</span>
         {referenceLabel && reference != null && <span>{referenceLabel}</span>}
         <span>{rightLabel}</span>

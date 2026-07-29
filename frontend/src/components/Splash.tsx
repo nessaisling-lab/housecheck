@@ -62,10 +62,10 @@ export function Splash({ onDone }: { onDone: () => void }) {
           <path d="M9.5 14.5l2.5 2.5 4.5-4.5" strokeLinecap="round" />
         </svg>
       </div>
-      <h1 className="mt-5 text-[28px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+      <h1 className="mt-5 text-[1.75rem] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         HouseCheck
       </h1>
-      <p className="absolute bottom-16 text-[15px]" style={{ color: "var(--hc-canvas-ink-2)" }}>
+      <p className="absolute bottom-16 text-[0.9375rem]" style={{ color: "var(--hc-canvas-ink-2)" }}>
         Public data. Honest signals.
       </p>
     </div>

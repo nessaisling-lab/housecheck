@@ -23,10 +23,10 @@ function Row({
       <button onClick={() => navigate(`/building/${bbl}`)} className="flex flex-1 items-center gap-3 text-left">
         <MiniRing score={score} size={44} stroke={5} />
         <span>
-          <span className="block text-[16px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+          <span className="block text-[1rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
             {address}
           </span>
-          <span className="block text-[13px]" style={{ color: "var(--hc-ink-2)" }}>
+          <span className="block text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
             Bed-Stuy · {band.short}
           </span>
         </span>
@@ -54,7 +54,7 @@ export default function Saved() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-36 pt-14">
-      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+      <h1 className="text-[1.875rem] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         Saved
       </h1>
 
@@ -63,7 +63,7 @@ export default function Saved() {
       </h2>
       <div className="mt-3 space-y-2.5">
         {recents.length === 0 && (
-          <p className="rounded-2xl p-4 text-[14px]" style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}>
+          <p className="rounded-2xl p-4 text-[0.875rem]" style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}>
             Buildings you look up will appear here.
           </p>
         )}
@@ -84,7 +84,7 @@ export default function Saved() {
       </h2>
       <div className="mt-3 space-y-2.5">
         {saved.length === 0 && (
-          <p className="rounded-2xl p-4 text-[14px]" style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}>
+          <p className="rounded-2xl p-4 text-[0.875rem]" style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}>
             Tap the bookmark on any building to save it here — saved buildings feed Compare.
           </p>
         )}
@@ -106,7 +106,7 @@ export default function Saved() {
       {tray.length >= 2 && (
         <button
           onClick={() => navigate("/compare")}
-          className="hc-anim glass-dark fixed inset-x-0 bottom-24 z-30 mx-auto w-[calc(100%-2.5rem)] max-w-md rounded-full py-4 text-center text-[16px] font-semibold text-white"
+          className="hc-anim glass-dark fixed inset-x-0 bottom-24 z-30 mx-auto w-[calc(100%-2.5rem)] max-w-md rounded-full py-4 text-center text-[1rem] font-semibold text-white"
         >
           Compare {tray.length} buildings →
         </button>

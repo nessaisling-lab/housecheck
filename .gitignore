@@ -4,3 +4,6 @@
 /data/*.db
 /data/raw/
 .gstack/
+
+.vercel
+.env*

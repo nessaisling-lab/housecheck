@@ -21,14 +21,14 @@ export function SubScoreRow({ name, status, score, onClick }: SubScoreRowProps) 
     >
       <MiniRing score={score} size={34} stroke={4.5} />
       <span className="flex-1">
-        <span className="block text-[17px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        <span className="block text-[1.0625rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
           {name}
         </span>
-        <span className="block text-[13px]" style={{ color: "var(--hc-ink-2)" }}>
+        <span className="block text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
           {status}
         </span>
       </span>
-      <span className="text-[28px] font-semibold tabular-nums" style={{ color }}>
+      <span className="text-[1.75rem] font-semibold tabular-nums" style={{ color }}>
         {score ?? "—"}
       </span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hc-ink-3)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
@@ -61,14 +61,14 @@ export function SubScoreTile({ name, status, score, onClick, borderR, borderB }:
     >
       <span className="flex items-center gap-2">
         <MiniRing score={score} size={26} stroke={4} />
-        <span className="text-[15px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        <span className="text-[0.9375rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
           {name}
         </span>
-        <span className="ml-auto text-[24px] font-semibold leading-none tabular-nums" style={{ color }}>
+        <span className="ml-auto text-[1.5rem] font-semibold leading-none tabular-nums" style={{ color }}>
           {score ?? "—"}
         </span>
       </span>
-      <span className="block text-[12px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+      <span className="block text-[0.75rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
         {status}
       </span>
     </button>

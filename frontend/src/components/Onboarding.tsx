@@ -84,12 +84,12 @@ export function Onboarding() {
         <p className="hc-eyebrow">One question · optional</p>
         <h2
           id="onboarding-title"
-          className="mt-2 text-[26px] font-semibold tracking-tight"
+          className="mt-2 text-[1.625rem] font-semibold tracking-tight"
           style={{ color: "var(--hc-ink)" }}
         >
           What matters most to you?
         </h2>
-        <p className="mt-1.5 text-[14px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+        <p className="mt-1.5 text-[0.875rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
           Pick up to {MAX_PRIORITIES} — those sections move to the top of every Building Health
           Card. Nothing is ever hidden.
         </p>
@@ -113,15 +113,15 @@ export function Onboarding() {
               >
                 <span style={{ color: active ? "var(--hc-ink)" : "var(--hc-ink-3)" }}>{o.icon}</span>
                 <span className="flex-1">
-                  <span className="block text-[16px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+                  <span className="block text-[1rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
                     {o.label}
                   </span>
-                  <span className="block text-[12px]" style={{ color: "var(--hc-ink-2)" }}>
+                  <span className="block text-[0.75rem]" style={{ color: "var(--hc-ink-2)" }}>
                     {o.hint}
                   </span>
                 </span>
                 <span
-                  className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-[0.6875rem] font-bold"
                   style={
                     active
                       ? { background: "#F5F5F7", color: "#2C2C2E" }
@@ -139,13 +139,13 @@ export function Onboarding() {
         <button
           onClick={confirm}
           disabled={selected.length === 0}
-          className="glass-dark mt-6 w-full rounded-full py-4 text-[16px] font-semibold text-white disabled:opacity-40"
+          className="glass-dark mt-6 w-full rounded-full py-4 text-[1rem] font-semibold text-white disabled:opacity-40"
         >
           Continue{selected.length > 0 ? ` (${selected.length})` : ""}
         </button>
         <button
           onClick={skip}
-          className="mt-3 w-full text-center text-[15px] font-medium"
+          className="mt-3 w-full text-center text-[0.9375rem] font-medium"
           style={{ color: "var(--hc-ink-2)" }}
         >
           Skip for now

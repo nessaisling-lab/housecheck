@@ -91,7 +91,7 @@ export function ScoreRing({
           >
             {score ?? "—"}
           </span>
-          <span className="mt-1 text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+          <span className="mt-1 text-[0.8125rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
             of 100
           </span>
         </div>

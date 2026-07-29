@@ -9,7 +9,7 @@ interface StatusPillProps {
 export function StatusPill({ text, color = "#6C6C70", trend = null }: StatusPillProps) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium whitespace-nowrap"
+      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.8125rem] font-medium whitespace-nowrap"
       style={{ backgroundColor: `${color}26`, color }}
     >
       {trend === "up" && <span aria-hidden>▲</span>}

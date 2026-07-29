@@ -65,7 +65,7 @@ export function SectionCard({
         >
           {icon}
         </span>
-        <span className="flex-1 text-[20px]" style={{ color: "var(--hc-ink)" }}>
+        <span className="flex-1 text-[1.25rem]" style={{ color: "var(--hc-ink)" }}>
           {title}
           {badge}
         </span>
@@ -77,9 +77,9 @@ export function SectionCard({
           {rows.map((r) => (
             <div key={r.label} className="flex items-baseline justify-between gap-4">
               <dt className="hc-row-label">{r.label}</dt>
-              <dd className="text-right text-[15px] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>
+              <dd className="text-right text-[0.9375rem] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>
                 {r.hint != null && (
-                  <span className="mr-2 text-[12px] font-normal" style={{ color: "var(--hc-ink-3)" }}>
+                  <span className="mr-2 text-[0.75rem] font-normal" style={{ color: "var(--hc-ink-3)" }}>
                     {r.hint}
                   </span>
                 )}
@@ -93,7 +93,7 @@ export function SectionCard({
       {children}
 
       {sentence && (
-        <p className="mt-4 text-[17px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+        <p className="mt-4 text-[1.0625rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
           {sentence}
         </p>
       )}

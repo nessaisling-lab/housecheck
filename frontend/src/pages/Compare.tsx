@@ -133,27 +133,27 @@ export default function Compare() {
   if (tray.length < 2) {
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-32 pt-14">
-        <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+        <h1 className="text-[1.875rem] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
           Compare
         </h1>
         <div className="mt-10 rounded-2xl p-5" style={{ background: "var(--hc-sunken)" }}>
-          <p className="text-[16px] font-medium" style={{ color: "var(--hc-ink)" }}>
+          <p className="text-[1rem] font-medium" style={{ color: "var(--hc-ink)" }}>
             {tray.length === 0 ? "Your compare tray is empty" : "Add one more building"}
           </p>
-          <p className="mt-1.5 text-[14px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="mt-1.5 text-[0.875rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
             Add 2–4 buildings from Search or Saved, then compare scores, violations, and access side by side.
           </p>
           <div className="mt-4 flex flex-wrap gap-2.5">
             <button
               onClick={() => navigate("/")}
-              className="rounded-full px-5 py-2.5 text-[14px] font-semibold"
+              className="rounded-full px-5 py-2.5 text-[0.875rem] font-semibold"
               style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}
             >
               Search a new building
             </button>
             <button
               onClick={() => navigate("/saved")}
-              className="rounded-full px-5 py-2.5 text-[14px] font-semibold"
+              className="rounded-full px-5 py-2.5 text-[0.875rem] font-semibold"
               style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}
             >
               Pick from Saved
@@ -166,10 +166,10 @@ export default function Compare() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-32 pt-14">
-      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+      <h1 className="text-[1.875rem] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         Compare
       </h1>
-      <p className="mt-1 text-[14px]" style={{ color: "var(--hc-canvas-ink-2)" }}>
+      <p className="mt-1 text-[0.875rem]" style={{ color: "var(--hc-canvas-ink-2)" }}>
         {tray.length} buildings
       </p>
 
@@ -183,10 +183,10 @@ export default function Compare() {
 
       {error && (
         <div className="hc-card mt-8 p-5">
-          <p className="text-[16px] font-medium" style={{ color: "var(--hc-ink)" }}>
+          <p className="text-[1rem] font-medium" style={{ color: "var(--hc-ink)" }}>
             We couldn't load the comparison
           </p>
-          <p className="mt-1 text-[14px]" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="mt-1 text-[0.875rem]" style={{ color: "var(--hc-ink-2)" }}>
             Check your connection and try again — your tray is kept.
           </p>
         </div>
@@ -199,12 +199,12 @@ export default function Compare() {
           aria-label="Ranked for your priorities"
         >
           <p
-            className="text-[11px] font-semibold uppercase tracking-wider"
+            className="text-[0.6875rem] font-semibold uppercase tracking-wider"
             style={{ color: "var(--hc-ink-3)" }}
           >
             Ranked for your priorities
           </p>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="mt-1 text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
             Weighted by what you picked, in order:{" "}
             <strong style={{ color: "var(--hc-ink)" }}>{priorities.join(" › ")}</strong>
           </p>
@@ -212,25 +212,25 @@ export default function Compare() {
             {rankRows.map((r, i) => (
               <li key={r.bbl} className="flex items-baseline gap-3">
                 <span
-                  className="text-[13px] font-semibold tabular-nums"
+                  className="text-[0.8125rem] font-semibold tabular-nums"
                   style={{ color: "var(--hc-ink-3)" }}
                 >
                   {i + 1}
                 </span>
                 <button
                   onClick={() => navigate(`/building/${r.bbl}`)}
-                  className="flex-1 text-left text-[14px] underline-offset-2 hover:underline"
+                  className="flex-1 text-left text-[0.875rem] underline-offset-2 hover:underline"
                   style={{ color: "var(--hc-ink)" }}
                 >
                   {r.address.split(",")[0]}
                 </button>
-                <span className="text-[14px] font-semibold tabular-nums" style={{ color: "var(--hc-ink)" }}>
+                <span className="text-[0.875rem] font-semibold tabular-nums" style={{ color: "var(--hc-ink)" }}>
                   {r.weighted_score}
                 </span>
               </li>
             ))}
           </ol>
-          <p className="mt-3 text-[12px]" style={{ color: "var(--hc-ink-3)" }}>
+          <p className="mt-3 text-[0.75rem]" style={{ color: "var(--hc-ink-3)" }}>
             Same sub-scores as each Health Card — only the weighting differs.
           </p>
         </section>
@@ -240,10 +240,10 @@ export default function Compare() {
         <>
           {summary && (
             <div className="hc-card mt-6 p-4">
-              <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--hc-ink-3)" }}>
+              <p className="text-[0.75rem] font-semibold uppercase tracking-wide" style={{ color: "var(--hc-ink-3)" }}>
                 Summary
               </p>
-              <p className="mt-1 text-[15px] leading-snug" style={{ color: "var(--hc-ink)" }}>
+              <p className="mt-1 text-[0.9375rem] leading-snug" style={{ color: "var(--hc-ink)" }}>
                 {summary}
               </p>
             </div>
@@ -269,7 +269,7 @@ export default function Compare() {
                     </button>
                     <button onClick={() => navigate(`/building/${c.bbl}`)} className="flex flex-col items-center gap-1.5">
                       <MiniRing score={c.score} size={52} stroke={6} />
-                      <span className="max-w-[84px] text-center text-[12px] font-medium leading-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+                      <span className="max-w-[84px] text-center text-[0.75rem] font-medium leading-tight" style={{ color: "var(--hc-canvas-ink)" }}>
                         {c.address}
                       </span>
                     </button>
@@ -294,7 +294,7 @@ export default function Compare() {
                     return (
                       <td
                         key={c.bbl}
-                        className="px-1 py-2.5 text-center text-[15px] tabular-nums"
+                        className="px-1 py-2.5 text-center text-[0.9375rem] tabular-nums"
                         style={{
                           color: isUnverified ? "var(--hc-canvas-ink-3)" : "var(--hc-canvas-ink)",
                           fontWeight: isBest ? 700 : 400,
@@ -308,7 +308,7 @@ export default function Compare() {
               ))}
             </tbody>
           </table>
-          <p className="mt-5 text-center text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+          <p className="mt-5 text-center text-[0.8125rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
             Best value per row in bold · tap a column for the full card
           </p>
           </div>

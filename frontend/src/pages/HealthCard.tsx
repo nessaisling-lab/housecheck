@@ -115,7 +115,7 @@ export default function HealthCard() {
   const sectionOrder = (id: SectionId) => (prioritySections.has(id) ? 0 : 1);
   const priorityBadge = (
     <span
-      className="ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wider"
+      className="ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[0.625rem] font-semibold uppercase tracking-wider"
       style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
     >
       Your priority
@@ -202,14 +202,14 @@ export default function HealthCard() {
             <path d="M9.5 14.5l2.5 2.5 4.5-4.5" />
           </svg>
         </div>
-        <h1 className="mt-6 text-[24px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
+        <h1 className="mt-6 text-[1.5rem] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
           We don't have this building
         </h1>
-        <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
+        <p className="mt-2 text-[0.9375rem] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
           Our pilot covers ~250 buildings in Bed-Stuy. Double-check the address, or explore the
           covered set.
         </p>
-        <button onClick={() => navigate("/")} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold" style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}>
+        <button onClick={() => navigate("/")} className="mt-6 rounded-full px-6 py-3 text-[0.9375rem] font-semibold" style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}>
           Back to search
         </button>
       </div>
@@ -218,13 +218,13 @@ export default function HealthCard() {
   if (state === "error" || !building)
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center px-6 pb-32 pt-28 text-center">
-        <h1 className="text-[24px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
+        <h1 className="text-[1.5rem] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
           Something didn't load
         </h1>
-        <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
+        <p className="mt-2 text-[0.9375rem] leading-snug" style={{ color: "var(--hc-canvas-ink-2)" }}>
           We couldn't reach the data service. Nothing about the building changed — this is on us.
         </p>
-        <button onClick={load} className="mt-6 rounded-full px-6 py-3 text-[15px] font-semibold" style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}>
+        <button onClick={load} className="mt-6 rounded-full px-6 py-3 text-[0.9375rem] font-semibold" style={{ background: "var(--hc-card)", color: "var(--hc-ink)", border: "0.5px solid var(--hc-ink-3)" }}>
           Try again
         </button>
       </div>
@@ -248,7 +248,7 @@ export default function HealthCard() {
       title: "Rent fairness",
       body: (
         <>
-          <p className="text-[15px] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
             We compare rents against the Census tract median (ACS table B25064) and the HUD Fair
             Market Rent for the area. This is a benchmark, not a judgment of any specific lease.
           </p>
@@ -260,7 +260,7 @@ export default function HealthCard() {
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
-                <dd className="text-[15px] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>{val}</dd>
+                <dd className="text-[0.9375rem] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>{val}</dd>
               </div>
             ))}
           </dl>
@@ -271,7 +271,7 @@ export default function HealthCard() {
       title: "Building condition",
       body: (
         <>
-          <p className="text-[15px] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
             NYC HPD classes: A = non-hazardous, B = hazardous, C = immediately hazardous. Open Class
             C violations are the strongest public signal of neglect — ask the landlord about repair
             timelines and check again before signing.
@@ -286,7 +286,7 @@ export default function HealthCard() {
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
-                <dd className="text-[15px] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>{val}</dd>
+                <dd className="text-[0.9375rem] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>{val}</dd>
               </div>
             ))}
           </dl>
@@ -297,7 +297,7 @@ export default function HealthCard() {
       title: "Legal protections",
       body: (
         <>
-          <p className="text-[15px] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
             {building.stabilization_message ??
               "Stabilization status comes from public HPD/DHCR records."}{" "}
             Stabilization caps rent increases and guarantees lease renewal; Good Cause (2024) adds
@@ -311,7 +311,7 @@ export default function HealthCard() {
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
-                <dd className="text-[15px] font-medium" style={{ color: "var(--hc-ink)" }}>{val}</dd>
+                <dd className="text-[0.9375rem] font-medium" style={{ color: "var(--hc-ink)" }}>{val}</dd>
               </div>
             ))}
           </dl>
@@ -322,7 +322,7 @@ export default function HealthCard() {
       title: "Accessibility",
       body: (
         <>
-          <p className="text-[15px] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
             Access likelihood is inferred from public records — elevator filings (DOB) and distance
             to the nearest ADA-accessible subway (MTA). It is a starting point, never a guarantee:
             verify step-free entry, door widths, and elevator reliability in person.
@@ -337,7 +337,7 @@ export default function HealthCard() {
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
-                <dd className="text-[15px] font-medium" style={{ color: "var(--hc-ink)" }}>{val}</dd>
+                <dd className="text-[0.9375rem] font-medium" style={{ color: "var(--hc-ink)" }}>{val}</dd>
               </div>
             ))}
           </dl>
@@ -352,10 +352,10 @@ export default function HealthCard() {
         {/* Header */}
         <header className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-[24px] font-semibold leading-tight tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+            <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
               {building.address}
             </h1>
-            <p className="mt-0.5 text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+            <p className="mt-0.5 text-[0.8125rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
               {building.neighborhood ?? "Bedford-Stuyvesant"} · BBL {building.bbl}
               {source === "demo" && " · demo data"}
             </p>
@@ -386,7 +386,7 @@ export default function HealthCard() {
           >
             {band.label}
           </p>
-          <p className="mt-1.5 max-w-[280px] text-center text-[13px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+          <p className="mt-1.5 max-w-[280px] text-center text-[0.8125rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
             Built from public NYC data — a signal, not a legal ruling.
           </p>
         </div>
@@ -399,14 +399,14 @@ export default function HealthCard() {
             </svg>
           </span>
           <span>
-            <span className="block text-[15px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+            <span className="block text-[0.9375rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
               {building.year_built ? `${building.year_built} ` : ""}
               {building.has_elevator ? "elevator building" : "walk-up"}
               {v.c > 0 ? ` with ${v.c} hazardous violation${v.c > 1 ? "s" : ""} open` : " with a clean hazardous-violation record"}
               {building.stabilization === "likely" ? "; likely rent-stabilized" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}
               {building.good_cause ? ", with Good Cause coverage" : ""}.
             </span>
-            <span className="mt-1.5 block text-[14px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+            <span className="mt-1.5 block text-[0.875rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
               Ask the agent ➜
             </span>
           </span>
@@ -420,7 +420,7 @@ export default function HealthCard() {
           <SubScoreTile name="Accessibility" status={subStatus(building, "accessibility")} score={building.sub_scores.accessibility} onClick={() => jump("section-access")} />
         </div>
 
-        <h2 className="mt-8 text-[28px] tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+        <h2 className="mt-8 text-[1.75rem] tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
           Building details
         </h2>
 
@@ -477,21 +477,21 @@ export default function HealthCard() {
               }}
             >
               <div className="flex h-11 flex-1 items-center rounded-full px-4" style={{ background: "#E2E2E4" }}>
-                <span className="text-[15px]" style={{ color: "var(--hc-canvas-ink-2)" }}>$</span>
+                <span className="text-[0.9375rem]" style={{ color: "var(--hc-canvas-ink-2)" }}>$</span>
                 <input
                   value={rentInput}
                   onChange={(e) => setRentInput(e.target.value)}
                   inputMode="numeric"
                   placeholder="Your monthly rent"
                   aria-label="Your monthly rent"
-                  className="w-full bg-transparent px-2 text-[15px] tabular-nums outline-none"
+                  className="w-full bg-transparent px-2 text-[0.9375rem] tabular-nums outline-none"
                   style={{ color: "#2C2C2E" }}
                 />
               </div>
               <button
                 type="submit"
                 disabled={!rentInput.replace(/[^0-9]/g, "") || rentBusy}
-                className="glass-orb h-11 shrink-0 rounded-full px-5 text-[14px] font-semibold disabled:opacity-40"
+                className="glass-orb h-11 shrink-0 rounded-full px-5 text-[0.875rem] font-semibold disabled:opacity-40"
                 style={{
                   color: "#2C2C2E",
                   background:
@@ -599,7 +599,7 @@ export default function HealthCard() {
               const r = store.addToTray(building.bbl);
               setToast(r.ok ? (store.inTray(building.bbl) && tray.includes(building.bbl) ? "Already in compare" : "Added to compare") : r.reason ?? "Couldn't add");
             }}
-            className="flex items-center gap-2 text-[15px] font-semibold"
+            className="flex items-center gap-2 text-[0.9375rem] font-semibold"
             style={{ color: "var(--hc-canvas-ink)" }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -607,12 +607,12 @@ export default function HealthCard() {
             </svg>
             Compare this building
           </button>
-          <button onClick={() => navigate("/more")} className="text-[15px] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
+          <button onClick={() => navigate("/more")} className="text-[0.9375rem] font-semibold" style={{ color: "var(--hc-canvas-ink)" }}>
             How scores work ➜
           </button>
         </div>
 
-        <p className="mt-10 text-center text-[12px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+        <p className="mt-10 text-center text-[0.75rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
           Every number links to a NYC or Census source · Data from {DATA_MONTH}
         </p>
       </div>
@@ -621,7 +621,7 @@ export default function HealthCard() {
       <Sheet open={!!detail} onClose={() => setDetail(null)} labelledBy="detail-title">
         {detail && (
           <div className="overflow-y-auto px-6 pb-10 pt-2">
-            <h2 id="detail-title" className="text-[24px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+            <h2 id="detail-title" className="text-[1.5rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
               {detailContent[detail].title}
             </h2>
             <div className="mt-3">{detailContent[detail].body}</div>
@@ -630,7 +630,7 @@ export default function HealthCard() {
                 setDetail(null);
                 navigate("/more");
               }}
-              className="mt-6 text-[15px] font-semibold"
+              className="mt-6 text-[0.9375rem] font-semibold"
               style={{ color: "var(--hc-ink)" }}
             >
               How we calculate this ➜
@@ -642,7 +642,7 @@ export default function HealthCard() {
       {/* Toast */}
       {toast && (
         <div
-          className="hc-anim glass-dark fixed inset-x-0 bottom-24 z-50 mx-auto w-fit max-w-[calc(100%-3rem)] rounded-full px-5 py-3 text-[14px] font-medium text-white"
+          className="hc-anim glass-dark fixed inset-x-0 bottom-24 z-50 mx-auto w-fit max-w-[calc(100%-3rem)] rounded-full px-5 py-3 text-[0.875rem] font-medium text-white"
           style={{ animation: "hc-fade-in 0.2s ease-out" }}
           role="status"
         >

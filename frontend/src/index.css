@@ -36,13 +36,23 @@
     --hc-sunken: #48484A;
     --hc-ink: #F5F5F7;
     --hc-ink-2: rgba(255, 255, 255, 0.66);
-    --hc-ink-3: rgba(255, 255, 255, 0.44);
-    --hc-strong: #4CC66A;
+    /* WCAG 2.2 AA 1.4.3. Every token below is small text (status pills,
+       "Unverified" labels, the 11px source line, statute links), so all of
+       them need 4.5:1 — not the 3:1 large-text allowance. Measured against
+       --hc-sunken (#48484A), the lighter of the two surfaces they sit on;
+       anything passing there also passes on --hc-card (#3A3A3C).
+       Hue and saturation are unchanged, lightness raised to the minimum that
+       clears 4.5:1, so the palette keeps its identity. Previous values and
+       their ratios on sunken: ink-3 0.44 = 3.19, strong #4CC66A = 4.17,
+       concern #F0743E = 3.16, critical #F0595C = 2.73 (below even the 3:1
+       non-text floor), unverified #A0A0A6 = 3.51. */
+    --hc-ink-3: rgba(255, 255, 255, 0.62);
+    --hc-strong: #5ECC79;
     --hc-solid: #A6D65E;
-    --hc-mixed: #E0A83E;
-    --hc-concern: #F0743E;
-    --hc-critical: #F0595C;
-    --hc-unverified: #A0A0A6;
+    --hc-mixed: #E2AE4A;
+    --hc-concern: #F5A37F;
+    --hc-critical: #F69FA1;
+    --hc-unverified: #B6B6BA;
   }
 }
 

@@ -73,7 +73,7 @@ export default function Home() {
         <img src="/housecheck-logo.svg" alt="HouseCheck" className="h-auto w-52" />
 
         <p
-          className="mt-8 text-[34px] font-semibold leading-[1.12] tracking-tight"
+          className="mt-8 text-[2.125rem] font-semibold leading-[1.12] tracking-tight"
           style={{ color: "var(--hc-canvas-ink)" }}
         >
           Know the building
@@ -94,7 +94,7 @@ export default function Home() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="look up a building"
-            className="w-full bg-transparent text-[17px] outline-none placeholder:text-white/40"
+            className="w-full bg-transparent text-[1.0625rem] outline-none placeholder:text-white/40"
             style={{ color: "#F5F5F7" }}
             aria-label="Look up a building by address"
             enterKeyHint="search"
@@ -115,7 +115,7 @@ export default function Home() {
                 role="option"
                 aria-selected="false"
                 onClick={() => pick(r)}
-                className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-[16px] hover:bg-black/[0.03]"
+                className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-[1rem] hover:bg-black/[0.03]"
                 style={{ color: "var(--hc-ink)" }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--hc-ink-3)" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -129,7 +129,7 @@ export default function Home() {
         )}
 
         {notFound && (
-          <p className="mt-3 px-2 text-[14px]" style={{ color: "var(--hc-canvas-ink-2)" }}>
+          <p className="mt-3 px-2 text-[0.875rem]" style={{ color: "var(--hc-canvas-ink-2)" }}>
             Address not found — try street + house number.
           </p>
         )}
@@ -139,10 +139,10 @@ export default function Home() {
       {/* Out-of-coverage sheet (flow 1 edge state) */}
       <Sheet open={!!coverage} onClose={() => setCoverage(null)} labelledBy="coverage-title">
         <div className="px-6 pb-10 pt-2">
-          <h2 id="coverage-title" className="text-[24px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+          <h2 id="coverage-title" className="text-[1.5rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
             We're not there yet
           </h2>
-          <p className="mt-2 text-[15px] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
+          <p className="mt-2 text-[0.9375rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
             HouseCheck currently covers ~250 buildings in Bedford-Stuyvesant for our pilot.
             {coverage?.label ? ` “${coverage.label}” is outside that area.` : ""}
           </p>
@@ -162,7 +162,7 @@ export default function Home() {
               />
             ))}
           </div>
-          <p className="mt-2 text-center text-[12px]" style={{ color: "var(--hc-ink-3)" }}>
+          <p className="mt-2 text-center text-[0.75rem]" style={{ color: "var(--hc-ink-3)" }}>
             Coverage: Bed-Stuy pilot area
           </p>
           <button
@@ -170,13 +170,13 @@ export default function Home() {
               setCoverage(null);
               navigate("/more");
             }}
-            className="mt-5 w-full rounded-full py-4 text-[16px] font-semibold text-white"
+            className="mt-5 w-full rounded-full py-4 text-[1rem] font-semibold text-white"
             style={{ background: "var(--hc-ink)" }}
           >
             Explore covered buildings
           </button>
           <button
-            className="mt-4 w-full text-center text-[15px] font-medium"
+            className="mt-4 w-full text-center text-[0.9375rem] font-medium"
             style={{ color: "var(--hc-ink)" }}
             onClick={() => setCoverage(null)}
           >

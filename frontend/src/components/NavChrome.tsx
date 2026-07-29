@@ -87,14 +87,14 @@ export function NavChrome({ onOpenAgent }: { onOpenAgent: () => void }) {
                   {t.icon(isActive)}
                 </span>
                 <span
-                  className="text-[11px] font-medium"
+                  className="text-[0.6875rem] font-medium"
                   style={{ color: isActive ? "#3A3A3C" : "var(--hc-canvas-ink-2)" }}
                 >
                   {t.label}
                 </span>
                 {t.to === "/compare" && tray.length > 0 && (
                   <span
-                    className="absolute right-2.5 top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white"
+                    className="absolute right-2.5 top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-semibold text-white"
                     style={{ background: "var(--hc-ink)" }}
                   >
                     {tray.length}

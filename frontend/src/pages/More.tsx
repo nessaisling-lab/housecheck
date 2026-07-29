@@ -4,7 +4,72 @@ import { MiniRing } from "@/components/ScoreRing";
 import { Sheet } from "@/components/Sheet";
 import { listBuildings } from "@/lib/api";
 import { BANDS, scoreCircleColor, type Band } from "@/lib/score";
+import {
+  applyTextSize,
+  store,
+  useTextSize,
+  TEXT_SIZE_LABEL,
+  TEXT_SCALE,
+  type TextSize,
+} from "@/lib/store";
 import type { BuildingSummary, DataSource } from "@/types/building";
+
+const SIZES = Object.keys(TEXT_SCALE) as TextSize[];
+
+/**
+ * Reader text size (WCAG 2.2 AA 1.4.4).
+ *
+ * Browser zoom already satisfies the criterion on paper. This exists because
+ * the people using HouseCheck are reading a violation history on a phone in a
+ * hallway, and "pinch to zoom, then scroll sideways" is not a real answer.
+ * Scaling the root font size keeps the layout intact instead.
+ */
+function TextSizeControl() {
+  const size = useTextSize();
+
+  const choose = (s: TextSize) => {
+    store.setTextSize(s);
+    applyTextSize(s);
+  };
+
+  return (
+    <div className="hc-card mt-8 p-5">
+      <h2 className="text-[1.0625rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        Text size
+      </h2>
+      <p className="mt-2 text-[0.875rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+        Applies everywhere in HouseCheck and is remembered on this device.
+      </p>
+      <div
+        className="mt-4 flex gap-2"
+        role="radiogroup"
+        aria-label="Text size"
+      >
+        {SIZES.map((s) => {
+          const active = s === size;
+          return (
+            <button
+              key={s}
+              role="radio"
+              aria-checked={active}
+              onClick={() => choose(s)}
+              className="flex-1 rounded-2xl px-2 py-3 font-semibold"
+              style={{
+                background: active ? "var(--hc-ink)" : "var(--hc-sunken)",
+                color: active ? "#1C1C1E" : "var(--hc-ink-2)",
+                // Deliberately fixed px, not rem: these are previews of the
+                // sizes, so they must NOT resize with the setting they set.
+                fontSize: `${13 * TEXT_SCALE[s]}px`,
+              }}
+            >
+              {TEXT_SIZE_LABEL[s]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function Methodology() {
   const legend: { band: Band; range: string; sample: number | null }[] = [
@@ -18,10 +83,10 @@ function Methodology() {
 
   return (
     <div className="hc-card p-5">
-      <h2 className="text-[20px]" style={{ color: "var(--hc-ink)" }}>
+      <h2 className="text-[1.25rem]" style={{ color: "var(--hc-ink)" }}>
         How scores work
       </h2>
-      <p className="mt-2 text-[15px] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+      <p className="mt-2 text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
         The Building Health Score runs 0–100 and is a plain average of four pillars —{" "}
         <strong style={{ color: "var(--hc-ink)" }}>each pillar counts equally</strong>: condition
         (HPD violations, 311), legal protections (DHCR stabilization, Good Cause), neighborhood
@@ -34,17 +99,17 @@ function Methodology() {
           return (
             <div key={band} className="flex items-center gap-3">
               <span className="h-3 w-3 rounded-full" style={{ background: color }} />
-              <span className="w-24 text-[13px] font-semibold tabular-nums" style={{ color }}>
+              <span className="w-24 text-[0.8125rem] font-semibold tabular-nums" style={{ color }}>
                 {range}
               </span>
-              <span className="text-[14px]" style={{ color: "var(--hc-ink-2)" }}>
+              <span className="text-[0.875rem]" style={{ color: "var(--hc-ink-2)" }}>
                 {BANDS[band].label}
               </span>
             </div>
           );
         })}
       </div>
-      <p className="mt-4 text-[13px] leading-relaxed" style={{ color: "var(--hc-ink-3)" }}>
+      <p className="mt-4 text-[0.8125rem] leading-relaxed" style={{ color: "var(--hc-ink-3)" }}>
         HouseCheck is a signal built from public records — not a legal ruling, an inspection, or
         rental advice. Always verify in person and with the agency listed on each source line.
       </p>
@@ -72,13 +137,13 @@ export default function More() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-32 pt-14">
-      <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
+      <h1 className="text-[1.875rem] font-semibold tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
         About
       </h1>
 
       {source === "demo" && (
         <p
-          className="mt-4 rounded-full px-4 py-2 text-center text-[12px] font-medium"
+          className="mt-4 rounded-full px-4 py-2 text-center text-[0.75rem] font-medium"
           style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
         >
           Backend unreachable — showing bundled demo data
@@ -89,15 +154,17 @@ export default function More() {
         <Methodology />
       </div>
 
+      <TextSizeControl />
+
       <button
         onClick={() => setShowList(true)}
         className="hc-card mt-8 flex w-full items-center gap-3 p-4 text-left"
       >
         <span className="flex-1">
-          <span className="block text-[17px] font-medium" style={{ color: "var(--hc-ink)" }}>
+          <span className="block text-[1.0625rem] font-medium" style={{ color: "var(--hc-ink)" }}>
             Covered buildings
           </span>
-          <span className="mt-0.5 block text-[13px]" style={{ color: "var(--hc-ink-2)" }}>
+          <span className="mt-0.5 block text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
             {buildings.length} in the Bed-Stuy pilot
           </span>
         </span>
@@ -107,16 +174,16 @@ export default function More() {
       </button>
 
       <div className="hc-card mt-8 p-5">
-        <h2 className="text-[17px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+        <h2 className="text-[1.0625rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
           Data sources
         </h2>
-        <p className="mt-2 text-[14px] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+        <p className="mt-2 text-[0.875rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
           NYC HPD violations · NYC DOB records · 311 complaints · US Census ACS (B25064) · HUD Fair
           Market Rents · NYS DHCR · MTA accessibility. Free, public, and linked from every card.
         </p>
       </div>
 
-      <p className="mt-8 text-center text-[12px]" style={{ color: "var(--hc-canvas-ink-3)" }}>
+      <p className="mt-8 text-center text-[0.75rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
         HouseCheck · a Pursuit fellowship project · Brooklyn, NY
       </p>
 
@@ -124,16 +191,16 @@ export default function More() {
         <div className="px-5 pb-8 pt-1">
           <div className="flex items-end justify-between">
             <div>
-              <h2 id="covered-title" className="text-[22px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+              <h2 id="covered-title" className="text-[1.375rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
                 Covered buildings
               </h2>
-              <p className="mt-0.5 text-[13px]" style={{ color: "var(--hc-ink-2)" }}>
+              <p className="mt-0.5 text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
                 {buildings.length} in the Bed-Stuy pilot · links to public NYC data
               </p>
             </div>
             <button
               onClick={() => setSortDesc((v) => !v)}
-              className="rounded-full px-3 py-1.5 text-[12px] font-semibold"
+              className="rounded-full px-3 py-1.5 text-[0.75rem] font-semibold"
               style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
               aria-label="Toggle sort order"
             >
@@ -149,10 +216,10 @@ export default function More() {
                 style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
               >
                 <MiniRing score={b.score} size={36} stroke={4.5} />
-                <span className="flex-1 text-[15px] font-medium" style={{ color: "var(--hc-ink)" }}>
+                <span className="flex-1 text-[0.9375rem] font-medium" style={{ color: "var(--hc-ink)" }}>
                   {b.address}
                 </span>
-                <span className="text-[15px] font-semibold tabular-nums" style={{ color: scoreCircleColor(b.score) }}>
+                <span className="text-[0.9375rem] font-semibold tabular-nums" style={{ color: scoreCircleColor(b.score) }}>
                   {b.score ?? "—"}
                 </span>
               </button>

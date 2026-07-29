@@ -61,7 +61,7 @@ export function StickyStrip({ watchRef, subScores, onJump }: StickyStripProps) {
             tabIndex={visible ? 0 : -1}
           >
             <MiniRing score={subScores[it.key]} size={20} stroke={3} />
-            <span className="text-[13px] font-semibold tabular-nums" style={{ color: "var(--hc-ink)" }}>
+            <span className="text-[0.8125rem] font-semibold tabular-nums" style={{ color: "var(--hc-ink)" }}>
               {subScores[it.key] ?? "—"}
             </span>
           </button>

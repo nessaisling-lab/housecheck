@@ -23,7 +23,7 @@ export function SourceLine({ agency, date, href }: SourceLineProps) {
     </>
   );
   const cls =
-    "mt-3 flex items-center justify-between border-t pt-2.5 text-[12px]";
+    "mt-3 flex items-center justify-between border-t pt-2.5 text-[0.75rem]";
   const style = { color: "var(--hc-ink-3)", borderColor: "rgba(60,60,67,0.12)" };
   if (href) {
     return (

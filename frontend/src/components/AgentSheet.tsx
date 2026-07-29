@@ -11,7 +11,7 @@ import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
 // navigable (fixes literal ** and collapsed table pipes). Tables stack into
 // blocks so they never force horizontal scroll on a phone.
 const mdEyebrow: CSSProperties = {
-  fontSize: 11,
+  fontSize: "0.6875rem",
   fontWeight: 600,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
@@ -90,7 +90,7 @@ const mdComponents: Components = {
   th: ({ children }) => (
     <div
       style={{
-        fontSize: 11,
+        fontSize: "0.6875rem",
         fontWeight: 600,
         textTransform: "uppercase",
         letterSpacing: "0.06em",
@@ -102,7 +102,7 @@ const mdComponents: Components = {
     </div>
   ),
   td: ({ children }) => (
-    <div style={{ color: "var(--hc-ink-2)", fontSize: 14, lineHeight: 1.5, margin: "2px 0" }}>
+    <div style={{ color: "var(--hc-ink-2)", fontSize: "0.875rem", lineHeight: 1.5, margin: "2px 0" }}>
       {children}
     </div>
   ),
@@ -110,7 +110,7 @@ const mdComponents: Components = {
 
 function MarkdownMessage({ text }: { text: string }) {
   return (
-    <div className="text-[15px]">
+    <div className="text-[0.9375rem]">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
         {text}
       </ReactMarkdown>
@@ -317,7 +317,7 @@ export function AgentSheet() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--hc-ink)" aria-hidden>
             <path d="M12 2l2.1 7.9L22 12l-7.9 2.1L12 22l-2.1-7.9L2 12l7.9-2.1L12 2z" />
           </svg>
-          <span id="agent-title" className="text-[14px] font-semibold" style={{ color: "var(--hc-ink)" }}>
+          <span id="agent-title" className="text-[0.875rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
             HouseCheck Agent
           </span>
         </span>
@@ -331,7 +331,7 @@ export function AgentSheet() {
       {building && (
         <div className="px-4 pb-2">
           <span
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px]"
+            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[0.8125rem]"
             style={{ background: "var(--hc-sunken)", color: "var(--hc-ink-2)" }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -343,7 +343,26 @@ export function AgentSheet() {
         </div>
       )}
 
-      <div ref={scrollRef} className="min-h-[220px] flex-1 space-y-3 overflow-y-auto px-4 py-2">
+      {/*
+        WCAG 2.2 AA 4.1.3 (status messages). An agent reply used to appear with
+        no announcement at all, so a screen-reader user had no way to know it
+        had arrived short of hunting for it.
+
+        polite, not assertive: the reply is not urgent enough to interrupt what
+        the reader is already hearing. atomic=false so only the newly added
+        message is read, not the whole thread again on every turn. aria-busy
+        marks the wait, which is what the animated dots convey visually.
+      */}
+      <div
+        ref={scrollRef}
+        className="min-h-[220px] flex-1 space-y-3 overflow-y-auto px-4 py-2"
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+        aria-relevant="additions"
+        aria-busy={busy}
+        aria-label="Conversation with the HouseCheck agent"
+      >
         {msgs.map((m, i) =>
           m.role === "agent" ? (
             <div
@@ -351,9 +370,12 @@ export function AgentSheet() {
               className="max-w-[88%] rounded-2xl p-3.5"
               style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
             >
+              {/* Who is speaking is carried only by bubble colour and side,
+                  which is invisible to a screen reader (1.3.1). */}
+              <span className="sr-only">Agent said: </span>
               <MarkdownMessage text={m.text} />
               {m.source && (
-                <p className="mt-2 text-[11px]" style={{ color: "var(--hc-ink-3)" }}>
+                <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--hc-ink-3)" }}>
                   {m.source}
                 </p>
               )}
@@ -361,9 +383,10 @@ export function AgentSheet() {
           ) : (
             <div
               key={i}
-              className="ml-auto max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[15px]"
+              className="ml-auto max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[0.9375rem]"
               style={{ background: "#F5F5F7", color: "#2C2C2E" }}
             >
+              <span className="sr-only">You said: </span>
               {m.text}
             </div>
           )
@@ -372,6 +395,9 @@ export function AgentSheet() {
           <div
             className="inline-block rounded-2xl px-3.5 py-1.5"
             style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
+            // aria-busy on the log already reports the wait; announcing the
+            // dots as well would say it twice.
+            aria-hidden
           >
             <Typing />
           </div>
@@ -384,7 +410,7 @@ export function AgentSheet() {
             key={c}
             onClick={() => send(c)}
             disabled={busy}
-            className="glass-nav rounded-full px-3.5 py-2 text-[13px] font-medium disabled:opacity-50"
+            className="glass-nav rounded-full px-3.5 py-2 text-[0.8125rem] font-medium disabled:opacity-50"
             style={{ color: "#3A3A3C" }}
           >
             {c}
@@ -406,7 +432,7 @@ export function AgentSheet() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={building ? "Ask about this building…" : "Ask about HouseCheck…"}
-          className="glass-field h-11 flex-1 rounded-full px-4 text-[15px] outline-none placeholder:text-[15px]"
+          className="glass-field h-11 flex-1 rounded-full px-4 text-[0.9375rem] outline-none placeholder:text-[0.9375rem]"
           style={{ color: "var(--hc-ink)" }}
           aria-label="Message the agent"
         />

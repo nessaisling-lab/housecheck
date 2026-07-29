@@ -25,7 +25,26 @@ const KEYS = {
   tray: "hc.compareTray.v1",
   onboarding: "hc.onboarding.v1",
   priorityCounts: "hc.priorityCounts.v1",
+  textSize: "hc.textSize.v1",
 } as const;
+
+/** Reader text size (WCAG 2.2 AA 1.4.4). Scales the root font size; every
+ *  type size in the app is rem-based, so the whole UI grows with it. */
+export type TextSize = "sm" | "md" | "lg" | "xl";
+
+export const TEXT_SCALE: Record<TextSize, number> = {
+  sm: 0.875,
+  md: 1,
+  lg: 1.125,
+  xl: 1.25,
+};
+
+export const TEXT_SIZE_LABEL: Record<TextSize, string> = {
+  sm: "Small",
+  md: "Default",
+  lg: "Large",
+  xl: "Larger",
+};
 
 const MAX_RECENT = 8;
 export const MAX_COMPARE = 4;
@@ -154,7 +173,28 @@ export const store = {
   priorityCounts(): Partial<Record<Priority, number>> {
     return read<Partial<Record<Priority, number>>>(KEYS.priorityCounts, {});
   },
+
+  // ── Reader text size (WCAG 1.4.4) ────────────────────────────────────
+  textSize(): TextSize {
+    const v = read<TextSize>(KEYS.textSize, "md");
+    return v in TEXT_SCALE ? v : "md";
+  },
+  setTextSize(size: TextSize) {
+    write(KEYS.textSize, size);
+  },
 };
+
+/**
+ * Apply the stored size to the document root.
+ *
+ * Browsers let the user set a default font size, and 1.4.4 is about honouring
+ * it — so this multiplies that preference rather than replacing it. Writing a
+ * hard `16px * scale` here would override the very setting the criterion
+ * exists to protect.
+ */
+export function applyTextSize(size: TextSize = store.textSize()) {
+  document.documentElement.style.fontSize = `${TEXT_SCALE[size] * 100}%`;
+}
 
 // ── React bindings ──────────────────────────────────────────────────────
 function useStore<T>(pick: () => T): T {
@@ -179,4 +219,7 @@ export function useOnboarding(): OnboardingState {
 }
 export function usePriorityCounts(): Partial<Record<Priority, number>> {
   return useStore(store.priorityCounts);
+}
+export function useTextSize(): TextSize {
+  return useStore(store.textSize);
 }

@@ -55,7 +55,7 @@ export function SpectrumTrack({
           )}
         </div>
       </div>
-      <div className="mt-2 flex justify-between text-[11px] font-medium" style={{ color: "var(--hc-ink-2)" }}>
+      <div className="mt-2 flex justify-between text-[0.6875rem] font-medium" style={{ color: "var(--hc-ink-2)" }}>
         <span>{leftLabel}</span>
         {referenceLabel && reference != null && <span>{referenceLabel}</span>}
         <span>{rightLabel}</span>

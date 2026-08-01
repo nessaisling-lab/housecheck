@@ -1,6 +1,6 @@
 # HouseCheck — Case Study
 
-> **Carfax for apartments.** Type any NYC address, get an instant Building Health Card — condition, legal protections, rent fairness, and accessibility — every number linked to a government source. Then ask an AI agent about it that cites published law and will not make anything up.
+> **Carfax for apartments.** Type any NYC address, get an instant Building Health Card — condition, legal protections, neighborhood, and accessibility — every number linked to a government source. Then ask an AI agent about it that cites published law and will not make anything up.
 
 **Team:** Aisling Leiva-Davila (backend, data, agent), Anthony Lesov (frontend), Jagger (comparison prototype), + DB analyst · Pursuit NYC Fellowship, L2 Cycle 4
 **Live app:** https://housecheck-wine.vercel.app · **API:** https://housecheck-nessa.fly.dev · **Repo:** https://github.com/nessaisling-lab/housecheck
@@ -23,7 +23,9 @@ Brooklyn renters evaluating a specific apartment before signing — and current 
 
 ## The solution
 
-Type an address → an instant **Building Health Card**: a single 0–100 score across four plain-language axes — **building condition** (HPD violations), **legal protections** (rent-stabilization, Good Cause), **rent fairness** (your rent vs the neighborhood median + HUD FMR), and **accessibility** (elevator-on-record + build-era). Every figure links to its source, with a "data from [date]" label.
+Type an address → an instant **Building Health Card**: a single 0–100 score across four plain-language axes — **building condition** (HPD violations, weighted 0.45), **legal protections** (rent-stabilization, Good Cause, 0.20), **neighborhood** (311 complaint density near the building, 0.15), and **accessibility** (elevator-on-record + build-era, 0.20). Every figure links to its source, with a "data from [date]" label.
+
+**Rent fairness** — your rent against the Census tract median — is a separate, on-demand check rather than one of the four scored axes. It cannot be part of the card: it needs your own monthly rent, which the server never stores. Earlier versions of this document listed it as the fourth axis and omitted neighborhood; that was wrong, and the correction is recorded here rather than quietly edited out.
 
 The differentiator isn't any single feature — it's the **trust model**: objective government data only, not crowdsourced reviews, with every number sourced and honestly bounded.
 

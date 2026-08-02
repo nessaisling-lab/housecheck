@@ -1,6 +1,6 @@
 # Chapter 7 — The Database Is the Deployment
 
-> **The question this chapter answers:** Why is a 671 KB SQLite file baked into
+> **The question this chapter answers:** Why is a 1.2 MB SQLite file baked into
 > the image the decision everything else is downstream of, and what does it cost?
 
 ---
@@ -8,9 +8,9 @@
 ## 1. The artifact
 
 ```
-data/housecheck.db      671,744 bytes
+data/housecheck.db    1,269,760 bytes
 page_size                     4,096
-page_count                      164
+page_count                      310
 freelist_count                    0
 journal_mode                 delete
 ```
@@ -20,9 +20,16 @@ Inside it:
 | table | rows |
 |---|---:|
 | `buildings` | 250 |
-| `violations` | 13,253 |
+| `violations` | 26,306 |
 | `acs_rent_by_tract` | 41 |
 | `meta` | **1** |
+
+> **These figures are from after the fix in Chapter 8.** This chapter was written against
+> an artifact of **671,744 bytes / 164 pages / 13,253 violations**, and every measurement
+> below was taken against that file. Chapter 8 is the reason it doubled: the ingest had been
+> requesting 50,000 HPD rows against 134,837 that matched, so the smaller artifact was not a
+> smaller dataset — it was half of one. The numbers are restated here rather than left stale,
+> and the original ones are kept so the two chapters still line up.
 
 One non-primary-key index in the entire schema:
 
@@ -64,13 +71,19 @@ No connection pool to establish. No external database to reach over a network. N
 migration to run against a live schema. No credential to fetch before the first
 query. The process opens a file and binds a port.
 
-And the sizing is quietly perfect: SQLite's default page cache is 2 MB. The entire
-database is 671 KB. **The whole dataset fits in the default cache**, so after the
-first few reads there is no filesystem I/O in the serving path at all. Nobody
-appears to have tuned that — it is what happens when the data is small enough, and
-the 21 ms for 250 fully-scored buildings is the consequence. Every one of those 250
-cards runs `condition_score` over that building's violations, plus three more
-scoring functions and a weighted sum.
+And the sizing is quietly fortunate: SQLite's default page cache is 2 MB. The entire
+database was 671 KB when this was measured and is 1,240 KB now. **The whole dataset
+still fits in the default cache**, so after the first few reads there is no filesystem
+I/O in the serving path at all. Nobody appears to have tuned that — it is what happens
+when the data is small enough, and the 21 ms for 250 fully-scored buildings is the
+consequence. Every one of those 250 cards runs `condition_score` over that building's
+violations, plus three more scoring functions and a weighted sum.
+
+Worth noticing that the fix in Chapter 8 spent a third of that headroom in one commit:
+34% of the cache used before, 62% after. Nothing budgets it, nothing measures it, and
+the day the artifact crosses 2 MB the serving path quietly starts doing disk reads with
+no signal that anything changed. That is the same shape as the neighborhood curve's 11%
+margin — a property the system depends on and does not assert.
 
 The security property is the one the Dockerfile leads with, and it is real. The
 image contains a binary and a data file. There is no database URL, no password, no
@@ -99,7 +112,7 @@ is the part the sentence is really about.
 ```
 
 Two ignore files that deliberately disagree, and the disagreement is commented. The
-671 KB binary stays out of git history; it must be in the Docker build context.
+1.2 MB binary stays out of git history; it must be in the Docker build context.
 That is a considered call, and for keeping a repository clean it is the right one.
 
 The consequence is unavoidable and large: **a fresh clone of this repository cannot

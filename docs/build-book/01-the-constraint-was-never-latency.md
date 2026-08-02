@@ -21,7 +21,7 @@ gross rent. Four of those feed weighted pillars. The weights are 0.45 condition,
 (`crates/scoring/src/lib.rs:78-84`).
 
 The whole serving corpus is 250 buildings and 13,253 violation records in a
-SQLite file of **671,744 bytes**. A person could hold the entire dataset in a
+SQLite file of **1,269,760 bytes**. A person could hold the entire dataset in a
 spreadsheet. Nothing about this system is large.
 
 Nothing about it is fast, either, and that is the point of this book. There was

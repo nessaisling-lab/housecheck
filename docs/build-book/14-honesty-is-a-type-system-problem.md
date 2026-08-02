@@ -15,7 +15,7 @@ The argument this book set out to prosecute:
 > `String` instead of in a type.
 
 Thirteen chapters in, the first half held completely. Nothing in HouseCheck is fast
-because nothing needed to be: a 671 KB artifact, 2.2 ms cards, 167 ms cold start,
+because nothing needed to be: a 1.2 MB artifact, 2.2 ms cards, 167 ms cold start,
 a 0.11-second test suite. Every architectural decision — the injected snapshot
 year, the pure scoring crate, the baked database, the domain allowlist, the curated
 legal directory — was made to be believed rather than to be quick.

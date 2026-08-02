@@ -271,6 +271,6 @@ would predict, and worth saying out loud.
 
 ---
 
-*Next: **Chapter 7 — The Database Is the Deployment.** Why a 671 KB SQLite file
+*Next: **Chapter 7 — The Database Is the Deployment.** Why a 1.2 MB SQLite file
 baked into the image is the architectural decision the rest of the system is
 downstream of, and what it costs when the data goes stale.*

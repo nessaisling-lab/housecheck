@@ -125,25 +125,39 @@ prosecution.
 Every change this book argues for, ranked by **what a tenant sees differently**,
 not by elegance.
 
-| # | change | ch. | cost | what changes for a user |
-|---|---|---|---|---|
-| 1 | **Truncation guard** — `bail!` when `rows.len() == limit`, all five sites | 4, 8 | 1 line | Mean score −6.5. 70 of 250 leave the wrong band. The "clean record" sentence stops being false. |
-| 2 | **Re-ingest and republish** after (1), recalibrating `−4.0` | 4, 8 | a run | The published numbers become true. Must land *with* (1): fixing the query alone pushes buildings into the floor. |
-| 3 | **`number \| null` through the violation path** + a "no data" render | 10 | ~4 lines | Absence stops being displayed as a clean record. |
-| 4 | **Read-only open + non-empty assert at startup** | 2, 7 | ~3 lines | An empty deploy fails instead of serving 404s under a green health check. |
-| 5 | **Fill `meta`** — ingest date, coverage, class I exclusion, checksum — and surface it on `/health`, in `grounding_block`, and as `DATA_MONTH` | 5, 7, 9, 10 | ~20 lines | The product can state what it does and does not contain. Four chapters ended here. |
-| 6 | **`enum Stabilization` + generated TS union**; fix `citations_for` | 5, 9 | ~15 lines | Removes the 65% false DHCR citation and the trap where fixing the doc comment silently breaks ten frontend branches. |
-| 7 | **Basis-vector weight tests** | 3 | 4 lines | Nothing today. Stops the weights drifting silently tomorrow. |
-| 8 | **Card alpha `.94` → `1.0`** | 11 | 1 char | Five band tokens go from 4.44:1 to 5.12:1, clearing AA. |
-| 9 | **Census link `ACSDT1Y2023` → `ACSDT5Y2023`** | 10 | 1 char | The "check our source" link reaches a table that contains the number. |
-| 10 | **`enum ViolationClass`**, schema↔dispatch test, extract `crates/agent`, delete `components/ui` | 5, 6, 10 | ~1 day | Nothing a user sees. Makes classes of defect unrepresentable. |
+| # | change | ch. | cost | status | what changes for a user |
+|---|---|---|---|---|---|
+| 1 | **Truncation guard** — `bail!` when `rows.len() == limit`, all five sites | 4, 8 | 1 line | **shipped** | Mean score −6.5. 72 of 250 left the wrong band. The "clean record" sentence stopped being false. |
+| 2 | **Re-ingest and republish** after (1), recalibrating `−4.0` | 4, 8 | a run | **shipped** | 26,306 violations instead of 13,253. The published numbers became true. |
+| 3 | **`number \| null` through the violation path** + a "no data" render | 10 | ~4 lines | **shipped** | Absence stops being displayed as a clean record. |
+| 4 | **Read-only open + non-empty assert at startup** | 2, 7 | ~3 lines | **shipped** | An empty deploy fails instead of serving 404s under a green health check. |
+| 5 | **Fill `meta`** — ingest date, coverage, class I exclusion, checksum — and surface it on `/health`, in `grounding_block`, and as `DATA_MONTH` | 5, 7, 9, 10 | ~20 lines | open | The product could state what it does and does not contain. Four chapters ended here. |
+| 6a | **Fix `citations_for`** — the dead `!= "none"` branch | 9 | ~4 lines | **shipped** | The 65% false DHCR citation is gone. |
+| 6b | **`enum Stabilization` + generated TS union** | 5 | ~12 lines | open | Would close the trap where fixing the doc comment silently breaks ten frontend branches. |
+| 7 | **Basis-vector weight tests** | 3 | 4 lines | open | Nothing today. Stops the weights drifting silently tomorrow. |
+| 8 | **Card alpha `.94` → opaque** | 11 | 1 char | **shipped** | Five band tokens went from 4.44:1 to 5.12:1, clearing AA. |
+| 9 | **Census link `ACSDT1Y2023` → `ACSDT5Y2023`** | 10 | 1 char | **shipped** | The "check our source" link reaches a table that contains the number. |
+| 10 | **`enum ViolationClass`**, schema↔dispatch test, extract `crates/agent`, delete `components/ui` | 5, 6, 10 | ~1 day | open | Nothing a user sees. Makes classes of defect unrepresentable. |
 
-Items 1 through 5 are roughly **thirty lines and one ingest run**, and they account
-for every finding in this book that changes what a person is told.
+**Seven of eleven are live as of 2 August 2026**, verified against production rather
+than against a local build: the API serves 250 buildings at a mean total of 63.0, and
+the shipped stylesheet renders cards as `linear-gradient(170deg,#404042,#343436)` with
+no alpha. Item 4 has an unusual proof — the Fly machine booting *is* the assertion
+passing, because an artifact with no buildings now refuses to start.
 
-Items 6 through 10 are the type-system work the title promised. They are real, they
-are cheap, and they are *below* a one-line `if` in the ordering. That ranking is the
-book's actual conclusion.
+Item 6 split in the doing. Fixing `citations_for` is four lines and removes a false
+claim from every agent answer; the enum behind it is a larger change with no
+user-visible effect, so it did not ride along. That split is the ledger's own thesis
+applied to itself — the cheap fix that changes what someone is told goes first, and
+the structural work that prevents the *next* one waits its turn.
+
+Items 1 through 5 were roughly **thirty lines and one ingest run**, and they account
+for every finding in this book that changes what a person is told. Four of the five
+are done; the fifth is provenance, and it is the one I would do next.
+
+The rest is the type-system work the title promised. It is real, it is cheap, and it
+is *below* a one-line `if` in the ordering. That ranking is the book's actual
+conclusion, and the order things actually shipped in is the evidence for it.
 
 ## 5. The change to refuse
 
@@ -175,10 +189,12 @@ this whole book makes: somebody checked.
 
 ## The hardest question a reader can ask of this book
 
-> *"You have listed ten changes. If you get exactly one, which — and why does it
-> beat the other nine?"*
+> *"You have listed eleven changes. If you get exactly one, which — and why does it
+> beat the other ten?"*
 
-**The truncation guard.** One statement in `get_json_query`:
+**The truncation guard.** It is also the one that actually shipped first, which is
+the strongest form this answer can take: the ranking was not a preference, it was a
+prediction, and it was acted on.
 
 ```rust
 if rows.len() as u32 == limit {

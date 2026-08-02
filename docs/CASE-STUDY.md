@@ -61,11 +61,18 @@ We attacked it to check. Instructed to ignore its rules, act as a legal advisor,
 
 | Building | Score | What the card shows |
 |---|---|---|
-| **61 Stuyvesant Ave** | **24 / 100** | 65 open violations (A:21 B:32 C:12) — a genuinely hazardous walk-up |
-| **443A Monroe St** | **78 / 100** | zero open violations — clean, well-kept |
+| **61 Stuyvesant Ave** | **28 / 100** | 65 open violations (A:21 B:32 C:12) — a genuinely hazardous walk-up |
+| **443A Monroe St** | **79 / 100** | zero open violations — clean, well-kept |
+| **689 Myrtle Ave** | **40 / 100** | 7 open Class C — hazardous, and previously scored 84 |
 | **510 Quincy St** | — | **192 rent-stabilized units** on the 2024 DOF record |
 
-Two real buildings a few blocks apart score **24 vs 78** — that spread *is* the product. The curated set of **250 real Bed-Stuy buildings** blends large regulated buildings (87 sourced rent-stabilized) with small rowhouses, ranging 1–1,624 units.
+Two real buildings a few blocks apart score **28 vs 79** — that spread *is* the product. The curated set of **250 real Bed-Stuy buildings** blends large regulated buildings (87 sourced rent-stabilized) with small rowhouses, ranging 1–1,624 units.
+
+**A correction, recorded rather than quietly applied.** Until August 2026 these scores were computed from an incomplete violation history. The HPD ingest requested 50,000 records against 134,837 that matched its own query, in a single unordered request, so the shipped database held **13,253 of the 26,306 violations** HPD actually has for these buildings — and only 23% of those issued in the last two years, which the scoring rule weights double. Because the condition score starts at 100 and subtracts, a violation you fail to fetch can only ever make a building look *better*. Every score was therefore too high, and a tool built to give tenants leverage was biased toward landlords.
+
+Paging the query fixed it. Across all 250 buildings the mean score fell **69.5 → 63.0**, and **72 changed band, 69 of them downward**. 689 Myrtle Avenue is the clearest case: it was published at 84 — "strong" — while HPD held seven open immediately-hazardous violations against it, and the card described it as having a clean hazardous-violation record. It now reads 40, "concern", with the seven violations listed. The 311 pull had the same defect and was fixed the same way, which raised complaint counts 4.56x and required the neighborhood curve to be recalibrated so the pillar kept meaning the same thing.
+
+The numbers above are lower than the ones this page showed a week ago. That is the correction working.
 
 Ask the agent *"I have no heat for a week and my landlord won't respond"* and it returns the governing statute with a link, an evidence checklist (dated 311 numbers, timestamped thermometer photos, written notice), the official complaint route, a drafted question for a lawyer, and a free hotline to call — then states plainly that this is published information and a public record, not advice about your situation.
 

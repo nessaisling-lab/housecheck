@@ -12,7 +12,13 @@ import { bandMeta, fmtDistance, fmtMoney, fmtPct, pctToPosition, scoreWash } fro
 import { store, useIsSaved, useOnboarding, useTray, type Priority } from "@/lib/store";
 import type { BuildingCard as Building, DataSource, RentFairnessResult } from "@/types/building";
 
-const DATA_MONTH = "Jul 2026";
+/**
+ * Month the serving artifact was ingested. Hand-maintained, and it should not be: the backend
+ * knows when its own data was gathered and the `meta` table already carries `snapshot_year`
+ * through to every response, so this belongs in an API field rather than a literal here.
+ * Re-check it whenever `data/housecheck.db` is rebuilt — nothing enforces it.
+ */
+const DATA_MONTH = "Aug 2026";
 
 type SectionId = "rent" | "condition" | "legal" | "access";
 
@@ -460,7 +466,7 @@ export default function HealthCard() {
                   }`
                 : "Asking rents in this tract sit near the city benchmark. Paying rent? Check yours below."
             }
-            source={{ agency: "US Census B25064", date: DATA_MONTH, href: "https://data.census.gov/table/ACSDT1Y2023.B25064" }}
+            source={{ agency: "US Census B25064", date: DATA_MONTH, href: "https://data.census.gov/table/ACSDT5Y2023.B25064" }}
             onOpenDetail={() => setDetail("rent")}
           >
             <div className="mt-4">

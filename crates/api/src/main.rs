@@ -12,7 +12,7 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use model::{HealthCard, ScoreBreakdown, Stabilization, ViolationCounts};
+use model::{HealthCard, ScoreBreakdown, Stabilization, StabilizationStatus, ViolationCounts};
 use store::{
     get_all_buildings, get_building, get_open_violations, get_snapshot_year, get_tract_median,
 };
@@ -2072,13 +2072,12 @@ fn citations_for(card: &HealthCard, tract_median: Option<i32>) -> Vec<String> {
         "NYC HPD violations (wvxf-dwi5)".to_string(),
         "NYC DOF / PLUTO building record".to_string(),
     ];
-    // `Stabilization::from_units` emits exactly "likely" | "none_on_record" | "unverified".
-    // This branch used to test `!= "none"` — a value produced nowhere in the workspace, so it
-    // was always true and the citation was unconditional. "unverified" means the DOF lookup
-    // found no record for the building, and 163 of the 250 shipped buildings are unverified,
-    // so two thirds of answers cited a source that returned nothing. Cite it only when a
-    // record actually backed the claim.
-    if matches!(card.stabilization.status.as_str(), "likely" | "none_on_record") {
+    // This branch once tested `!= "none"` — a value produced nowhere in the workspace, so it
+    // was always true and the citation was unconditional. 163 of 250 shipped buildings are
+    // unverified, meaning the DOF lookup found nothing, so two thirds of agent answers cited
+    // a source that returned no record. The question is now asked of the type, which is the
+    // only thing that knows the answer.
+    if card.stabilization.status.has_dof_record() {
         c.push("NYC DOF rent-stabilization record · NYS DHCR".to_string());
     }
     if tract_median.is_some() {
@@ -2324,13 +2323,13 @@ mod tests {
         let res = server.get("/building/3000010001").await;
         res.assert_status_ok();
         let card: HealthCard = res.json();
-        assert_eq!(card.stabilization.status, "likely");
+        assert_eq!(card.stabilization.status, StabilizationStatus::Likely);
         assert!(card.stabilization.message.contains("12 units"));
         assert_eq!(card.building.rent_stab_units, Some(12));
         // Building 2 has rent_stabilized = NULL → "unverified" (never overstated).
         let res2 = server.get("/building/3000020002").await;
         let card2: HealthCard = res2.json();
-        assert_eq!(card2.stabilization.status, "unverified");
+        assert_eq!(card2.stabilization.status, StabilizationStatus::Unverified);
         assert_eq!(card2.building.rent_stab_units, None);
     }
 
@@ -3025,14 +3024,14 @@ mod tests {
         // The stabilization branch, which this test's name has always claimed to cover and
         // did not. Fixture building 1 has a DOF record; building 2 has none.
         let dhcr = |c: &Vec<String>| c.iter().any(|s| s.contains("DHCR"));
-        assert_eq!(card.stabilization.status, "likely");
+        assert_eq!(card.stabilization.status, StabilizationStatus::Likely);
         assert!(dhcr(&with), "a building with a DOF record must cite it");
 
         // Fixture building 2 ships `rent_stabilized = NULL` (store:124) → "unverified".
         let unverified = card_for(&conn, DEFAULT_SNAPSHOT_YEAR, "3000020002")
             .expect("query")
             .expect("card");
-        assert_eq!(unverified.stabilization.status, "unverified");
+        assert_eq!(unverified.stabilization.status, StabilizationStatus::Unverified);
         assert!(
             !dhcr(&citations_for(&unverified, Some(2400))),
             "must not cite a DOF stabilization record that was never found"

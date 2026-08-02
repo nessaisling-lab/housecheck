@@ -31,11 +31,23 @@ export interface SubScores {
 }
 
 export type AccessLikelihood = "Higher" | "Mixed" | "Lower" | string;
-export type Stabilization =
-  | "likely"
-  | "none_on_record"
-  | "unverified"
-  | string;
+
+/**
+ * Mirrors `StabilizationStatus` in `crates/model/src/lib.rs`, whose `#[serde(rename_all =
+ * "snake_case")]` is the single place these strings are defined and whose
+ * `serializes_to_the_wire_contract` test pins them.
+ *
+ * The trailing `| string` that used to be here dissolved the union: TypeScript widens
+ * `"likely" | "unverified" | string` to plain `string`, so the closed set was decorative and
+ * `=== "likley"` compiled fine. It is closed now, which is what makes the ten comparisons in
+ * HealthCard.tsx actually checked.
+ */
+export type Stabilization = "likely" | "none_on_record" | "unverified";
+
+/** Narrow an unknown payload value to a known state, or null. */
+export function asStabilization(x: unknown): Stabilization | null {
+  return x === "likely" || x === "none_on_record" || x === "unverified" ? x : null;
+}
 
 export interface HudFmr {
   area?: string;

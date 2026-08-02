@@ -64,12 +64,61 @@ pub struct ScoreBreakdown {
     pub accessibility: u8,
 }
 
+/// Machine-readable rent-stabilization state.
+///
+/// This was a `String` with a doc comment listing `"on_record" | "not_found" | "unverified"`.
+/// The constructor below emitted `"likely" | "none_on_record" | "unverified"` — two of the
+/// three documented values existed nowhere in the workspace. Nothing could catch that, because
+/// a doc comment is not checked against the function forty lines under it, and the frontend
+/// got it right only by reading the JSON instead of the type.
+///
+/// The variants are the documentation now, so there is nothing left to drift from. The
+/// `rename_all` is the single place the wire strings exist; `serializes_to_the_wire_contract`
+/// pins them, because ten comparisons in `HealthCard.tsx` depend on these exact bytes and
+/// changing them would fail silently rather than loudly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StabilizationStatus {
+    /// A DOF record shows stabilized units.
+    Likely,
+    /// A DOF record exists and shows zero stabilized units.
+    NoneOnRecord,
+    /// No DOF record was found for this building. Not evidence either way.
+    Unverified,
+}
+
+impl StabilizationStatus {
+    /// Whether a DOF record actually backed this state — i.e. whether citing one is honest.
+    /// `Unverified` means the lookup found nothing, which is not a source.
+    pub fn has_dof_record(self) -> bool {
+        matches!(self, Self::Likely | Self::NoneOnRecord)
+    }
+
+    /// The wire string, for prose that needs to name the state (the agent's grounding block).
+    ///
+    /// This is a second place the strings appear, which is exactly the shape of the original
+    /// defect — so `wire_form_matches_serde` asserts it against what serde actually emits.
+    /// Two hand-written copies of a fact are fine when a test makes them one fact.
+    pub fn as_wire(self) -> &'static str {
+        match self {
+            Self::Likely => "likely",
+            Self::NoneOnRecord => "none_on_record",
+            Self::Unverified => "unverified",
+        }
+    }
+}
+
+impl std::fmt::Display for StabilizationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_wire())
+    }
+}
+
 /// Honest, three-state rent-stabilization signal for the Health Card. Public stabilization
 /// lists are incomplete and never a legal ruling, so the wording is deliberately hedged.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Stabilization {
-    /// "on_record" | "not_found" | "unverified" — machine-readable state for the frontend.
-    pub status: String,
+    pub status: StabilizationStatus,
     /// Human wording shown to tenants.
     pub message: String,
 }
@@ -82,7 +131,7 @@ impl Stabilization {
     pub fn from_units(rent_stabilized: Option<bool>, rent_stab_units: Option<i32>) -> Self {
         match rent_stabilized {
             Some(true) => Stabilization {
-                status: "likely".into(),
+                status: StabilizationStatus::Likely,
                 message: format!(
                     "Likely rent-stabilized — {} units on the latest NYC DOF record (2024). \
                      A signal, not a legal ruling; confirm with DHCR.",
@@ -90,13 +139,13 @@ impl Stabilization {
                 ),
             },
             Some(false) => Stabilization {
-                status: "none_on_record".into(),
+                status: StabilizationStatus::NoneOnRecord,
                 message: "No stabilized units on the latest DOF record (2024) — public data \
                           lags, so not proof it is market-rate."
                     .into(),
             },
             None => Stabilization {
-                status: "unverified".into(),
+                status: StabilizationStatus::Unverified,
                 message: "Unverified — no DOF stabilization record found for this building.".into(),
             },
         }
@@ -166,6 +215,76 @@ pub struct BuildingListItem {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The wire contract. `HealthCard.tsx` compares `stabilization` against these exact
+    /// strings in ten places, and `types/building.ts` declares them as a closed union — so
+    /// renaming a variant without updating both would not fail a build, it would silently
+    /// send every card down the frontend's else-branch. A building with twelve stabilized
+    /// units would render "Rent stabilized: No".
+    ///
+    /// This is the test the old `String` field could not have. There was nothing to pin:
+    /// the value was constructed inline at three call sites and described, wrongly, in a
+    /// doc comment.
+    #[test]
+    fn serializes_to_the_wire_contract() {
+        let json = |s: StabilizationStatus| serde_json::to_string(&s).unwrap();
+        assert_eq!(json(StabilizationStatus::Likely), "\"likely\"");
+        assert_eq!(json(StabilizationStatus::NoneOnRecord), "\"none_on_record\"");
+        assert_eq!(json(StabilizationStatus::Unverified), "\"unverified\"");
+
+        // And round-trips, so a stored/cached card still deserializes.
+        for s in [
+            StabilizationStatus::Likely,
+            StabilizationStatus::NoneOnRecord,
+            StabilizationStatus::Unverified,
+        ] {
+            let back: StabilizationStatus = serde_json::from_str(&json(s)).unwrap();
+            assert_eq!(back, s);
+        }
+    }
+
+    /// `as_wire` and `rename_all` are two hand-maintained spellings of the same fact, which is
+    /// the defect this whole enum exists to remove. This is what makes them one fact.
+    #[test]
+    fn wire_form_matches_serde() {
+        for s in [
+            StabilizationStatus::Likely,
+            StabilizationStatus::NoneOnRecord,
+            StabilizationStatus::Unverified,
+        ] {
+            assert_eq!(
+                serde_json::to_string(&s).unwrap(),
+                format!("\"{}\"", s.as_wire()),
+                "as_wire disagrees with serde for {s:?}"
+            );
+            assert_eq!(s.to_string(), s.as_wire(), "Display disagrees with as_wire");
+        }
+    }
+
+    #[test]
+    fn only_a_real_dof_record_counts_as_a_source() {
+        assert!(StabilizationStatus::Likely.has_dof_record());
+        assert!(StabilizationStatus::NoneOnRecord.has_dof_record());
+        // "unverified" means the lookup found nothing. Citing DHCR here is the defect that
+        // over-claimed a source on 163 of 250 shipped buildings.
+        assert!(!StabilizationStatus::Unverified.has_dof_record());
+    }
+
+    #[test]
+    fn from_units_maps_the_tri_state() {
+        assert_eq!(
+            Stabilization::from_units(Some(true), Some(12)).status,
+            StabilizationStatus::Likely
+        );
+        assert_eq!(
+            Stabilization::from_units(Some(false), Some(0)).status,
+            StabilizationStatus::NoneOnRecord
+        );
+        assert_eq!(
+            Stabilization::from_units(None, None).status,
+            StabilizationStatus::Unverified
+        );
+    }
 
     #[test]
     fn counts_only_open_violations_by_class() {

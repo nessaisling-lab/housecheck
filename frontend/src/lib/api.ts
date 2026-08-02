@@ -1,3 +1,4 @@
+import { asStabilization } from "@/types/building";
 import type {
   ApiResult,
   BuildingCard,
@@ -147,7 +148,10 @@ function normalizeBuilding(raw: any): BuildingCard {
     },
     access_likelihood: raw.access_likelihood ?? null,
     stabilization:
-      typeof stab === "string" ? stab : stab?.status ?? null,
+      // Narrowed rather than cast: the union is closed now, so an unrecognised value from a
+      // future backend becomes null (and renders as unverified) instead of quietly widening
+      // the type and defeating the ten comparisons downstream.
+      asStabilization(typeof stab === "string" ? stab : stab?.status),
     stabilization_message:
       typeof stab === "string" ? raw.stabilization_message ?? null : stab?.message ?? null,
     good_cause: facts.good_cause ?? raw.good_cause ?? null,

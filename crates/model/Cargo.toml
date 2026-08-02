@@ -5,3 +5,10 @@ edition.workspace = true
 
 [dependencies]
 serde.workspace = true
+
+# Test-only. `[dependencies]` stays at exactly one crate — the property that lets `model` be
+# constructed in four lines in a test and never fail to build — and a dev-dependency is not
+# part of what ships. It is here so `serializes_to_the_wire_contract` can assert the actual
+# JSON bytes rather than trusting that `rename_all` does what it says.
+[dev-dependencies]
+serde_json.workspace = true

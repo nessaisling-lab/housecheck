@@ -44,15 +44,31 @@ pub fn legal_score(b: &Building) -> u8 {
 /// Constants and rationale:
 /// - `ln(1 + c)` — complaint counts are heavy-tailed; log compresses them so a jump from 50→60
 ///   barely moves the score while 300→3000 still does. `1 +` keeps `c = 0` well-defined.
-/// - `- 4.0` — a "free" allowance: `ln(1 + c) <= 4` (≈ c ≤ 54) means zero penalty, because a
+/// - `- 5.5` — a "free" allowance: `ln(1 + c) <= 5.5` (c ≤ 244) means zero penalty, because a
 ///   busy-but-normal block shouldn't be dinged. `.max(0)` prevents low counts from *raising* it.
-/// - `* 20.0` — slope: converts the ~0→4.1 usable log range into the 0→60 penalty band.
+/// - `* 20.0` — slope. With the 60-point clamp this makes the penalty band exactly `60/20 = 3.0`
+///   log units wide, running from the allowance at `ln = 5.5` to saturation at `ln = 8.5`
+///   (c = 244 → 4,914). The previous comment claimed this mapped a "~0→4.1 usable log range"
+///   into 0→60, which does not close: 4.1 × 20 = 82, not 60. The band is 3.0 wide by
+///   construction, not 4.1.
 /// - `clamp(.., 0, 60)` — floor the score at 40 for the very worst blocks.
 ///
-/// Reference points: c≈54 → 100, c=262 → 69, c=3209 → 40.
+/// **The allowance was 4.0 until the ingest was fixed to page.** `complaints_311` was previously
+/// computed from a truncated 311 pull — 50,000 of ~219,000 matching rows — so every count was
+/// roughly 23% of its true value. Paging the query multiplied the counts by 4.56x measured
+/// across the curated set, and `ln(4.562) = 1.518`, so the allowance moved 4.0 → 5.5 to keep the
+/// curve meaning the same thing about a real block that it meant before. That the shift is
+/// derived rather than fitted is the point: mean neighborhood score across the 250 buildings is
+/// 59.4 after, against 59.5 before, so the correction fixed the input without quietly
+/// re-weighting the pillar.
+///
+/// Reference points: c ≤ 244 → 100, c=433 → 89, c=1966 → 58, c=4310 → 43, c ≥ 4793 → 40.
+/// Observed range on the shipped artifact is 433..4310, so the worst real block sits at 43 with
+/// about 11% headroom before the floor. That margin is thin and `neighborhood_floor_has_headroom`
+/// exists to fail if a future ingest closes it.
 pub fn neighborhood_score(complaints_311: i32) -> u8 {
     let c = complaints_311.max(0) as f64;
-    let penalty = (((1.0 + c).ln() - 4.0).max(0.0) * 20.0)
+    let penalty = (((1.0 + c).ln() - 5.5).max(0.0) * 20.0)
         .round()
         .clamp(0.0, 60.0);
     (100.0 - penalty) as u8
@@ -173,22 +189,39 @@ mod tests {
 
     #[test]
     fn neighborhood_penalizes_311_density() {
-        // LOG rule: a busy-but-normal block (≤ ~54 complaints) is not penalized.
+        // LOG rule: a busy-but-normal block (c ≤ 244 on complete 311 data) is not penalized.
         assert_eq!(neighborhood_score(0), 100);
         assert_eq!(neighborhood_score(10), 100);
-        assert_eq!(neighborhood_score(100), 88);
+        assert_eq!(neighborhood_score(244), 100);
+        assert_eq!(neighborhood_score(250), 99); // first penalised count
         // Spec reference points that the discriminating curve must hit.
-        assert_eq!(neighborhood_score(262), 69);
-        assert_eq!(neighborhood_score(3209), 40); // penalty clamped at 60
+        assert_eq!(neighborhood_score(1966), 58);
+        assert_eq!(neighborhood_score(4914), 40); // penalty clamped at 60
     }
 
     #[test]
     fn neighborhood_discriminates_dense_blocks() {
         // Under the old linear rule (−2/complaint, −60 cap) both 100 and 500 saturated to 40,
         // so the score told you nothing. The LOG rule must now separate them.
-        assert_ne!(neighborhood_score(100), neighborhood_score(500));
-        assert_eq!(neighborhood_score(100), 88);
-        assert_eq!(neighborhood_score(500), 56);
+        assert_ne!(neighborhood_score(433), neighborhood_score(4310));
+        assert_eq!(neighborhood_score(433), 89);
+        assert_eq!(neighborhood_score(4310), 43);
+    }
+
+    #[test]
+    fn neighborhood_floor_has_headroom_over_the_real_maximum() {
+        // The curve was recalibrated once already, after paging the 311 query multiplied every
+        // count by 4.56x. A future ingest that widens the bbox or the date window will do the
+        // same thing again, and the failure is silent: counts drift up, buildings pile onto the
+        // 40 floor, and the pillar stops discriminating exactly as it did under the pre-2bc7851
+        // linear rule. 4310 is the worst block in the shipped artifact.
+        const WORST_OBSERVED: i32 = 4310;
+        assert!(
+            neighborhood_score(WORST_OBSERVED) > 40,
+            "the worst real block is already on the floor — recalibrate the allowance"
+        );
+        // And the floor itself must stay meaningfully above it, not one complaint above.
+        assert!(neighborhood_score(WORST_OBSERVED) >= 43);
     }
 
     #[test]

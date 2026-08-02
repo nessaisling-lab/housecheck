@@ -59,18 +59,33 @@ fn arr(v: &Value) -> &[Value] {
     v.as_array().map(|a| a.as_slice()).unwrap_or(&[])
 }
 
+/// A URL with its query string removed, for error messages and logs.
+///
+/// `census_url` embeds `CENSUS_API_KEY` as a query parameter, and the Census fetch below is
+/// non-fatal — it prints `{e:#}`, the whole anyhow context chain. Interpolating the raw URL
+/// into that context would print the caller's API key to stdout on any Census outage, and from
+/// there into CI logs and terminal scrollback. The host and path are all a reader needs.
+fn redacted(url: &str) -> &str {
+    url.split('?').next().unwrap_or(url)
+}
+
 /// GET a whole URL (Census / MTA — no raw spaces to encode) and decode JSON.
 fn get_json(c: &Client, url: &str) -> Result<Value> {
-    let resp = c.get(url).send().with_context(|| format!("GET {url}"))?;
+    let safe = redacted(url);
+    let resp = c.get(url).send().with_context(|| format!("GET {safe}"))?;
     let resp = resp
         .error_for_status()
-        .with_context(|| format!("bad status for {url}"))?;
+        .with_context(|| format!("bad status for {safe}"))?;
     resp.json()
-        .with_context(|| format!("decode json from {url}"))
+        .with_context(|| format!("decode json from {safe}"))
 }
 
 /// GET a base URL with query params (Socrata SoQL). `reqwest` percent-encodes the `$where`
 /// clause's spaces and `>` — the whole point of sending components, not a baked URL string.
+///
+/// Raw fetch, no completeness check: use this only where `$limit` is a deliberate sample cap
+/// (the PLUTO building pull, which is *meant* to stop at `--limit`). Anywhere the query is
+/// supposed to return everything that matches, use `get_json_complete` or `get_json_paged`.
 fn get_json_query(c: &Client, base: &str, params: &[(String, String)]) -> Result<Value> {
     let resp = c
         .get(base)
@@ -82,6 +97,92 @@ fn get_json_query(c: &Client, base: &str, params: &[(String, String)]) -> Result
         .with_context(|| format!("bad status for {base}"))?;
     resp.json()
         .with_context(|| format!("decode json from {base}"))
+}
+
+/// Short name for log lines: the Socrata dataset id out of the URL.
+fn dataset_of(base: &str) -> &str {
+    base.rsplit('/').next().unwrap_or(base)
+}
+
+/// GET a query that is expected to return every matching row in one request, and **fail loudly
+/// if it did not**.
+///
+/// A bare `$limit` is a silent truncation. Socrata returns the first N rows in an unspecified
+/// order and tells you nothing about how many matched, so a query that quietly drops rows looks
+/// exactly like one that found few. Row count equal to the limit is the signal, and it is the
+/// only signal there is.
+fn get_json_complete(c: &Client, base: &str, params: &[(String, String)]) -> Result<Value> {
+    let rows = get_json_query(c, base, params)?;
+    if let Some(limit) = param_limit(params) {
+        let n = arr(&rows).len();
+        anyhow::ensure!(
+            n < limit,
+            "{}: returned {n} rows against a $limit of {limit} — the result is truncated and \
+             the ingest would silently store incomplete data. Page this query or raise the limit.",
+            dataset_of(base)
+        );
+    }
+    Ok(rows)
+}
+
+/// The `$limit` in a param list, if it parses.
+fn param_limit(params: &[(String, String)]) -> Option<usize> {
+    params
+        .iter()
+        .find(|(k, _)| k == "$limit")
+        .and_then(|(_, v)| v.parse::<usize>().ok())
+}
+
+/// Upper bound on a paged pull, so a server that ignores `$offset` cannot loop forever.
+const MAX_PAGED_ROWS: usize = 2_000_000;
+
+/// GET **every** row matching a query, paging on `$offset` until a short page comes back.
+///
+/// This exists because the HPD violation query asked for 50,000 rows against 134,837 matching
+/// ones. That cost half the violation history, and because `condition_score` starts at 100 and
+/// subtracts, a violation you fail to fetch can only ever make a building look better. The
+/// 311 query had the same defect against 219,199 rows.
+///
+/// `$order` is required rather than optional: `$offset` paging without a total order is
+/// undefined, and pages may repeat or skip rows. Callers pass `:id`, Socrata's stable system
+/// column. Forgetting it is an error here, not a silently wrong result.
+///
+/// The `$limit` in `params` is the page size.
+fn get_json_paged(c: &Client, base: &str, params: &[(String, String)]) -> Result<Vec<Value>> {
+    anyhow::ensure!(
+        params.iter().any(|(k, _)| k == "$order"),
+        "{}: a paged fetch needs an explicit $order or offset paging may skip or repeat rows",
+        dataset_of(base)
+    );
+    let page = param_limit(params).unwrap_or(50_000);
+    anyhow::ensure!(page > 0, "{}: $limit must be positive", dataset_of(base));
+
+    let mut out: Vec<Value> = Vec::new();
+    let mut requests = 0usize;
+    loop {
+        let mut p = params.to_vec();
+        p.push(("$offset".to_string(), out.len().to_string()));
+        let rows = get_json_query(c, base, &p)?;
+        requests += 1;
+        let n = arr(&rows).len();
+        out.extend(arr(&rows).iter().cloned());
+        if n < page {
+            break;
+        }
+        anyhow::ensure!(
+            out.len() <= MAX_PAGED_ROWS,
+            "{}: passed {MAX_PAGED_ROWS} rows — $offset is probably being ignored",
+            dataset_of(base)
+        );
+    }
+    if requests > 1 {
+        println!(
+            "  {}: {} rows over {requests} requests (paged)",
+            dataset_of(base),
+            out.len()
+        );
+    }
+    Ok(out)
 }
 
 pub fn run_real(cfg: &Config) -> Result<()> {
@@ -145,8 +246,8 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     let mut unknown_classes = 0usize;
     for chunk in blocks.chunks(500) {
         let (base, params) = hpd_block_query(boroid, chunk);
-        let rows = get_json_query(&c, &base, &params)?;
-        for v in arr(&rows) {
+        let rows = get_json_paged(&c, &base, &params)?;
+        for v in &rows {
             let Some(bbl) = hpd_bbl(v) else { continue };
             if !bbl_set.contains(&bbl) {
                 continue; // a neighbor on the same block, not one of our buildings
@@ -168,7 +269,7 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     let mut has_elevator: HashMap<String, bool> = HashMap::new();
     for chunk in bbls.chunks(200) {
         let (base, params) = bbl_in_query("e5aq-a4j2", "bbl,device_type,device_status", chunk);
-        let rows = get_json_query(&c, &base, &params)?;
+        let rows = get_json_complete(&c, &base, &params)?;
         for v in arr(&rows) {
             if parse_dob_has_elevator(v) {
                 if let Some(bbl) = v.get("bbl").and_then(|x| x.as_str()) {
@@ -234,14 +335,14 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     };
 
     // 5b. 311 complaints for the nearby-context density (count within 150 m of each building).
-    //     Bound the pull to the curated set's lat/long bbox and to recent complaints so a single
-    //     request with a tens-of-thousands `$limit` covers the slice.
+    //     Bounded to the curated set's bbox and to recent complaints — which is still far more
+    //     than one request returns, so this is paged. 50_000 is the page size.
     let points_311: Vec<(f64, f64)> = match bbox {
         None => Vec::new(),
         Some((min_lat, min_lon, max_lat, max_lon)) => {
             let (base, params) = complaints_311_query(min_lat, min_lon, max_lat, max_lon, 50_000);
-            let rows = get_json_query(&c, &base, &params)?;
-            arr(&rows).iter().filter_map(parse_311_point).collect()
+            let rows = get_json_paged(&c, &base, &params)?;
+            rows.iter().filter_map(parse_311_point).collect()
         }
     };
     println!("311: {} complaint points loaded", points_311.len());
@@ -254,7 +355,7 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         Some((min_lat, min_lon, max_lat, max_lon)) => {
             let (base, params) =
                 restaurant_grades_query(min_lat, min_lon, max_lat, max_lon, 20_000);
-            match get_json_query(&c, &base, &params) {
+            match get_json_complete(&c, &base, &params) {
                 Ok(rows) => arr(&rows)
                     .iter()
                     .filter_map(parse_restaurant_grade)

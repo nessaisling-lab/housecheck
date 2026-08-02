@@ -141,6 +141,10 @@ pub fn hpd_block_query(boroid: u32, blocks: &[u32]) -> Query {
             "$where".to_string(),
             format!("boroid={boroid} AND block in({list})"),
         ),
+        // `:id` is Socrata's stable system column. It is here so `$offset` paging in
+        // `get_json_paged` is well-defined — without a total order, pages may repeat or skip
+        // rows. `$limit` below is therefore a PAGE SIZE, not a ceiling on the result.
+        ("$order".to_string(), ":id".to_string()),
         ("$limit".to_string(), "50000".to_string()),
     ];
     (base, params)
@@ -230,9 +234,15 @@ pub fn parse_census_medians(v: &Value) -> std::collections::HashMap<String, i32>
 }
 
 /// 311 service requests (erm2-nwe9) inside a lat/long bounding box and since a recent cutoff.
-/// Bounding to the curated set's box + recent complaints keeps a single request (with a
-/// tens-of-thousands `$limit`) enough to cover the slice. `$where` carries spaces and `>`, so
-/// it goes through `reqwest`'s `.query()` for encoding, same as the other Socrata builders.
+///
+/// The bbox + date cutoff do NOT bring this under one request, and the previous comment here
+/// said they did. Measured against the shipped bbox, the `$where` matches 219,199 rows and the
+/// `$limit` asked for 50,000 — so every `complaints_311` count in the artifact was computed
+/// from an arbitrary 23% of the data, in whatever order Socrata happened to return. Paged now;
+/// `limit` is the page size.
+///
+/// `$where` carries spaces and `>`, so it goes through `reqwest`'s `.query()` for encoding,
+/// same as the other Socrata builders.
 pub fn complaints_311_query(
     min_lat: f64,
     min_lon: f64,
@@ -251,6 +261,10 @@ pub fn complaints_311_query(
                  AND longitude >= {min_lon} AND longitude <= {max_lon}"
             ),
         ),
+        // Stable total order so `$offset` paging is well-defined; see `hpd_block_query`.
+        // `limit` is the page size, not a ceiling — this bbox matches far more rows than
+        // any single request returns.
+        ("$order".to_string(), ":id".to_string()),
         ("$limit".to_string(), limit.to_string()),
     ];
     (base, params)
@@ -426,6 +440,10 @@ mod tests {
         assert!(base.ends_with("/wvxf-dwi5.json"), "base was {base}");
         assert_eq!(param(&params, "$where"), "boroid=3 AND block in(1599,1970)");
         assert!(param(&params, "$select").contains("violationstatus"));
+        // This query matched 134,837 rows against a 50,000 `$limit` and silently dropped half
+        // the violation history. `$limit` is now a page size, and paging is only well-defined
+        // with a total order — so the absence of `$order` is the bug, not a style choice.
+        assert_eq!(param(&params, "$order"), ":id");
     }
 
     #[test]
@@ -541,7 +559,11 @@ mod tests {
         assert!(where_clause.contains("longitude >= -74"));
         assert!(where_clause.contains("longitude <= -73.9"));
         assert_eq!(param(&params, "$select"), "latitude,longitude");
+        // 50,000 is the PAGE SIZE, not a ceiling. The old test asserted the same value while
+        // it was a ceiling against 219,199 matching rows, which pinned the truncation as
+        // intended behaviour. The `$order` is what makes the page size safe.
         assert_eq!(param(&params, "$limit"), "50000");
+        assert_eq!(param(&params, "$order"), ":id");
     }
 
     #[test]

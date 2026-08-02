@@ -30,7 +30,7 @@ Eight external sources:
 | Socrata `erm2-nwe9` (311) | complaint points |
 | Socrata `43nn-pn8j` (DOHMH) | restaurant grades |
 | Socrata (MTA) | ADA-accessible stations |
-| `api.census.gov/data/**2023**/acs/acs5` | B25064 tract rent medians |
+| `api.census.gov/data/2023/acs/acs5` — note the pinned vintage | B25064 tract rent medians |
 | JustFix S3 CSV | DOF rent-stabilization unit counts |
 
 Note the `2023` in the Census URL. That query is **pinned to a dataset vintage**,

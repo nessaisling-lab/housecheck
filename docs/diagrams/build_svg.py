@@ -14,8 +14,12 @@ G = json.load(io.open(os.path.join(HERE, "iso_geom.json"), encoding="utf-8"))
 OUT = os.path.join(HERE, "housecheck-architecture.svg")
 
 INK, SLATE, ACC, PAPER = "#14161C", "#5C6472", "#C2321B", "#F7F6F3"
-FILL = {"top": "#FFFFFF", "left": "#E7E5E0", "right": "#D6D3CC"}
-HOT = {"top": "#FDEEEA", "left": "#F5D8D0", "right": "#EAC3B8"}
+# Face fills carry the 3D read, so adjacent faces need real luminance separation and the
+# top face has to sit clearly below the paper. A near-white stack on near-white paper is
+# legible only from its strokes, which is what the first version of this was.
+# Measured: top/paper 1.45:1, top/left 1.61:1, left/right 1.65:1.
+FILL = {"top": "#DCD6C8", "left": "#B2A995", "right": "#8B8170"}
+HOT = {"top": "#F3C6B8", "left": "#DC9C88", "right": "#BC7A66"}
 SANS = "ui-sans-serif,system-ui,'Segoe UI',Helvetica,Arial,sans-serif"
 MONO = "ui-monospace,Menlo,Consolas,'Courier New',monospace"
 
@@ -77,8 +81,8 @@ p.append("</g>")
 for Lr in G["layers"]:
     f = HOT if Lr["hot"] else FILL
     st = ACC if Lr["hot"] else INK
-    op = ".55" if Lr["hot"] else ".22"
-    p.append('<g stroke="%s" stroke-opacity="%s" stroke-width="1.25" stroke-linejoin="round">'
+    op = ".85" if Lr["hot"] else ".55"
+    p.append('<g stroke="%s" stroke-opacity="%s" stroke-width="1.4" stroke-linejoin="round">'
              % (st, op))
     p.append('<polygon points="%s" fill="%s"/>' % (Lr["right"], f["right"]))
     p.append('<polygon points="%s" fill="%s"/>' % (Lr["left"], f["left"]))

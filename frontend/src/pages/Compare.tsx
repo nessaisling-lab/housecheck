@@ -20,7 +20,7 @@ const ROWS: RowDef[] = [
   { label: "Legal", get: (b) => b.sub_scores.legal ?? "—", raw: (b) => b.sub_scores.legal, higherIsBetter: true },
   { label: "Neighborhood", get: (b) => b.sub_scores.neighborhood ?? "—", raw: (b) => b.sub_scores.neighborhood, higherIsBetter: true },
   { label: "Accessibility", get: (b) => b.sub_scores.accessibility ?? "—", raw: (b) => b.sub_scores.accessibility, higherIsBetter: true },
-  { label: "Class C", get: (b) => b.open_violations.c, raw: (b) => b.open_violations.c, higherIsBetter: false },
+  { label: "Class C", get: (b) => b.open_violations.c ?? "—", raw: (b) => b.open_violations.c, higherIsBetter: false },
   {
     label: "Stabilized",
     get: (b) => (b.stabilization === "likely" ? "Yes" : b.stabilization === "unverified" ? "Unverified" : "No"),

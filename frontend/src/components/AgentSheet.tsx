@@ -212,7 +212,15 @@ function answerChip(
     role: "agent",
     text:
       median != null && pct != null
-        ? `The asking pattern here runs ${fmtPct(pct)} the tract median (${fmtMoney(median)}). Concrete levers: cite the ${b.open_violations.c} open Class C violation${b.open_violations.c === 1 ? "" : "s"}, ask for a longer lease in exchange for a lower ask, or negotiate a free month instead of a rent cut.`
+        ? `The asking pattern here runs ${fmtPct(pct)} the tract median (${fmtMoney(median)}). Concrete levers: ${
+            // Only offer the violation lever when there is a count to cite. Interpolating a
+            // null here printed "cite the null open Class C violations".
+            b.open_violations.c === null
+              ? "ask what the building's open HPD violations are"
+              : b.open_violations.c > 0
+                ? `cite the ${b.open_violations.c} open Class C violation${b.open_violations.c === 1 ? "" : "s"}`
+                : "note the clean Class C record as a reason the asking rent should not carry a risk premium"
+          }, ask for a longer lease in exchange for a lower ask, or negotiate a free month instead of a rent cut.`
         : "I don't have a tract rent benchmark for this building yet. Enter your rent in the Rent fairness section and I'll compare it against the Census tract median.",
     source: "Source: US Census B25064 · HUD FMR",
   };

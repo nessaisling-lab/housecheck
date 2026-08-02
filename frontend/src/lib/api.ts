@@ -79,6 +79,11 @@ function asArray<T>(v: T | T[]): T[] {
  *     access_likelihood: "Higher"|"Mixed"|"Lower",
  *     stabilization: { status, message } }
  */
+/** A finite number, or null. Anything else the backend sends is "we don't know". */
+function numOrNull(x: unknown): number | null {
+  return typeof x === "number" && Number.isFinite(x) ? x : null;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeBuilding(raw: any): BuildingCard {
   const facts = raw.building ?? raw;
@@ -105,9 +110,12 @@ function normalizeBuilding(raw: any): BuildingCard {
       accessibility: score.accessibility ?? null,
     },
     open_violations: {
-      a: v.a ?? v.class_a ?? v.A ?? 0,
-      b: v.b ?? v.class_b ?? v.B ?? 0,
-      c: v.c ?? v.class_c ?? v.C ?? 0,
+      // `?? 0` here is what let a missing field render as "a clean hazardous-violation
+      // record". The spelling fallbacks stay — the backend has used all three — but the
+      // final fallback is null, so absence stays absent all the way to the card.
+      a: numOrNull(v.a ?? v.class_a ?? v.A),
+      b: numOrNull(v.b ?? v.class_b ?? v.B),
+      c: numOrNull(v.c ?? v.class_c ?? v.C),
       open_since: v.open_since ?? v.since ?? null,
     },
     access_likelihood: raw.access_likelihood ?? null,

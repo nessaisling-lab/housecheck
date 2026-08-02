@@ -200,10 +200,23 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Open the shipped artifact and refuse to serve a bad one.
+    ///
+    /// Read-only, so a missing file is a startup error rather than a newly-created empty
+    /// database. `migrate` is deliberately gone from this path: the server has no business
+    /// creating a schema, and running it here is what turned "the artifact is missing" into
+    /// "the artifact is empty and I built it myself". The count catches the remaining bad
+    /// state — a file that exists and has no rows.
     pub fn from_path(path: &str) -> anyhow::Result<Self> {
-        let conn = store::open_db(path)?;
-        store::migrate(&conn)?;
+        let conn = store::open_db_readonly(path)?;
+        let buildings = store::building_count(&conn)?;
+        anyhow::ensure!(
+            buildings > 0,
+            "artifact at {path} has no buildings — refusing to start rather than serve a \
+             404 for every address under a green health check"
+        );
         let snapshot_year = get_snapshot_year(&conn)?.unwrap_or(DEFAULT_SNAPSHOT_YEAR);
+        tracing::info!(path, buildings, snapshot_year, "artifact loaded");
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
             snapshot_year,
@@ -1952,7 +1965,13 @@ fn citations_for(card: &HealthCard, tract_median: Option<i32>) -> Vec<String> {
         "NYC HPD violations (wvxf-dwi5)".to_string(),
         "NYC DOF / PLUTO building record".to_string(),
     ];
-    if card.stabilization.status != "none" {
+    // `Stabilization::from_units` emits exactly "likely" | "none_on_record" | "unverified".
+    // This branch used to test `!= "none"` — a value produced nowhere in the workspace, so it
+    // was always true and the citation was unconditional. "unverified" means the DOF lookup
+    // found no record for the building, and 163 of the 250 shipped buildings are unverified,
+    // so two thirds of answers cited a source that returned nothing. Cite it only when a
+    // record actually backed the claim.
+    if matches!(card.stabilization.status.as_str(), "likely" | "none_on_record") {
         c.push("NYC DOF rent-stabilization record · NYS DHCR".to_string());
     }
     if tract_median.is_some() {
@@ -2895,6 +2914,22 @@ mod tests {
         );
         let with = citations_for(&card, Some(2400));
         assert!(with.iter().any(|c| c.contains("B25064")));
+
+        // The stabilization branch, which this test's name has always claimed to cover and
+        // did not. Fixture building 1 has a DOF record; building 2 has none.
+        let dhcr = |c: &Vec<String>| c.iter().any(|s| s.contains("DHCR"));
+        assert_eq!(card.stabilization.status, "likely");
+        assert!(dhcr(&with), "a building with a DOF record must cite it");
+
+        // Fixture building 2 ships `rent_stabilized = NULL` (store:124) → "unverified".
+        let unverified = card_for(&conn, DEFAULT_SNAPSHOT_YEAR, "3000020002")
+            .expect("query")
+            .expect("card");
+        assert_eq!(unverified.stabilization.status, "unverified");
+        assert!(
+            !dhcr(&citations_for(&unverified, Some(2400))),
+            "must not cite a DOF stabilization record that was never found"
+        );
     }
 
     // ---- /agent/chat request validation (all before any paid call) ----

@@ -77,10 +77,11 @@ function Skeleton({ address }: { address?: string }) {
 
 function subStatus(b: Building, key: "condition" | "legal" | "neighborhood" | "accessibility"): string {
   switch (key) {
-    case "condition":
-      return b.open_violations.c > 0
-        ? `${b.open_violations.c} hazardous violation${b.open_violations.c > 1 ? "s" : ""} open`
-        : "No hazardous violations";
+    case "condition": {
+      const c = b.open_violations.c;
+      if (c === null) return "No violation data";
+      return c > 0 ? `${c} hazardous violation${c > 1 ? "s" : ""} open` : "No hazardous violations";
+    }
     case "legal":
       return b.stabilization === "likely"
         ? `Stabilized${b.good_cause ? " · Good Cause" : ""}`
@@ -284,9 +285,9 @@ export default function HealthCard() {
           </p>
           <dl className="mt-4 space-y-2.5">
             {[
-              ["Class C — immediately hazardous", v.c],
-              ["Class B — hazardous", v.b],
-              ["Class A — non-hazardous", v.a],
+              ["Class C — immediately hazardous", v.c ?? "—"],
+              ["Class B — hazardous", v.b ?? "—"],
+              ["Class A — non-hazardous", v.a ?? "—"],
               ["Open since", v.open_since ?? "—"],
               ["311 complaints (12 mo)", building.complaints_311 ?? "—"],
             ].map(([l, val]) => (
@@ -408,7 +409,11 @@ export default function HealthCard() {
             <span className="block text-[0.9375rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
               {building.year_built ? `${building.year_built} ` : ""}
               {building.has_elevator ? "elevator building" : "walk-up"}
-              {v.c > 0 ? ` with ${v.c} hazardous violation${v.c > 1 ? "s" : ""} open` : " with a clean hazardous-violation record"}
+              {v.c === null
+                ? " with no violation data on record"
+                : v.c > 0
+                  ? ` with ${v.c} hazardous violation${v.c > 1 ? "s" : ""} open`
+                  : " with a clean hazardous-violation record"}
               {building.stabilization === "likely" ? "; likely rent-stabilized" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}
               {building.good_cause ? ", with Good Cause coverage" : ""}.
             </span>
@@ -518,19 +523,23 @@ export default function HealthCard() {
             badge={prioritySections.has("condition") ? priorityBadge : undefined}
             order={sectionOrder("condition")}
             pill={
-              v.c > 0
-                ? { text: `${v.c} Class C`, color: "var(--hc-critical)" }
-                : { text: "No Class C", color: "var(--hc-strong)" }
+              v.c === null
+                ? { text: "No data", color: "var(--hc-unverified)" }
+                : v.c > 0
+                  ? { text: `${v.c} Class C`, color: "var(--hc-critical)" }
+                  : { text: "No Class C", color: "var(--hc-strong)" }
             }
             rows={[
-              { label: "Class C — hazardous", value: v.c },
-              { label: "Class B", value: v.b },
+              { label: "Class C — hazardous", value: v.c ?? "—" },
+              { label: "Class B", value: v.b ?? "—" },
               { label: "Open since", value: v.open_since ?? "—" },
             ]}
             sentence={
-              v.c > 0
-                ? "Class C means immediately hazardous — ask what the repair timeline is."
-                : "No heat complaints on record."
+              v.c === null
+                ? "No violation records came back for this building — treat the condition score as unverified."
+                : v.c > 0
+                  ? "Class C means immediately hazardous — ask what the repair timeline is."
+                  : "No heat complaints on record."
             }
             source={{ agency: "NYC HPD", date: DATA_MONTH, href: "https://hpdonline.nyc.gov/hpdonline" }}
             onOpenDetail={() => setDetail("condition")}

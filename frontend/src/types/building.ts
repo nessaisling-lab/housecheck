@@ -6,10 +6,20 @@ export interface SearchResult {
   in_curated_set: boolean;
 }
 
+/**
+ * Open HPD violation counts by class.
+ *
+ * `null` means "the backend did not tell us", which is NOT the same as zero and must never
+ * render as one. These were coerced to `0` on the way in, so a building whose payload was
+ * missing the field displayed identically to a building with a genuinely clean record — and
+ * the card states that case affirmatively ("a clean hazardous-violation record"), which is
+ * the strongest claim the product makes about a building. Absence has to survive to the
+ * render or the render invents a fact.
+ */
 export interface ViolationCounts {
-  a: number;
-  b: number;
-  c: number;
+  a: number | null;
+  b: number | null;
+  c: number | null;
   open_since?: number | null;
 }
 

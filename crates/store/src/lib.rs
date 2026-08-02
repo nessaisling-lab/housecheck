@@ -1,9 +1,35 @@
-use anyhow::Result;
-use rusqlite::Connection;
+use anyhow::{Context, Result};
+use rusqlite::{Connection, OpenFlags};
 
-/// Open a bundled-SQLite connection (":memory:" or a file path).
+/// Open the serving artifact **read-only**, for the API.
+///
+/// `open_db` below is read-write with create-if-missing, which is correct for `ingest` — it
+/// has to create the file — and wrong for the server, which must never create or modify one.
+/// Pointing the API at a missing path used to succeed: it created the directory, created an
+/// empty database, built the schema, and then served `/health` → `ok` with a 404 for every
+/// building. A green deploy with no data, and nothing logged.
+///
+/// Read-only makes that state unrepresentable rather than merely detectable. A missing file
+/// fails here, once, at startup, instead of silently at every request forever after.
+pub fn open_db_readonly(path: &str) -> Result<Connection> {
+    Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+    )
+    .with_context(|| format!("open {path} read-only (the serving artifact must already exist)"))
+}
+
+/// Number of buildings in the artifact. The API asserts this is non-zero at startup: a
+/// present-but-empty database is the one bad state `open_db_readonly` cannot rule out.
+pub fn building_count(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row("SELECT count(*) FROM buildings", [], |r| r.get(0))?)
+}
+
+/// Open a bundled-SQLite connection (":memory:" or a file path) for **writing**.
 /// Creates the parent directory for a file path if it doesn't exist — SQLite
 /// error 14 ("unable to open the database file") otherwise on a fresh checkout.
+/// Used by `ingest` and by the in-memory test fixtures; the API uses
+/// [`open_db_readonly`].
 pub fn open_db(path: &str) -> Result<Connection> {
     if path != ":memory:" {
         if let Some(parent) = std::path::Path::new(path).parent() {

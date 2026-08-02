@@ -149,5 +149,5 @@ export function mockSummary(bbl: string): string | null {
       : b.stabilization === "unverified"
         ? "stabilization unverified"
         : "no stabilization on record";
-  return `${b.address} is a ${b.year_built ?? "older"} ${b.has_elevator ? "elevator building" : "walk-up"} scoring ${b.score} — a signal built from public records. Legal record: ${stab}${b.good_cause ? " with Good Cause coverage" : ""}. ${b.open_violations.c > 0 ? `${b.open_violations.c} hazardous (Class C) violation${b.open_violations.c > 1 ? "s" : ""} open — ask about repairs before signing.` : "No hazardous violations open."} Verify everything in person; this is public data, not a legal ruling.`;
+  return `${b.address} is a ${b.year_built ?? "older"} ${b.has_elevator ? "elevator building" : "walk-up"} scoring ${b.score} — a signal built from public records. Legal record: ${stab}${b.good_cause ? " with Good Cause coverage" : ""}. ${b.open_violations.c === null ? "No violation data available." : b.open_violations.c > 0 ? `${b.open_violations.c} hazardous (Class C) violation${b.open_violations.c > 1 ? "s" : ""} open — ask about repairs before signing.` : "No hazardous violations open."} Verify everything in person; this is public data, not a legal ruling.`;
 }

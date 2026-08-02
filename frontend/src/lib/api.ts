@@ -79,6 +79,33 @@ function asArray<T>(v: T | T[]): T[] {
  *     access_likelihood: "Higher"|"Mixed"|"Lower",
  *     stabilization: { status, message } }
  */
+/**
+ * What the deployed artifact says about itself (`GET /meta`).
+ *
+ * Everything here used to be either hardcoded in the UI or not stated at all. `data_month`
+ * in particular was a literal in HealthCard.tsx — a claim about the backend's data that the
+ * backend could not confirm and that no re-ingest would update.
+ */
+export interface ArtifactMeta {
+  data_month?: string | null;
+  buildings?: string | null;
+  violations?: string | null;
+  violation_classes?: string | null;
+  violation_classes_excluded?: string | null;
+  sources?: string | null;
+  snapshot_year?: string | null;
+}
+
+let metaCache: Promise<ArtifactMeta | null> | null = null;
+
+/** Fetched once per page load; the artifact cannot change while the process is up. */
+export function getMeta(): Promise<ArtifactMeta | null> {
+  if (!metaCache) {
+    metaCache = req<ArtifactMeta>("/meta").catch(() => null);
+  }
+  return metaCache;
+}
+
 /** A finite number, or null. Anything else the backend sends is "we don't know". */
 function numOrNull(x: unknown): number | null {
   return typeof x === "number" && Number.isFinite(x) ? x : null;

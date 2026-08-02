@@ -6,19 +6,22 @@ import { Sheet } from "@/components/Sheet";
 import { SpectrumTrack } from "@/components/SpectrumTrack";
 import { StatusPill } from "@/components/StatusPill";
 import { SubScoreTile } from "@/components/SubScoreRow";
-import { checkRentFairness, getBuilding } from "@/lib/api";
+import { checkRentFairness, getBuilding, getMeta, type ArtifactMeta } from "@/lib/api";
 import { useAgent } from "@/lib/agent-context";
 import { bandMeta, fmtDistance, fmtMoney, fmtPct, pctToPosition, scoreWash } from "@/lib/score";
 import { store, useIsSaved, useOnboarding, useTray, type Priority } from "@/lib/store";
 import type { BuildingCard as Building, DataSource, RentFairnessResult } from "@/types/building";
 
 /**
- * Month the serving artifact was ingested. Hand-maintained, and it should not be: the backend
- * knows when its own data was gathered and the `meta` table already carries `snapshot_year`
- * through to every response, so this belongs in an API field rather than a literal here.
- * Re-check it whenever `data/housecheck.db` is rebuilt — nothing enforces it.
+ * Shown only until `GET /meta` answers, and only if it never does.
+ *
+ * This was a hardcoded month — a claim about the backend's data, made by the frontend, that
+ * no re-ingest would ever update. The artifact now stamps `ingested_at_unix` at ingest and
+ * the API derives the month from it, so the source lines below state what the deployment is
+ * actually serving. Kept as a fallback because an unreachable `/meta` should degrade to a
+ * hedge, not to a blank.
  */
-const DATA_MONTH = "Aug 2026";
+const DATA_MONTH_FALLBACK = "recent public records";
 
 type SectionId = "rent" | "condition" | "legal" | "access";
 
@@ -103,6 +106,16 @@ export default function HealthCard() {
 
   const [building, setBuilding] = useState<Building | null>(null);
   const [source, setSource] = useState<DataSource>("live");
+  // The artifact describes itself now; the UI stops asserting a date it cannot know.
+  const [meta, setMeta] = useState<ArtifactMeta | null>(null);
+  useEffect(() => {
+    let live = true;
+    getMeta().then((m) => live && setMeta(m));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const dataMonth = meta?.data_month ?? DATA_MONTH_FALLBACK;
   const [state, setState] = useState<"loading" | "ready" | "notfound" | "error">("loading");
   const [detail, setDetail] = useState<SectionId | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -471,7 +484,7 @@ export default function HealthCard() {
                   }`
                 : "Asking rents in this tract sit near the city benchmark. Paying rent? Check yours below."
             }
-            source={{ agency: "US Census B25064", date: DATA_MONTH, href: "https://data.census.gov/table/ACSDT5Y2023.B25064" }}
+            source={{ agency: "US Census B25064", date: dataMonth, href: "https://data.census.gov/table/ACSDT5Y2023.B25064" }}
             onOpenDetail={() => setDetail("rent")}
           >
             <div className="mt-4">
@@ -541,7 +554,7 @@ export default function HealthCard() {
                   ? "Class C means immediately hazardous — ask what the repair timeline is."
                   : "No heat complaints on record."
             }
-            source={{ agency: "NYC HPD", date: DATA_MONTH, href: "https://hpdonline.nyc.gov/hpdonline" }}
+            source={{ agency: "NYC HPD", date: dataMonth, href: "https://hpdonline.nyc.gov/hpdonline" }}
             onOpenDetail={() => setDetail("condition")}
           />
 
@@ -570,7 +583,7 @@ export default function HealthCard() {
             sentence={
               building.stabilization_message ?? "Confirm stabilization with NYS DHCR before signing."
             }
-            source={{ agency: "HPD · DHCR-HCR", date: DATA_MONTH, href: "https://portal.hcr.ny.gov/app/ask" }}
+            source={{ agency: "HPD · DHCR-HCR", date: dataMonth, href: "https://portal.hcr.ny.gov/app/ask" }}
             onOpenDetail={() => setDetail("legal")}
           />
 
@@ -602,7 +615,7 @@ export default function HealthCard() {
                 <StatusPill text={`${building.floors}-story walk-up`} color="var(--hc-unverified)" />
               ) : undefined
             }
-            source={{ agency: "NYC DOB · MTA", date: DATA_MONTH, href: "https://www.mta.com/accessibility" }}
+            source={{ agency: "NYC DOB · MTA", date: dataMonth, href: "https://www.mta.com/accessibility" }}
             onOpenDetail={() => setDetail("access")}
           />
         </div>
@@ -628,7 +641,17 @@ export default function HealthCard() {
         </div>
 
         <p className="mt-10 text-center text-[0.75rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
-          Every number links to a NYC or Census source · Data from {DATA_MONTH}
+          Every number links to a NYC or Census source · Data from {dataMonth}
+          {/* What the dataset leaves out, stated by the dataset. HPD publishes a fourth
+              violation class the ingest does not score, and until the artifact carried its
+              own provenance there was nowhere honest to say so. */}
+          {meta?.violation_classes && (
+            <>
+              <br />
+              HPD classes {meta.violation_classes} only
+              {meta.violation_classes_excluded ? ` · excluded: class ${meta.violation_classes_excluded}` : ""}
+            </>
+          )}
         </p>
       </div>
 

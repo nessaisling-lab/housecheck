@@ -251,13 +251,45 @@ pub fn upsert_tract_median(conn: &Connection, tract_geoid: &str, median: i32) ->
     Ok(())
 }
 
-pub fn set_snapshot_year(conn: &Connection, year: i32) -> Result<()> {
+/// Write one provenance fact into `meta`. Idempotent per key.
+///
+/// `meta` already carried `snapshot_year` and nothing else, which meant the artifact could
+/// not answer the two questions anyone actually asks of it: when was this gathered, and what
+/// is missing from it. Both were knowable at ingest and thrown away. Everything written here
+/// travels with the database into the image, so a running container can state its own
+/// provenance instead of the frontend asserting it from a hardcoded literal.
+pub fn set_meta(conn: &Connection, key: &str, value: &str) -> Result<()> {
     conn.execute(
-        "INSERT INTO meta (key,value) VALUES ('snapshot_year', ?1)
+        "INSERT INTO meta (key,value) VALUES (?1, ?2)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        rusqlite::params![year.to_string()],
+        rusqlite::params![key, value],
     )?;
     Ok(())
+}
+
+/// One provenance fact, or `None` if this artifact predates it.
+pub fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT value FROM meta WHERE key=?1")?;
+    let mut rows = stmt.query_map([key], |r| r.get::<_, String>(0))?;
+    Ok(match rows.next() {
+        Some(v) => Some(v?),
+        None => None,
+    })
+}
+
+/// Every provenance row, key-ordered, for `/health` and startup logging.
+pub fn all_meta(conn: &Connection) -> Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT key, value FROM meta ORDER BY key")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+pub fn set_snapshot_year(conn: &Connection, year: i32) -> Result<()> {
+    set_meta(conn, "snapshot_year", &year.to_string())
 }
 
 pub fn get_snapshot_year(conn: &Connection) -> Result<Option<i32>> {

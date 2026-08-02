@@ -446,6 +446,50 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         stabilized_count,
         buildings.len()
     );
+
+    // 7. Provenance. Everything below was known during this run and used to be discarded:
+    //    `meta` shipped exactly one row, `snapshot_year`, so the artifact could not say when
+    //    it was gathered or what it excludes. The frontend filled that gap by hardcoding a
+    //    month in a .tsx file, which is a claim about the backend that the backend cannot
+    //    confirm. These rows travel with the database into the image, so the running
+    //    container states its own provenance.
+    //
+    //    Unix seconds rather than a formatted date, deliberately: `chrono` is not a
+    //    dependency of this workspace and adding one here to print a string would put a
+    //    clock in reach of the scoring path. The API formats it.
+    let stored_violations: i64 =
+        conn.query_row("SELECT count(*) FROM violations", [], |r| r.get(0))?;
+    let ingested_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    for (k, v) in [
+        ("ingested_at_unix", ingested_at.to_string()),
+        ("buildings", buildings.len().to_string()),
+        ("violations", stored_violations.to_string()),
+        ("tract_medians", tracts_written.len().to_string()),
+        ("complaints_311_points", points_311.len().to_string()),
+        ("violation_classes", "A,B,C".to_string()),
+        (
+            "violation_classes_excluded",
+            format!("I ({unknown_classes} records skipped at ingest)"),
+        ),
+        (
+            "sources",
+            "HPD wvxf-dwi5 · 311 erm2-nwe9 · PLUTO 64uk-42ks · DOB e5aq-a4j2 · \
+             DOHMH 43nn-pn8j · Census ACS5 2023 B25064 · JustFix nyc-doffer 2024"
+                .to_string(),
+        ),
+        ("community_district", cfg.community_district.to_string()),
+    ] {
+        store::set_meta(&conn, k, &v)?;
+    }
+
     println!("wrote {} buildings to {}", buildings.len(), cfg.out);
+    println!(
+        "provenance: {} violations (A/B/C; {} class-I skipped), {} 311 points, ingested_at_unix={}",
+        stored_violations, unknown_classes, points_311.len(), ingested_at
+    );
     Ok(())
 }

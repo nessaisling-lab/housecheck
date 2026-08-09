@@ -230,8 +230,29 @@ oversight.
    weaker than it looks from outside.
 3. **Whether a renter acts on a bad score.** Carried forward unresolved from the Framing Notes;
    it governs whether Problem 2 is ever worth building for directly.
-4. **Whether HPD's description text is usable as published**, or needs normalising before it
-   can be shown. Unknown until the field is actually fetched.
+4. ~~**Whether HPD's description text is usable as published**~~ — **partially answered
+   9 August 2026.** Sampled 800 rows live from HPD `wvxf-dwi5`: the `novdescription` field is
+   **100% populated** (800/800), mean 120 chars, median 115, p90 161, max 258, 83% distinct.
+
+   It is usable **for the committed user and not for the mission user.** The text is the
+   notice's own language — all caps, statute-prefixed, location-suffixed:
+
+   > `§ 12 M/D LAW DISCONTINUE THE STORAGE OF COMBUSTIBLE MATERIAL 100 CUBIC YARDS AT
+   > GASMETER ROOM AT CELLAR, SECTION AT WEST`
+
+   For an attorney that is ideal, because it is what goes in the petition. For a renter it is
+   barely better than the count. So shipping descriptions raw serves Problem 1 and leaves
+   Problem 2 untouched.
+
+   **And it collides with coverage.** 26,306 violations × ~120 chars ≈ 3.2 MB of text against a
+   1.3 MB artifact — roughly 3.4×, moving the 256 MB ceiling from ~40,000 buildings to
+   **~14,500** (derived; confirm with a real ingest before it drives a decision). The cheapest
+   fix to the committed problem spends two-thirds of the remaining coverage headroom, and
+   nothing in the earlier analysis surfaced that.
+
+5. **Whether descriptions need grouping before display.** At 83% distinct, near-duplicates
+   differ only by room or section, so a building with 33 open violations renders as a wall of
+   nearly identical lines unless they are grouped by condition.
 
 ---
 

@@ -12,7 +12,7 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use model::{HealthCard, ScoreBreakdown, Stabilization, StabilizationStatus, ViolationCounts};
+use model::{HealthCard, ScoreBreakdown, Stabilization, ViolationCounts};
 use store::{
     get_all_buildings, get_building, get_open_violations, get_snapshot_year, get_tract_median,
 };
@@ -2207,6 +2207,8 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use model::StabilizationStatus;
+
     /// A BBL present in the in-memory fixture DB (see `store::insert_fixture`).
     const FIXTURE_BBL: &str = "3000010001";
 

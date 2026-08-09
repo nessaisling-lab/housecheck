@@ -265,13 +265,16 @@ depends on them. Every one of these was written after a real failure.
 
 ### Technical constraints
 
-- **The coverage ceiling is architectural.** A database baked into the image is free to serve and
-  impossible to grow. At roughly 40,000 buildings the artifact exceeds the 256 MB machine. Adding
-  violation descriptions multiplies the artifact by about **3.4×**, moving that ceiling to
-  approximately **14,500 buildings** (derived from a measured field size; one real ingest
-  confirms it). **Citywide coverage of ~180,000 buildings therefore requires replacing the
-  storage design, and that decision trades away the "no DB server to breach" property.** This is
-  the single largest open architectural question for v2.
+- **The coverage ceiling is smaller than it first appeared.** An earlier estimate put the ceiling
+  at ~14,500 buildings once violation descriptions were added, implying citywide coverage
+  required replacing the storage design. That assumed raw text. Measured: descriptions compress
+  **9.9×** (statute-templated), only **25.6%** of the 11.2M citywide violations are open
+  (2,858,719), and storage costs **48 bytes per violation row** in the current artifact.
+  A citywide artifact lands near **240 MB compressed** against ~690 MB raw — so the read-only
+  baked-artifact design **survives**, on a 512 MB machine at roughly $3–4/month, keeping the
+  "no DB server to breach" property. Full working and the rejected alternatives in
+  `docs/design/database-layer.md`. Escape hatch if it ever passes ~800 MB: SQLite over HTTP
+  range reads from object storage, not Postgres.
 - **No telemetry, by design.** Every success metric above is a server-side aggregate precisely
   because there is no per-user tracking to draw on.
 - **The rate limit is a spend guard, not an authentication boundary** — it caps one abuser and

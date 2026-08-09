@@ -7,3 +7,6 @@
 
 .vercel
 .env*
+
+# Generated intermediates — the .docx is the deliverable, the .html is scaffolding
+docs/**/*.html

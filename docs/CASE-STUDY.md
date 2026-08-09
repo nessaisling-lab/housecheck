@@ -74,6 +74,19 @@ Paging the query fixed it. Across all 250 buildings the mean score fell **69.5 �
 
 The numbers above are lower than the ones this page showed a week ago. That is the correction working.
 
+**What shipped after the correction.** Finding the bug was the easy part; the harder question was why nothing had caught it, and the answer was that the artifact could not describe itself. It now can. The database carries its own provenance — when it was gathered, how many rows it holds, which sources fed it, and what it excludes — and the API serves that at `GET /meta`:
+
+```
+data_month                  Aug 2026
+violations                  26,306
+violation_classes           A,B,C
+violation_classes_excluded  I (753 records skipped at ingest)
+```
+
+Three things follow from it. The card's source lines now state the data month from the API instead of a date hardcoded in the frontend, so a re-ingest updates the page rather than requiring someone to remember. The agent receives a coverage line with its facts, so it can say what the snapshot covers instead of implying completeness by silence. And the card now states an exclusion it previously did not mention at all: **HPD publishes a fourth violation class, I, which this build does not score.** 753 of them were skipped on the curated set. That was true before and unsaid; it is now printed under every Health Card.
+
+Two smaller guards went in at the same time. The API opens its database **read-only** and refuses to start if it contains no buildings — previously, pointing it at a missing file caused it to silently create an empty one and serve a healthy-looking 404 for every address. And the rent-stabilization state became a real enum rather than a string, closing a gap where the code's own documentation named two values that existed nowhere in it.
+
 Ask the agent *"I have no heat for a week and my landlord won't respond"* and it returns the governing statute with a link, an evidence checklist (dated 311 numbers, timestamped thermometer photos, written notice), the official complaint route, a drafted question for a lawyer, and a free hotline to call — then states plainly that this is published information and a public record, not advice about your situation.
 
 - **Endpoints live:** `/building/{bbl}`, `/buildings` (map-ready), `/rent-fairness`, `/search`, `/compare`, `/summary`, `/agent/chat`

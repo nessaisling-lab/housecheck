@@ -91,10 +91,10 @@ Not "someday" — each has a specific blocker.
       lawyer's tool a saved caseload is client-adjacent data, so getting it wrong is worse than
       not having it.
 - [ ] **Citywide coverage.** **Re-scoped 9 August 2026 — see `design/database-layer.md`.** The
-      "cliff at ~14,500 buildings" assumed descriptions stored as raw text; they compress ~10x
-      because every one starts with a statute reference. Measured citywide: 2,858,719 *open*
-      violations (only 25.6% of the 11.2M total), 222,433 buildings, and ~240 MB compressed
-      against ~690 MB raw. **The baked-artifact design does not have to be replaced** — it needs
+      "cliff at ~14,500 buildings" assumed descriptions stored as raw text; stored in blocks of
+      ~128 rows they compress **6.6x** (per-row compression manages only 1.3x — the ratio lives
+      in the repetition between rows). Measured citywide: 2,858,719 *open* violations (only 25.6%
+      of the 11.2M total), 222,433 buildings, and **~266 MB** against ~690 MB raw. **The baked-artifact design does not have to be replaced** — it needs
       compression and a 512 MB machine, roughly $3-4/month. Sequenced in the design doc.
 - [ ] **Owner / portfolio dimension.** The record is published per building; owner linkage lives
       in a separate HPD registration dataset, so one landlord's twelve buildings are twelve

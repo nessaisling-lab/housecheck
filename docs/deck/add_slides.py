@@ -152,5 +152,19 @@ assert s.count(anchor) == 1
 s = s.replace(anchor, A + B + C + anchor, 1)
 s = s.replace(OLD_REG, NEW_REG, 1)
 
+# `IS` is a HARDCODED slide count, sitting in a const chain declared *before* OS, so it
+# cannot be written as OS.length. Keyboard and wheel navigation clamp on it:
+#     Math.min(IS-1, x+o)
+# Miss it and the deck silently refuses to advance past the old final slide, while the
+# dots keep working because they set the index directly -- so a dot-based check passes
+# and a presenter walking the deck with arrow keys hits a wall. That is exactly how it
+# shipped the first time. Assert agreement rather than trusting it.
+m = re.search(r"IS=(\d+),", s)
+assert m, "could not find the IS slide-count constant"
+n_slides = len(re.search(r"const OS=\[([^\]]+)\]", s).group(1).split(","))
+s = s[:m.start(1)] + str(n_slides) + s[m.end(1):]
+assert int(re.search(r"IS=(\d+),", s).group(1)) == n_slides, "IS still disagrees with OS"
+print("  IS synced to OS.length = %d (keyboard/scroll nav bound)" % n_slides)
+
 io.open(P, "w", encoding="utf-8", newline="").write(s)
 print("  inserted 3 slides -> 20 total")

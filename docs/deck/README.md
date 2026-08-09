@@ -30,6 +30,28 @@ class I exclusion. It cannot be applied until the assets exist.
 
 ## Change log
 
+- **2026-08-09** — Slides 8 and 20 trimmed to fit **1280×720**, via `trim_slides.py`. Both
+  clipped before any of this session's work; neither was one of the rebuilt slides. **No
+  sentence was removed** — the brief was to fill the deck out, so the fix is spacing and
+  decorative scale only.
+
+  | | Before | After |
+  |---|---:|---:|
+  | 8 · We Show Our Work | 71px over | fits |
+  | 20 · close | 89px over | fits |
+
+  Two things worth remembering from this:
+
+  - Slide 8's screenshot carried `width:100%` with **no height cap**, so its intrinsic aspect
+    ratio set the row height and nothing bounded it. Capped at 250px with `objectFit:contain`.
+  - Slide 20 is a `justify-center` stack, so **trimming its padding did nothing** — once content
+    is taller than the viewport it simply overflows both ends equally. Only reducing real
+    content height moved it, which is why the wordmark went 320 → 180px.
+
+  Verified at both 1280×720 and 1440×900: zero clipped text on all 20 slides, 18 links intact,
+  no horizontal scroll, ArrowRight walks 1→20 and ends on the closing slide.
+
+
 - **2026-08-09** — Seven sparsest slides rebuilt with real detail and citations, via
   `densify_slides.py`. Word counts roughly tripled:
 

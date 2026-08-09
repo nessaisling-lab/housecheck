@@ -30,6 +30,35 @@ class I exclusion. It cannot be applied until the assets exist.
 
 ## Change log
 
+- **2026-08-09** — Seven sparsest slides rebuilt with real detail and citations, via
+  `densify_slides.py`. Word counts roughly tripled:
+
+  | Slide | Before | After |
+  |---|---:|---:|
+  | 4 · The Change | 70 | 231 |
+  | 5 · HouseCheck | 77 | 224 |
+  | 6 · The Evidence | 85 | 177 |
+  | 10 · Under the Hood | 81 | 245 |
+  | 12 · Guardrails | 76 | 239 |
+  | 14 · Live Now | **45** | 227 |
+  | 15 · What It Makes Possible | 88 | 234 |
+
+  **18 outbound links added**, all `https`, all opening in a new tab. Only URLs verified in
+  `industry-research-notes.md` or checked live this session are used; `data.cityofnewyork.us/d/<id>`
+  is Socrata's stable short form. Statutes are cited by section without a link rather than
+  guessing a URL.
+
+  **Links use inline styles, not classes.** The bundle contains zero `<a>` elements, so no anchor
+  styling is compiled and any link class would silently do nothing.
+
+  Method: new components, registry re-pointed at them. The originals stay as dead code, so a
+  revert is a one-line registry change and no neighbouring minified function can be corrupted.
+
+  Verified at 1440×900: zero clipped text across all 20 slides, 18/18 links well-formed and
+  underlined, no horizontal scroll, nav still walks 1→20. At 1280×720 three slides clip —
+  8, 9 and 20 — **all pre-existing and none of them rebuilt here.**
+
+
 - **2026-08-09** — Three audience slides added at positions **16–18**, between *What It Makes
   Possible* and *Market*, taking the deck from 17 slides to 20. The deck covered the renter and
   said nothing about the professional user the product is now designed for.

@@ -113,7 +113,15 @@ Ask the agent *"I have no heat for a week and my landlord won't respond"* and it
 
 The **React (Vite + Tailwind + shadcn/ui)** frontend is live and wired to the API, agent included.
 
-**First, and now committed:** violation *descriptions*. HPD publishes the text of every Notice of Violation; our ingest doesn't pull it, and `crates/model/src/lib.rs` defines `Violation { class, open, year }` with nowhere to put it — so this is a schema change plus an ingest change, not just an extra field on a request. Until it lands, the agent can report how many violations a building has but not what they are, which is the difference between a number and an argument.
+**The committed next feature** — scoped in [`docs/classwork/solution-design-sprint.md`](classwork/solution-design-sprint.md), tracked in [`docs/BACKLOG.md`](BACKLOG.md):
+
+> A tenant lawyer opens a building, sees every open violation in the notice's own words with how long each has been open, and exports it as a file a stranger can independently verify was not altered after retrieval.
+
+That starts with violation *descriptions*. HPD publishes the text of every Notice of Violation — measured at **100% populated**, mean 120 characters — and our ingest doesn't pull it. `crates/model/src/lib.rs` defines `Violation { class, open, year }` with nowhere to put it, so this is a schema change plus an ingest change, not an extra field on a request. Until it lands, the agent can report how many violations a building has but not what they are, which is the difference between a number and an argument.
+
+The export is what makes it more than a better lookup: a count you hand-copy is unverifiable hearsay, while a hash-chained, signed packet is an exhibit. It reuses SiteAssure's `entry_hash = sha256(prev_hash + payload_hash)` and Resona's Ed25519 verification — two earlier cycles, reused rather than referenced.
+
+**One cost, stated up front:** descriptions are roughly **3.4× the artifact** (~3.2 MB of text against 1.3 MB today), which moves the coverage ceiling from ~40,000 buildings to about **14,500**. The cheapest fix to the committed problem spends most of the remaining headroom. That figure is arithmetic on a measured field size, and one real ingest settles it.
 
 After that: coverage past one community district (blocking for any daily user — a tool covering 0.1% of a caseload doesn't get adopted), a map layer, and comparison weighted by what a renter actually cares about.
 

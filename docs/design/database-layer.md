@@ -214,3 +214,98 @@ latency and for a 512 MB memory ceiling — it just is not the reason the bytes 
 
 The codec choice is the decision that matters: **zstd over zlib**, for roughly comparable ratio
 at several times the decompression speed, with dictionary support if blocks stop being enough.
+
+
+---
+
+## Addendum 2 — the other datasets, and how a self-updating ingest is shaped
+
+The first pass sized **one** source. The real product joins many, is meant to cover every
+apartment in the city rather than only vacant ones, and is meant to refresh itself weekly without
+a human. Sizing every source as stored rows gives a frightening number and the wrong answer.
+
+### Measured inventory
+
+| Source | Rows | Role |
+|---|---:|---|
+| 311 service requests (`erm2-nwe9`) | **22,080,927** | derived |
+| HPD violations (`wvxf-dwi5`) | 11,156,924 | stored (open only) + derived |
+| PLUTO tax lots (`64uk-42ks`) | 858,602 | reference |
+| HPD registration contacts (`feu5-w2e2`) | 782,024 | reference |
+| DOHMH inspections (`43nn-pn8j`) | 294,746 | derived |
+| HPD housing litigation (`59kj-x8nc`) | 240,163 | stored |
+| HPD registrations (`tesw-yqqr`) | 203,236 | reference |
+| Marshal evictions (`6z8x-wfk4`) | 131,913 | stored |
+
+*HPD complaints and complaint-problems were not resolvable at the dataset ids tried, so they are
+absent from this table rather than estimated. Their real ids need looking up before anything is
+planned around them.*
+
+### The distinction that makes this tractable
+
+**Most sources are inputs to a derived value, not rows a user ever reads.** 311 is the largest
+dataset by a wide margin and contributes exactly one number per building: complaint density on a
+log curve. Twenty-two million rows collapse to 222,433 values, about 1.7 MB.
+
+| Component | Stored rows | MB |
+|---|---:|---:|
+| Buildings (PLUTO + registrations) | 222,433 | 63.6 |
+| Open violations | 2,858,719 | 117.2 |
+| — descriptions, block-compressed | 2,858,719 | 72.5 |
+| Housing litigation | 240,163 | 25.2 |
+| Evictions | 131,913 | 6.3 |
+| Owner linkage | 222,433 | 12.7 |
+| 311 density *(derived from 22.1M rows)* | 222,433 | 1.7 |
+| Landlord aggregates *(derived from 11.2M)* | ~60,000 | 2.7 |
+| Restaurant grade *(derived from 295k)* | 222,433 | 0.8 |
+| **Total** | **~7.0M** | **~303 MB** |
+
+**35.7 million source rows become 7.0 million stored rows — a 5x collapse — and the whole city,
+every apartment, still fits a 512 MB machine.**
+
+The rule worth keeping: *a source earns per-row storage only if a user reads those rows
+individually.* Violations, litigation and evictions do. 311 and restaurant inspections do not.
+
+### Ingest becomes several layers, deliberately
+
+One module per source, each independently runnable, each declaring:
+
+- its dataset id and **incremental key** (`created_date`, `violationid`, and so on)
+- its **refresh cadence** — 311 and violations weekly, registrations monthly, PLUTO is annual and
+  does not need a weekly pull
+- its **schema contract**, so a renamed or dropped column fails the build rather than silently
+  producing nulls
+- its own provenance: dataset version, retrieval timestamp, row count
+
+Sources stage to Parquet; one compose step reads all staged Parquet, computes the derived values,
+and emits the serving SQLite. **This is where DuckDB earns its place** — grouping 22.1M 311 rows
+and 11.2M violations is exactly its workload — and where it stays, since it never ships in the
+image.
+
+### What "set and forget" actually requires
+
+The scheduling is the easy part. The hard part is that **an automated pipeline which can publish
+bad data is worse than a manual one**, so the ordering is build, verify, deploy — never deploy
+then discover:
+
+- **Completeness check on every paged fetch.** Already built, after an unchecked `$limit` silently
+  dropped half the violations once.
+- **Schema drift is a hard failure.** A missing column aborts; it does not null-fill.
+- **Row-count sanity band.** A source returning far fewer rows than last week aborts rather than
+  publishing a thinner city.
+- **Verify the artifact before it ships:** non-zero buildings, scores in range, provenance
+  stamped, spot-check known addresses.
+- **Keep the previous artifact.** A failed ingest must leave last week's good data serving rather
+  than taking the site down. The API already refuses to boot on an empty database.
+- **The card keeps stating its own build date**, so a stalled pipeline is visible to users instead
+  of silently serving stale data as fresh.
+
+### Risks not yet resolved
+
+- **Socrata throttling** at this volume. An app token raises the limits; it belongs in the CI
+  secret store, added by the repo owner, and never in the repository.
+- **Weekly wall-clock is unmeasured.** Deltas should keep it modest, but the first full backfill
+  of 35.7M rows will not be quick.
+- **Address to BBL resolution citywide** is harder than within one district, and a geocoding
+  failure becomes a coverage gap rather than a visible error.
+- **The two HPD complaints datasets** need their real ids resolved.

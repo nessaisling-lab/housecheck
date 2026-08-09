@@ -61,6 +61,11 @@ From `classwork/solution-design-sprint.md`. The single core feature:
       explains it in the interim.
 - [ ] **Class I violations excluded.** 753 records skipped on the curated set. Stated on the card
       and in `/meta`, but not scored.
+- [ ] **Multi-source ingest and weekly self-refresh.** See `design/database-layer.md` addendum 2.
+      One module per source with its own incremental key, cadence and schema contract; stage to
+      Parquet; compose with DuckDB; build then verify then deploy, so a bad ingest never
+      publishes. Measured: 35.7M source rows collapse to ~7.0M stored rows, ~303 MB for the whole
+      city including 311, litigation, evictions and owner linkage.
 - [ ] **No scheduled refresh.** The artifact is a point-in-time snapshot; nothing re-ingests. The
       card states its build date rather than hiding it, but it is still a limitation.
 - [ ] **Coverage is 250 buildings, one community district (CD 303).**

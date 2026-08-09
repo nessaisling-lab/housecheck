@@ -270,7 +270,90 @@ The binding constraints are coverage — 250 buildings today, a hard architectur
 ~40,000 — and the per-request cost of the LLM endpoints. Full working in
 `docs/reflection/capacity-and-ceilings.md`.
 
-## Question 3 — *(pending)*
+## Question 3 — Does this change the problem, or sharpen it?
+
+**Sharpened, not changed.** The problem is the same one:
+
+> A building's condition is a matter of public record, and the people whose safety, money or
+> case depends on it cannot use that record at the moment they need it.
+
+That sentence survives the lens intact. What the wider group changes is **what I want to
+build**, and in four specific ways I would not have reached from the single-renter view.
+
+### 1. Violation *meaning*, not violation *counts* — this is the big one
+
+Every product in this space, mine included, reports **how many** violations a building has.
+HPD publishes **what each one is**. Nobody turns "7 open Class C" into *"no heat, twice,
+unresolved since March."*
+
+A renter cannot ask for this, because they do not know it exists. A tenant lawyer needs it in
+every single case — the count is useless to them; the *conditions* are the argument. Our own
+ingest does not pull the description field, so the agent can currently say how many violations
+exist but not what they are.
+
+**This is now the top of my build list, and the single-user view would never have produced
+it.**
+
+### 2. Coverage stops being a growth metric and becomes a correctness requirement
+
+For a renter, covering 250 of ~180,000 buildings is a miss — they check, we do not have it,
+they shrug. For a professional it is disqualifying. **A tool that works for 0.1% of your
+caseload is not a tool you adopt**, and no amount of quality fixes that.
+
+So the ~40,000-building architectural cliff moves from "a decision for someday" to a blocking
+constraint on the primary design target. That reorders the roadmap: coverage before polish,
+and the storage rethink stops being optional.
+
+### 3. Repeat use needs state, and state is the thing I have never built
+
+Someone who uses this twice a decade needs nothing remembered. Someone who uses it twice a day
+needs saved buildings, a portfolio view, history, export. That is per-user state.
+
+Which is precisely the gap my own four-cycle arc identified: **no accounts, no user record, no
+per-user state, in any project I have written.** I reached that conclusion by reading old code;
+this lens arrives at the same place from the opposite direction. Choosing the daily user as
+the design target *forces* the missing piece rather than letting me defer it a fifth time.
+
+### 4. The agent was already built for the professional, and I did not notice
+
+This is the finding that surprised me. The agent refuses to give advice, refuses to predict
+outcomes, cites a statute for every legal claim, restricts web search to nine government and
+academic domains, and closes every legal answer with a named free hotline.
+
+For a renter that is over-engineered. **For a lawyer or an organiser it is exactly right** —
+they need a research assistant that will never fabricate and always cites, because they have
+to defend every claim they repeat.
+
+The product was already drifting toward the professional user before I had language for it.
+That is not a coincidence so much as evidence: the constraint I actually build under is
+*"this has to be defensible,"* and that constraint serves the daily professional better than it
+serves the person in the hallway.
+
+### The tension, named honestly
+
+**Product viability rests on reach. Quality viability rests on professionals.** Those pull in
+opposite directions and I am not going to pretend otherwise.
+
+What makes it survivable is that they are not two products. Same ingest, same scoring, same
+records — different surfacing. The professional needs descriptions, coverage, history and
+export; the renter needs one legible card and the agent. **The professional's requirements are
+a superset of the renter's.** Building the harder one first means the easier one is a
+subtraction rather than a rewrite.
+
+Where it stays genuinely unresolved: this makes the *product* better without making the
+*business* clearer. §6 still holds — willingness to pay runs opposite to alignment, and I have
+just chosen to design for the group at the very top of that gradient, the one with the least
+money. I am doing that deliberately and with my eyes open, because a tool that is not good
+enough for the daily user was never going to be good enough for anyone.
+
+### What actually changes on the build list
+
+| | Before this lens | After |
+|---|---|---|
+| 1 | Polish the card | **Pull HPD violation descriptions** — meaning, not counts |
+| 2 | More buildings, eventually | **Coverage past one district** — now blocking, not nice-to-have |
+| 3 | — | **Per-user state** — saved buildings, history, export |
+| 4 | Broaden the agent | Leave the agent alone; it is already right for this user |
 
 ---
 

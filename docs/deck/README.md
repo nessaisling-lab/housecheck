@@ -28,7 +28,49 @@ One edit remains staged in `fill_deck.py` and **not** in the built file — a se
 provenance slide about the database carrying its own provenance and the card printing its
 class I exclusion. It cannot be applied until the assets exist.
 
+## Responsive behaviour
+
+The deck was built as a fixed 16:9 stage — every slide is `w-screen h-screen overflow-hidden`
+with no transform anywhere — so on a narrow screen content was not scaled down, it was
+**clipped**. `mobile_layer.py` injects a CSS layer with three tiers:
+
+| Width | Behaviour |
+|---|---|
+| **≤ 860px** | Reflows. Grids and rows stack to one column, type steps down, the two 64px edge overlays become a bottom **Back / Next** bar, dots go fixed with enlarged hit areas. |
+| **861–1180px** | Keeps the multi-column design — four-across is still right on an iPad — but the stage grows and the page scrolls instead of clipping. |
+| **> 1180px, height ≤ 700px** | Same anti-clip treatment, for a desktop browser with toolbars eating the height. |
+| **Everything else** | Untouched. The media queries simply do not match. |
+
+**Why reflow and not a scale transform.** Scaling the 1280×720 stage to fit preserves the design
+exactly and can never clip, and it is wrong here: at 390px that is roughly a 30% scale and body
+text lands near 5px. This is going to be hosted for people to *read*.
+
+**Why raw CSS rather than Tailwind classes.** The bundle ships a fixed precompiled set, so an
+absent class fails silently — which has bitten this deck twice. Hand-written CSS overrides the
+utilities by specificity and does not care what Tailwind compiled.
+
+**Navigation on a phone.** There is no swipe handler in the bundle; the `touchstart`/`touchend`
+hits in the source are React's internal event registry, not app code. So the existing edge
+overlays are re-anchored into a real bottom bar — same click handlers, no JS change — and the
+6px dots get an invisible `::after` hit area, because 6px is not a thumb target.
+
+`mobile_layer.py` is idempotent: it strips its previous block before injecting, so it can be
+re-run while iterating.
+
 ## Change log
+
+- **2026-08-09** — Mobile support added (`mobile_layer.py`, 8.2 KB of CSS). Verified at
+  **360×740, 390×844, 1024×768, 1280×720 and 1440×900**: no horizontal scroll at any size, no
+  unreachable content, no text under 11px, all 18 links intact, Back/Next and dots both
+  navigating, and desktop provably unchanged (media query inactive, stage still `720px` /
+  `overflow:hidden`).
+
+  One regression caught during the work and worth recording: a blanket
+  `svg { height:auto; max-width:100% }` collapsed a 30px inline icon to **0×0**, because an SVG
+  sized by `width`/`height` attributes does not survive being told its height is auto. The rule
+  was removed — the only wide decorative SVG is the 180px closing wordmark, which already fits a
+  390px screen, so it was guarding against nothing.
+
 
 - **2026-08-09** — Slides 8 and 20 trimmed to fit **1280×720**, via `trim_slides.py`. Both
   clipped before any of this session's work; neither was one of the rebuilt slides. **No

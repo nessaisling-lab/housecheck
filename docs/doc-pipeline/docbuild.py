@@ -187,7 +187,29 @@ def md_to_html(md):
             i += 1
         if buf:
             out.append("<p>%s</p>" % inline(" ".join(buf)))
+        else:
+            # Nothing consumed this line: it is non-blank, and it matches the paragraph
+            # loop's exclusion pattern, but no earlier branch claimed it. The real case is a
+            # `|`-prefixed line whose successor is not a separator row -- a table fragment.
+            # Without this the outer `while` never advances `i` and md_to_html spins forever
+            # on a document that looks completely ordinary. Emit it as text and move on.
+            out.append("<p>%s</p>" % inline(lines[i].strip()))
+            i += 1
     return "\n".join(out)
+
+
+def split_front_matter(md):
+    """Body after the first horizontal rule.
+
+    `md.split("---", 1)` splits on the first `---` ANYWHERE, which inside a table separator
+    row (`|---|---:|`) severs the table and hands the converter a fragment. Match a line that
+    is exactly a rule instead.
+    """
+    lines = md.split("\n")
+    for i, ln in enumerate(lines):
+        if re.match(r"^\s*(---|\*\*\*)\s*$", ln):
+            return "\n".join(lines[i + 1:])
+    return md
 
 
 def page(title, body_html):

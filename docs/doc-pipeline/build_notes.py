@@ -4,14 +4,14 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from docbuild import build, md_to_html  # noqa: E402
+from docbuild import build, md_to_html, split_front_matter  # noqa: E402
 
 SRC = r"D:\L2 Cycle 4\Housecheck Antonin Idea\docs\classwork\industry-research-notes.md"
 OUT = r"D:\L2 Cycle 4\Housecheck Antonin Idea\docs\classwork"
 
 md = io.open(SRC, encoding="utf-8").read()
 # Drop the H1 and lead block; the cover below replaces them.
-body = md.split("---", 1)[1] if md.startswith("#") and "---" in md else md
+body = split_front_matter(md)
 
 cover = (
     '<p class="eyebrow">HOUSECHECK &middot; INDUSTRY RESEARCH NOTES</p>'

@@ -32,3 +32,6 @@ coverage/
 
 # Vercel CLI
 .vercel
+
+# Copied from docs/deck at build time by scripts/copy-deck.mjs — not a source file
+public/deck/

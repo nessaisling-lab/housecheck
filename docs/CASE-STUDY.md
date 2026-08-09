@@ -19,7 +19,7 @@ New laws raised the stakes: the **FARE Act** (broker-fee ban, June 2025) and **G
 
 **Sharpened after market framing (August 2026).** Renting is the mission, but it turns out the *sharpest* version of this problem belongs to the person who hits it daily rather than twice a decade:
 
-> A tenant lawyer preparing a case can find out that a building has seven open hazardous violations, but not what they are — so they hand-copy conditions out of HPD Online for every client, even though the city already publishes the text.
+> A tenant lawyer preparing an HP action can see that a building has seven open hazardous violations but not what they are, because every tool in this space reports violation counts rather than the description text HPD already publishes — so they hand-copy conditions out of HPD Online for every client.
 
 A count cannot go in a filing; an HP action has to plead conditions. That makes the aggregate score genuinely unusable for the highest-frequency user, and it is the gap HouseCheck commits to closing next. Full working in [`docs/classwork/problem-definition-notes.md`](classwork/problem-definition-notes.md).
 

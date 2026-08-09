@@ -60,6 +60,31 @@ exist but not what they are. No product found in the landscape closes this.
 **Needs primary contact.** How long the manual pass actually takes; whether firms have already
 built private workarounds that are invisible from outside.
 
+### The same failure, in our own product — found 9 August 2026
+
+Reviewing the pitch deck turned up an instance of this problem inside HouseCheck itself, which
+is worth recording because it is evidence rather than embarrassment.
+
+A Health Card on the slide titled *"Every number traces to a public source"* shows:
+
+> **Condition — 1** · "No hazardous violations"
+
+That reads as a contradiction: a floor-level score next to a clean-sounding caption. It is not.
+Checked against the live API, **603 Putnam Avenue** is the same shape — `score.condition = 0`
+with `open_violations = { a: 11, b: 22, c: 0 }`. "Hazardous" means **Class C**, of which there
+are none, while thirty-three Class A and B violations drive the score to zero. Both numbers are
+correct and sourced.
+
+**What is missing is the sentence that reconciles them:** *33 open violations, none of them
+Class C.* The card shows a count fact and a score fact and never the meaning that connects
+them — so a reader either assumes a bug or, worse, reads "no hazardous violations" as "this
+building is fine."
+
+This is Problem 1 in miniature, in our own UI, on the slide that claims traceability. A count
+without its meaning is not merely less useful than the description; it can be **read backwards.**
+That raises the stakes on the committed problem: fetching HPD's description text is not only a
+feature for attorneys, it is a correctness fix for the renter-facing card.
+
 ---
 
 ## Problem 2 — Fifteen minutes against a forty-year record
@@ -142,13 +167,42 @@ do not know the field exists.
 
 ### The problem statement
 
-> A tenant lawyer preparing a case can find out that a building has seven open hazardous
-> violations, but not what they are, so they hand-copy conditions out of HPD Online for every
-> client — even though the city already publishes the text.
+**Final** — tightened into the template shape after review. The earlier draft implied the
+underlying reason instead of stating it; the template asks for the *because*.
 
-**What makes this buildable:** it names one person, one moment, one artefact that exists, and
-one specific missing step. It is falsifiable — if attorneys say the count is enough, the
-statement is wrong and I will have learned that cheaply.
+> **A tenant lawyer preparing an HP action can see that a building has seven open hazardous
+> violations but not what they are, because every tool in this space reports violation counts
+> rather than the description text HPD already publishes — so they hand-copy conditions out of
+> HPD Online for every client.**
+
+Reading it against the template:
+
+| Element | In the sentence |
+|---|---|
+| **Who** | a tenant lawyer |
+| **When** | preparing an HP action |
+| **What goes wrong** | can see the count, not the conditions |
+| **Because** | every tool reports counts, not the description text HPD already publishes |
+| **Cost** | hand-copies conditions out of HPD Online, once per client |
+
+**On the cost clause:** "for every client" is deliberately the whole of it. It carries the
+shape of the cost — per-client, non-compounding, unbounded by caseload — without asserting a
+duration I have not measured. The measurement is open question 1 below, and it stays there
+until someone tells me the number.
+
+**What makes this buildable:** one person, one moment, one artefact that already exists, one
+specific missing step. It is falsifiable — if attorneys say the count is enough, the statement
+is wrong and I will have learned that for the price of a phone call rather than a sprint.
+
+**The earlier draft, kept for the record:**
+
+> ~~A tenant lawyer preparing a case can find out that a building has seven open hazardous
+> violations, but not what they are, so they hand-copy conditions out of HPD Online for every
+> client — even though the city already publishes the text.~~
+
+The difference is not cosmetic. "Even though the city already publishes the text" is an irony;
+"because every tool reports counts rather than the text HPD publishes" is a **cause**, and a
+cause is the thing a build decision can attach to.
 
 **What is still unresolved:** it sits at the very top of the alignment gradient from the
 Research Notes §6 — the group with the highest need and the least ability to pay. Choosing it

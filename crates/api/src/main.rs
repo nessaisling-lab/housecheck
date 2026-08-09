@@ -603,6 +603,22 @@ fn geosearch_bbl(props: &serde_json::Value) -> Option<String> {
 /// Uppercases, drops punctuation, collapses runs of whitespace, and expands the
 /// street-type and compass abbreviations people actually type, so "464 Madison
 /// St", "464 madison street" and "464 MADISON STREET" all reduce to one string.
+///
+/// Expansion is decided by **position**, not by presence, because some of these
+/// abbreviations are also real NYC street names:
+///
+/// - `ST` is "Saint" and `DR` is "Doctor" when they precede a name — `ST NICHOLAS
+///   AVENUE`, `100 ST JOHNS PLACE`, `DR MARTIN LUTHER KING JR BOULEVARD`.
+///   Expanding them anywhere produced `STREET NICHOLAS AVENUE`; 167 lots in PLUTO
+///   start with `ST `. Both are titles, so they only ever mean a street type when
+///   nothing follows them — hence **last token only**. ("Unless first" is not
+///   enough: in `100 ST JOHNS PL` the `ST` sits after the house number.)
+/// - `N`/`S`/`E`/`W` are Brooklyn's lettered avenues when they trail — `AVENUE W`,
+///   `AVENUE N`. Expanding them anywhere produced `AVENUE WEST`; 403 lots end in
+///   `AVENUE W` and 744 in `AVENUE N`. So a directional expands **unless last**.
+///
+/// The remaining street types are unambiguous and expand anywhere, which keeps
+/// `AVE W` → `AVENUE W` matching the stored `AVENUE W`.
 fn normalize_address(s: &str) -> String {
     let cleaned: String = s
         .chars()
@@ -614,26 +630,49 @@ fn normalize_address(s: &str) -> String {
             }
         })
         .collect();
-    cleaned
-        .split_whitespace()
-        .map(|w| match w {
-            "ST" | "STR" => "STREET",
-            "AVE" | "AV" | "AVEN" => "AVENUE",
-            "PL" => "PLACE",
-            "RD" => "ROAD",
-            "BLVD" | "BLV" => "BOULEVARD",
-            "DR" => "DRIVE",
-            "CT" => "COURT",
-            "LN" => "LANE",
-            "PKWY" | "PKY" => "PARKWAY",
-            "TER" | "TERR" => "TERRACE",
-            "SQ" => "SQUARE",
-            "HWY" => "HIGHWAY",
-            "N" => "NORTH",
-            "S" => "SOUTH",
-            "E" => "EAST",
-            "W" => "WEST",
-            other => other,
+
+    let words: Vec<&str> = cleaned.split_whitespace().collect();
+    let last = words.len().saturating_sub(1);
+
+    words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            // Titles: "ST NICHOLAS" is Saint, "DR MARTIN LUTHER KING JR" is Doctor.
+            // They only mean a street type when nothing follows them.
+            if i == last && i > 0 {
+                match *w {
+                    "ST" | "STR" => return "STREET",
+                    "DR" => return "DRIVE",
+                    _ => {}
+                }
+            }
+            // Unambiguous street types expand wherever they appear, so "AVE W"
+            // and "AVENUE W" reduce to the same string.
+            match *w {
+                "AVE" | "AV" | "AVEN" => return "AVENUE",
+                "PL" => return "PLACE",
+                "RD" => return "ROAD",
+                "BLVD" | "BLV" => return "BOULEVARD",
+                "CT" => return "COURT",
+                "LN" => return "LANE",
+                "PKWY" | "PKY" => return "PARKWAY",
+                "TER" | "TERR" => return "TERRACE",
+                "SQ" => return "SQUARE",
+                "HWY" => return "HIGHWAY",
+                _ => {}
+            }
+            // "AVENUE W", "AVENUE N": a trailing letter is the avenue's name.
+            if i != last {
+                match *w {
+                    "N" => return "NORTH",
+                    "S" => return "SOUTH",
+                    "E" => return "EAST",
+                    "W" => return "WEST",
+                    _ => {}
+                }
+            }
+            *w
         })
         .collect::<Vec<_>>()
         .join(" ")
@@ -2371,6 +2410,43 @@ mod tests {
             normalize_address("464 Madison St"),
             normalize_address("829 Madison St")
         );
+    }
+
+    /// Two abbreviations are also real NYC street names, and expanding them
+    /// everywhere made those addresses unfindable by the name people type.
+    /// Counts are lots in PLUTO, measured against the live dataset.
+    #[test]
+    fn abbreviations_that_are_also_street_names_survive() {
+        // Leading ST is Saint, not Street. 167 PLUTO lots start with "ST ".
+        assert_eq!(normalize_address("ST NICHOLAS AVENUE"), "ST NICHOLAS AVENUE");
+        assert_eq!(normalize_address("st marks place"), "ST MARKS PLACE");
+        // "Unless first" was not enough: here ST sits after the house number.
+        assert_eq!(normalize_address("100 St Johns Pl"), "100 ST JOHNS PLACE");
+        // Same class of bug: DR is Doctor before a name. This is a real street.
+        assert_eq!(
+            normalize_address("Dr Martin Luther King Jr Blvd"),
+            "DR MARTIN LUTHER KING JR BOULEVARD"
+        );
+        assert_eq!(normalize_address("55 Sunset Dr"), "55 SUNSET DRIVE");
+
+        // "AVE W" and "AVENUE W" are the same place and must agree.
+        assert_eq!(normalize_address("Ave W"), normalize_address("Avenue W"));
+
+        // Trailing compass letters are Brooklyn's lettered avenues. 403 lots end
+        // in "AVENUE W", 744 in "AVENUE N".
+        assert_eq!(normalize_address("AVENUE W"), "AVENUE W");
+        assert_eq!(normalize_address("2100 Avenue N"), "2100 AVENUE N");
+        assert_eq!(normalize_address("Avenue S"), "AVENUE S");
+
+        // ...while the ordinary cases still expand.
+        assert_eq!(normalize_address("W 42 St"), "WEST 42 STREET");
+        assert_eq!(normalize_address("123 W 42nd St"), "123 WEST 42ND STREET");
+        assert_eq!(normalize_address("464 Madison St"), "464 MADISON STREET");
+        assert_eq!(normalize_address("9 Oak Blvd"), "9 OAK BOULEVARD");
+
+        // The distinction has to hold: a lettered avenue and a compass street
+        // are different places and must not normalise to the same string.
+        assert_ne!(normalize_address("AVENUE W"), normalize_address("AVENUE WEST"));
     }
 
     #[tokio::test]

@@ -1,24 +1,44 @@
-# Deck builder
+# The deck
 
-`fill_deck.py` patches the compiled React presentation bundle in place. It is kept here
-because it previously lived only in a session scratch directory, and that directory was
-cleaned — taking its build assets with it.
+`HouseCheck-Presentation.html` is the presentation, and **it is the artifact of record** —
+a living document held to the same standard as the case study and the classwork notes. It is
+committed here rather than living in a Downloads folder so that a claim on a slide can be
+diffed, corrected and traced like any other claim in this repository.
 
-## It does not currently run
+15 slides, self-contained, no network. Open it directly, or serve the folder:
 
-The script needs two directories that are **no longer on disk**:
+```bash
+python -m http.server 8931 --directory docs/deck
+```
 
-- `shots/b64.json` — the screenshots, base64-encoded
-- `targets/*.txt` — the exact source strings each patch searches for
+## Edit the HTML directly. The builder cannot regenerate it.
 
-Without them it fails at `json.load(open("shots/b64.json"))`. The last successfully built
-deck is `~/Downloads/HouseCheck-Presentation-filled.html`, which is current as of the
-ingest-truncation correction: it carries 26,306 violations, the 134,837-row finding, the
-69.5 → 63.0 fleet mean, and the 72-of-250 band change.
+`fill_deck.py` is kept for reference only. It needs two directories that are **no longer on
+disk** — `shots/b64.json` (screenshots, base64-encoded) and `targets/*.txt` (the exact source
+strings each patch searches for) — so it fails at `json.load(open("shots/b64.json"))`.
 
-One edit is staged in the source and **not** in that built file — a sentence on the
-provenance slide noting that the database now carries its own provenance and that the card
-prints its class I exclusion. It will apply the next time the assets exist.
+That makes the compiled HTML the source of truth, not a build output. Edits are made against
+it in place, with a uniqueness assertion on the search string:
+
+```python
+assert s.count(old) == 1, "expected exactly one occurrence, found %d" % s.count(old)
+```
+
+One edit remains staged in `fill_deck.py` and **not** in the built file — a sentence on the
+provenance slide about the database carrying its own provenance and the card printing its
+class I exclusion. It cannot be applied until the assets exist.
+
+## Change log
+
+- **2026-08-09** — Condition source card on *We Show Our Work* now reads: *"The score counts
+  every class, so a building can show no hazardous violations and still score low on volume
+  alone."* Added because the card beside it shows `Condition 1` next to *"No hazardous
+  violations"*, which reads as a contradiction and is not one. Verified against the live API:
+  603 Putnam Avenue scores `condition 0` with 11 Class A, 22 Class B and **zero** Class C.
+  Both numbers were always correct; the sentence reconciling them was missing. See
+  `docs/classwork/problem-definition-notes.md`.
+
+## Two traps, both hit more than once
 
 ## Two traps, both hit more than once
 

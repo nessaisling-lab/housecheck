@@ -10,8 +10,9 @@ descriptions was believed to break the architecture. What replaces it, and can i
 ## The headline, up front
 
 **The earlier conclusion was wrong, and by roughly an order of magnitude.** The "coverage cliff
-at ~14,500 buildings" assumed descriptions would be stored as raw text. They compress about
-**10×**, because every one of them begins with a housing-code statute reference.
+at ~14,500 buildings" assumed descriptions would be stored as raw text. Stored in blocks they
+compress **6.6×**, because every one begins with a housing-code statute reference. (The blocking
+matters and is not a detail — see the addendum.)
 
 Measured, not estimated:
 
@@ -21,7 +22,8 @@ Measured, not estimated:
 | **Open** violations — what the card lists | **2,858,719** | `count(1) where violationstatus='Open'` |
 | Distinct buildings with any violation | 222,433 | `count(distinct bbl)` |
 | Description length | 175 chars mean | 1,600 rows sampled across 8 offsets |
-| Description after zlib -9 | **17.7 bytes/row** (9.9×) | compressed the same 1,600 rows |
+| Description after zlib -9, blob | 17.7 bytes/row (9.9×) | compressed the same 1,600 rows — **not randomly accessible, see addendum** |
+| Description, **blocks of 128 rows** | **26.6 bytes/row** (6.6×) | the figure the design actually uses |
 | Storage per violation row today | **48 bytes** all-in | 26,306 rows in a 1.21 MB artifact |
 
 **Only 25.6% of violations are open.** The product lists open violations, so the working set is
@@ -29,14 +31,14 @@ Measured, not estimated:
 
 ### What citywide actually costs
 
-| Component | Uncompressed | Compressed |
+| Component | Uncompressed | Block-compressed |
 |---|---:|---:|
 | Violation rows (2.86M × ~43 B) | 123 MB | 123 MB |
-| Descriptions (2.86M × 175 B vs 17.7 B) | 500 MB | **51 MB** |
+| Descriptions (2.86M × 175 B vs 26.6 B) | 500 MB | **76 MB** |
 | Buildings (222,433 × ~300 B) | 67 MB | 67 MB |
-| **Total** | **~690 MB** | **~240 MB** |
+| **Total** | **~690 MB** | **~266 MB** |
 
-At 240 MB, **a citywide artifact still fits a small read-only machine.** The design does not have
+At ~266 MB, **a citywide artifact still fits a small read-only machine.** The design does not have
 to be replaced. That is a materially different situation from the one assumed in the solution
 sprint, and it was one measurement away the whole time.
 
@@ -51,10 +53,11 @@ it is not an artifact of a clustered sample.*
 
 ### A. Compress descriptions in the existing baked artifact ✅ recommended
 
-Store each description as a compressed blob. Decompress only the rows a user actually expands —
-around 30 per card — which is microseconds. Everything else stays exactly as it is.
+Store descriptions in compressed blocks of ~128 rows and decompress the block a card needs.
+Measured at 31 microseconds per block in Python zlib — under 3% of the 2.2 ms card budget, and
+several times cheaper in Rust with zstd. Everything else stays exactly as it is.
 
-- **Cost:** ~240 MB artifact. A 512 MB Fly machine is roughly $3–4/month.
+- **Cost:** ~266 MB artifact. A 512 MB Fly machine is roughly $3–4/month.
 - **Keeps:** read-only file, no database server, no write path, no secrets, the provenance stamp,
   and the whole "the database is the deployment" property.
 - **Costs:** descriptions are no longer greppable by raw SQL; a dictionary must be versioned with
@@ -123,8 +126,8 @@ measurement.
 
 ### What would change this answer
 
-- **Descriptions compressing worse than ~5×** on the full corpus. Sampled at 9.9×, so there is
-  a wide margin, but the sample is 1,600 of 2.86M rows.
+- **Descriptions compressing worse than ~4×** in blocks on the full corpus. Sampled at 6.6×, so
+  the margin is real but not vast, and the sample is 1,600 of 2.86M rows.
 - **Wanting closed violations as rows** rather than as per-landlord aggregates. That is 11.2M
   rows instead of 2.86M and roughly quadruples everything. Median-time-to-close should therefore
   be computed **at ingest** and stored as a summary — a design constraint that falls directly out
@@ -135,7 +138,79 @@ measurement.
 ### Open items
 
 - Ingest time and Socrata rate limits at 2.86M rows (~58 paged requests at 50k) are unmeasured.
-- Docker image size and deploy time with a 240 MB artifact are unmeasured.
+- Docker image size and deploy time with a ~266 MB artifact are unmeasured.
 - Whether a 512 MB machine holds the working set in page cache under real traffic — the current
   2.2 ms per card depends on the database being small enough to sit in cache, and that is the
   number most likely to move.
+
+
+---
+
+## Addendum — how the compression is done, and should DuckDB replace SQLite?
+
+Added after a second measurement pass. The first version of this document quoted 9.9× and
+17.7 bytes per row. **That figure was measured on all 1,600 descriptions concatenated into a
+single blob, and a blob cannot be randomly accessed.** The serving path needs one building's
+~30 violations, not the whole corpus.
+
+### Compression only survives in blocks
+
+| Scheme | Ratio | Bytes/row | Randomly accessible |
+|---|---:|---:|---|
+| Whole blob | 9.9× | 17.7 | **No** — the original, unusable figure |
+| Per row, no dictionary | **1.3×** | 136.5 | Yes |
+| Per row + trained dictionary | 2.6× | 72.2 | Yes |
+| **Blocks of 128 rows** | **6.6×** | **26.6** | Yes — one block decompress per lookup |
+| Blocks of 64 rows | 5.4× | 32.1 | Yes |
+
+Per-row compression is close to worthless here, because the ratio lives entirely in the
+*repetition between* descriptions — every one opens with a housing-code statute reference. Alone,
+a 175-byte string has nothing to reference.
+
+So: **store descriptions in blocks of ~128, compressed together, and decompress the block on
+read.** Measured cost of that decompress is **31 microseconds in Python zlib**; a card touches
+one or two blocks, so 31–63 µs against a 2,200 µs budget — under 3%, using the slower of the two
+available languages and the weaker of the two codecs. In Rust with zstd it is several times
+cheaper. **Decompression speed is not a constraint on this design.**
+
+A trained-dictionary approach (2.6× measured with zlib's `zdict`) would do considerably better
+with real zstd dictionaries, which are built for exactly this shape of data. Worth testing if
+block granularity ever becomes awkward, but blocks are simpler and already sufficient.
+
+### SQLite or DuckDB?
+
+The honest answer is **both, at different stages** — and the split falls exactly along the line
+the architecture already draws.
+
+| | Serving path | Ingest path |
+|---|---|---|
+| Shape | point lookup: one BBL, ~30 rows | full scan: 11.2M rows, group by landlord |
+| Frequency | every request | once per ingest |
+| Wins | **SQLite** | **DuckDB** |
+
+**Keep SQLite for serving.** The hot path is a B-tree point lookup, which is precisely what
+SQLite is best at and what the measured 2.2 ms comes from. DuckDB is columnar and vectorised —
+built for scanning and aggregating, and comparatively weak at single-row lookups. It also carries
+a much larger library and a heavier runtime memory profile, which matters on a 512 MB machine
+where the whole point is that the working set sits in page cache. Swapping a measured, working
+2.2 ms for a slower path with a bigger footprint would be a downgrade.
+
+**Use DuckDB (or Polars) at ingest.** Computing median-time-to-close per landlord means scanning
+all 11.2M violations and grouping — an analytical query, and the exact workload DuckDB is built
+for. It also reads Parquet directly and has **FSST** string compression, which targets short
+repetitive strings natively. Doing this in SQLite or hand-rolled Rust loops is the wrong tool.
+
+That split reinforces the principle the project already runs on: *everything expensive happens
+once, at ingest, on a laptop.* DuckDB is an ingest-time tool that never ships in the image.
+
+### On Rust and compression speed
+
+The instinct is right, the mechanism is slightly different. Compression throughput is set by the
+**codec**, not the language — most Rust compression crates bind the same C library the rest of
+the world uses (`zstd-rs` wraps libzstd). What Rust actually contributes here is that it can
+decompress straight into a reusable buffer with no allocation churn and no garbage-collector
+pause, and it can hold a decompressed block borrowed rather than copied. That matters for tail
+latency and for a 512 MB memory ceiling — it just is not the reason the bytes shrink.
+
+The codec choice is the decision that matters: **zstd over zlib**, for roughly comparable ratio
+at several times the decompression speed, with dictionary support if blocks stop being enough.

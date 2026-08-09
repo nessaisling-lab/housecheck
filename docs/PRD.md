@@ -268,9 +268,10 @@ depends on them. Every one of these was written after a real failure.
 - **The coverage ceiling is smaller than it first appeared.** An earlier estimate put the ceiling
   at ~14,500 buildings once violation descriptions were added, implying citywide coverage
   required replacing the storage design. That assumed raw text. Measured: descriptions compress
-  **9.9×** (statute-templated), only **25.6%** of the 11.2M citywide violations are open
+  **6.6×** when stored in blocks of ~128 rows (statute-templated; per-row compression
+  manages only 1.3×), only **25.6%** of the 11.2M citywide violations are open
   (2,858,719), and storage costs **48 bytes per violation row** in the current artifact.
-  A citywide artifact lands near **240 MB compressed** against ~690 MB raw — so the read-only
+  A citywide artifact lands near **266 MB** block-compressed against ~690 MB raw — so the read-only
   baked-artifact design **survives**, on a 512 MB machine at roughly $3–4/month, keeping the
   "no DB server to breach" property. Full working and the rejected alternatives in
   `docs/design/database-layer.md`. Escape hatch if it ever passes ~800 MB: SQLite over HTTP

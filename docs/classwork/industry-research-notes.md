@@ -252,6 +252,22 @@ Five things, ordered by how confident the evidence is rather than by how appeali
    included, reports how many violations a building has. HPD publishes what each one *is*.
    Nobody found turns "7 open Class C" into "no heat, twice, unresolved since March."
 
+   **Sharpened 9 August 2026** (see `problem-definition-notes.md`): the reason this gap is
+   larger than it looks is that the count is not merely *less useful* than the descriptions —
+   for the highest-frequency user it is **unusable**. An HP action has to plead conditions, not
+   totals. So a housing attorney takes the aggregate number, opens HPD Online, keys in the BBL
+   and hand-copies descriptions back out, once per client. The aggregate tool hands them a
+   number and then sends them to fetch the meaning by hand. **This is now the committed problem
+   statement for the build.**
+
+6. **The owner dimension — a landlord is invisible; only buildings are visible.** New,
+   identified 9 August 2026. The record is published per building, and the linking information
+   (registered owner and officer names) sits in a *different* HPD dataset than the violations.
+   A landlord operating twelve buildings therefore appears as twelve unrelated records. Tenant
+   organisers and housing reporters rebuild the portfolio by hand each time, and it goes stale
+   immediately. Confidence is lower than items 1–5: the workflow is inferred from the landscape
+   rather than observed, and needs primary contact before it is relied on.
+
 ### Gaps in our own build, measured
 
 Not aspirational. These are known, with numbers:
@@ -260,7 +276,12 @@ Not aspirational. These are known, with numbers:
   to roughly 40,000 buildings before it exceeds the 256 MB VM; all 180,000 HPD-registered
   multifamily buildings would need ~914 MB and a different storage design.
 - **Violation descriptions.** HPD publishes them; our ingest does not fetch them, so the agent
-  can say *how many* violations exist but not *what they are*.
+  can say *how many* violations exist but not *what they are*. Concretely,
+  `crates/model/src/lib.rs` defines `Violation { class, open, year }` — there is nowhere for a
+  description to go, so this is a schema change and an ingest change, not just a fetch.
+- **No owner dimension.** We key on BBL throughout. Two buildings owned by the same landlord
+  have no relationship in our data, because we never ingest HPD's registration/contacts
+  dataset. Recorded as a gap; not committed.
 - **Class I violations excluded.** 753 records skipped on the curated set — now stated on the
   card and in `/meta`, but not yet scored.
 - **No refresh.** The artifact is a point-in-time snapshot. Nothing re-ingests on a schedule.

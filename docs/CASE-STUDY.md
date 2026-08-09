@@ -17,6 +17,12 @@ Renting in Brooklyn means committing ~$40,000 a year and a 12-month lease to a b
 
 New laws raised the stakes: the **FARE Act** (broker-fee ban, June 2025) and **Good Cause Eviction** (April 2024) give renters rights they can only use *with data*. So renters sign blind, or spend hours cross-referencing HPD Online, DHCR lists, and Census tables — and still miss hazardous-violation history and stabilization rights they're entitled to.
 
+**Sharpened after market framing (August 2026).** Renting is the mission, but it turns out the *sharpest* version of this problem belongs to the person who hits it daily rather than twice a decade:
+
+> A tenant lawyer preparing a case can find out that a building has seven open hazardous violations, but not what they are — so they hand-copy conditions out of HPD Online for every client, even though the city already publishes the text.
+
+A count cannot go in a filing; an HP action has to plead conditions. That makes the aggregate score genuinely unusable for the highest-frequency user, and it is the gap HouseCheck commits to closing next. Full working in [`docs/classwork/problem-definition-notes.md`](classwork/problem-definition-notes.md).
+
 ## Who it's for
 
 Brooklyn renters evaluating a specific apartment before signing — and current tenants checking whether their unit is stabilized or their rent is fair.
@@ -105,7 +111,13 @@ Ask the agent *"I have no heat for a week and my landlord won't respond"* and it
 
 ## What's next
 
-The **React (Vite + Tailwind + shadcn/ui)** frontend is live and wired to the API, agent included. Next: a map layer, violation *descriptions* (HPD publishes them; our ingest doesn't pull them yet, so the agent can currently report how many violations exist but not what they are), and comparison weighted by what a renter actually cares about. Beyond that, a path to a real business — a free consumer tool feeding a B2B2C model in the $3.6B property-data adjacent market.
+The **React (Vite + Tailwind + shadcn/ui)** frontend is live and wired to the API, agent included.
+
+**First, and now committed:** violation *descriptions*. HPD publishes the text of every Notice of Violation; our ingest doesn't pull it, and `crates/model/src/lib.rs` defines `Violation { class, open, year }` with nowhere to put it — so this is a schema change plus an ingest change, not just an extra field on a request. Until it lands, the agent can report how many violations a building has but not what they are, which is the difference between a number and an argument.
+
+After that: coverage past one community district (blocking for any daily user — a tool covering 0.1% of a caseload doesn't get adopted), a map layer, and comparison weighted by what a renter actually cares about.
+
+**On market size, deliberately:** an earlier version of this line cited a "$3.6B property-data adjacent market." That figure is retired. Five research firms put 2025 global proptech between $40.2B and $47.1B — a ~17% spread on the same year, which is a signal about the category's reliability rather than a range worth averaging, and "proptech" bundles investor analytics and building-management software that have nothing to do with this product. The bottom-up model against verified denominators (91,918 NYC multifamily buildings) lands at **low single-digit millions of ARR in NYC** even at optimistic adoption. That's a real business and not a venture-scale one — which is exactly what Rentlogic's twelve years at nine people demonstrates. Working in [`docs/classwork/industry-research-notes.md`](classwork/industry-research-notes.md) §5.
 
 ---
 

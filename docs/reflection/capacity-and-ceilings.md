@@ -65,11 +65,35 @@ firms**, at 1–20 seats each.
 **Realistic if it got a foothold:** compliance software sells slowly and renews forever.
 **500–5,000 firms** would be a genuine business at $30–100/seat/month.
 
-**What blocks it:** four of eight Tauri commands return `Err("not implemented")` and all six
-React screens return `null`. 551 lines of first-party Rust against 5,184 vendored. This is a
-strong idea at prototype stage, and the vendored `wisper-core` still exports `download_url`
-and `check_for_update` inside a project whose first non-negotiable is zero egress — that has
-to go before anyone regulated installs it.
+**What blocks it — corrected 9 August 2026.** An earlier draft of this section said four of
+eight Tauri commands returned `Err("not implemented")` and all six React screens returned
+`null`. **That was measured against a stale local folder, not the repository**, and it
+understated the project by roughly 4x. The actual state of
+`nessaisling-lab/L2-C2-Solution`:
+
+| | Stale local copy | Repository |
+|---|---:|---:|
+| First-party Rust | 551 lines | 2,081 lines |
+| Tauri commands | 8 | 18 |
+| `not implemented` stubs | 4 | **0** |
+| Screens returning `null` | 6 | **0** |
+
+All 18 commands are registered *and* invoked by the UI, with nothing unmatched in either
+direction; there is no `TODO`, `FIXME` or `unimplemented!` anywhere in the app source. So the
+blocker is not unfinished features. It is the same one Resona has: **no CI, no release build,
+no signed installer.** The app is finished and uninstallable.
+
+The egress point survives the correction but changes shape. The vendored `wisper-core` does
+export a general-purpose downloader (`fetch::download_url`, yt-dlp) that SiteAssure never
+calls. It is *not* true that the project needs zero egress: first-run setup downloads the
+Whisper model and ffmpeg, so an offline-only build cannot transcribe. The property that
+actually matters is direction — pulling a public artifact down is installation, pushing a site
+record out is what must be impossible. That is now enforced by a deny-by-default host
+allowlist in `wisper-core/src/net.rs`, the single chokepoint every request funnels through.
+
+**The methodology lesson is the real finding.** I profiled a directory because it was on my
+disk and never checked it against `git`. Chapter 4 of the audit book is about exactly this
+failure — measuring the artifact you have rather than the artifact that ships.
 
 ---
 
@@ -193,7 +217,7 @@ state because I never built anything per-user.**
 | Project | The single unlock | Cost |
 |---|---|---|
 | **Resona** | A signed server entitlement, and actually cut a release build | days |
-| **SiteAssure** | Finish the four unimplemented commands and the six null screens | weeks |
+| **SiteAssure** | CI and a signed installer — the app is finished and uninstallable | days |
 | **Ziqpu** | Per-user API keys and auth in front of `0.0.0.0:8787` | days |
 | **HouseCheck** | Coverage past one district — the only thing between it and a real audience | one ingest run for a borough; a storage rethink past 40,000 |
 

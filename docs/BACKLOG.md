@@ -74,6 +74,35 @@ From `classwork/solution-design-sprint.md`. The single core feature:
 
 ---
 
+## Address resolution — from `design/address-to-bbl.md`
+
+- [ ] **Fix `normalize_address` to expand by position, not presence.** It currently corrupts real
+      NYC street names: `ST NICHOLAS AVENUE` becomes `STREET NICHOLAS AVENUE` (**167** PLUTO lots),
+      `AVENUE W` becomes `AVENUE WEST` (**403**), `AVENUE N` becomes `AVENUE NORTH` (**744**).
+      Street types should expand only in final position and never first; directionals only in
+      leading position. Wrong at any scale, so it does not wait for citywide.
+- [ ] **Replace the linear scan with an index built at ingest.** `search_curated` loads every
+      building and normalises every stored address *per query*. Invisible at 250; roughly two
+      orders of magnitude past the 2.2 ms card budget at 222,433. Normalise once at ingest, store
+      it, and use FTS5 for prefix/type-ahead.
+- [ ] **Put borough in the index key.** 30,035 of 858,602 PLUTO lots (**3.5%**) share an address
+      string with another lot. Substring matching compounds it — `FULTON STREET` matches every
+      building on Fulton Street in every borough.
+- [ ] **Treat an address with no house number as unresolvable.** Already biting at 250 buildings:
+      our curated set has 250 buildings and **249** distinct addresses, because `FULTON STREET`
+      appears twice against two different BBLs. PLUTO's address field is sometimes just a street.
+- [ ] **Verify the Property Address Directory (`bc8t-ecyu`).** PLUTO holds one address per lot, so
+      corner buildings and alternate entrances will never match what a user types. PAD is the
+      authoritative all-addresses-per-BBL source, but it did not respond on the Socrata tabular
+      endpoint and is probably a file download. **Confirm before planning around it** — two
+      dataset ids have already turned out not to resolve.
+- [ ] **Keep the two failure messages distinct.** "We could not find that address" and "that
+      building is outside our coverage" are different, and the current handler already separates
+      them. A silent geocoding gap is indistinguishable from a clean building, which is the
+      failure mode that makes this the biggest citywide risk.
+
+---
+
 ## Engineering debt carried from the audit
 
 - [ ] **Basis-vector weight tests** (audit ledger item 7).

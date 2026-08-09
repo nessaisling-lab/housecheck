@@ -10,3 +10,7 @@
 
 # Generated intermediates — the .docx is the deliverable, the .html is scaffolding
 docs/**/*.html
+# ...except the deck, which is the opposite case: the compiled HTML *is* the
+# deliverable and cannot be regenerated (fill_deck.py's assets are gone), so it
+# is the artifact of record rather than scaffolding. See docs/deck/README.md.
+!docs/deck/HouseCheck-Presentation.html

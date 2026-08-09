@@ -175,7 +175,100 @@ That is the honest place I am starting from for this block.
 
 ---
 
-## Question 2 — *(pending)*
+## Question 2 — Who else has this problem, how many, and what they do now
+
+### The broader group
+
+The problem is not "renters cannot read HPD data." It is one level up:
+
+> **A building's condition is a matter of public record, and the people whose safety, money
+> or case depends on that record cannot use it at the moment they need it.**
+
+Framed that way the group is much wider than renters, and it splits cleanly by *when* they
+need it.
+
+**At a decision point — episodic, high stakes, once every few years**
+
+| Group | How many | Source |
+|---|---:|---|
+| NYC households in-market for an apartment | **33,210** at any moment | NYC HPD, 1.41% vacancy 2023 |
+| — the same, annually | 188,000–283,000 | 8–12% turnover on 2,357,000 units |
+| Rent-stabilised/controlled tenants with rights they must know to use | ~1M units, ~2.5M people | NYCHVS-derived |
+
+**In daily practice — repeated, professional, low stakes per query**
+
+| Group | Rough size | How often |
+|---|---:|---|
+| Tenant lawyers and Legal Aid housing staff | Hundreds citywide | **Several times a day** |
+| Tenant organisers | Hundreds | Weekly |
+| Housing Court staff | Hundreds | Per case |
+| HPD inspectors | Low hundreds *(needs a source before quoting)* | Daily |
+| Journalists and researchers | Dozens | Per story |
+| Small property managers tracking their own portfolio | Thousands | Ongoing |
+
+**The observation that matters more than either headcount:** the people who need this most
+often are not the people there are most of. A renter needs it **twice in a decade**. A tenant
+lawyer needs it **twice a day**.
+
+### What they do instead today
+
+Nobody is doing nothing. Everyone has a workaround, and every workaround is bad in a different
+way.
+
+| Group | What they do now | Why it fails |
+|---|---|---|
+| Renters | Cross-reference HPD Online, DHCR lists and Census tables by hand — or, far more often, sign without checking | Three portals, none designed for a layperson, at the exact moment there is no time. 11.1M violation records, public and illegible |
+| Tenant lawyers | Pull records case by case from the same portals, manually, every time | Works, but it is per-client manual labour that never compounds |
+| Organisers | Build spreadsheets of buildings and landlords by hand | Goes stale immediately; no one else can reuse it |
+| Journalists | FOIL requests and bulk Open Data downloads, analysed ad hoc | Fine for a story, useless as a lookup |
+| Landlords/managers | Yardi, RealPage and similar | Shows *their* buildings, not a comparative read; priced for portfolios |
+| Everyone | Word of mouth, a walk-through, the broker's description | The broker is paid to close the lease |
+
+**The honest read on the alternatives:** the data being free and public is precisely why nobody
+has built the good version. There is no paywall to break — only an interpretation problem, and
+interpretation is hard to charge for.
+
+### Which group I would pick as primary — and it is not the obvious one
+
+The question is renters (volume) or lawyers and organisers (frequency). **I would design for
+the professionals and reach for the renters**, and the argument is not sentimental.
+
+**Renters are not addressable.** 33,210 people are in-market at any moment, they do not know
+they need this until the week they need it, and there is no channel that reaches them at that
+moment which is not simply buying attention. Openigloo proved the negative case here: they
+reached 3M+ NYC renters and still had to pivot into brokerage, because reach was never the
+constraint — **timing** was. Spending to acquire someone who needs the product for six weeks
+every four years is the hardest possible acquisition maths.
+
+**The professionals are findable.** There are hundreds of them, at a countable number of named
+organisations — Legal Aid, Housing Court Answers, Met Council, the tenant unions. You can
+reach essentially the entire population with a list and a phone. That is not a market, but it
+is a *distribution channel that exists*, which is more than the renter side has.
+
+**And frequency drives quality.** A user who opens the tool twice a day finds every gap in a
+month. The daily user is the one who will say "seven open Class C" is not enough — they need to
+know it is *no heat, twice, unresolved since March*. That is the biggest product gap in the
+whole landscape and it is invisible from the renter side, because a renter does not know what
+to ask for. **Building for the professional makes the product good enough that the renter
+version is worth having.**
+
+**What this is not:** it is not a claim that lawyers are the revenue. They are grant-funded and
+close to broke — they sit at the very top of the alignment gradient in §6, which is exactly why
+they will not pay. Primary market here means *primary design target and first distribution
+channel*, and the honest structure is:
+
+- **Design for** the daily professional user — they make it correct.
+- **Reach** renters — they are the mission and the volume.
+- **Charge** neither, yet. §6 is unresolved and picking a payer before resolving it is how both
+  comparables ended up somewhere other than where they started.
+
+### One constraint this decision does *not* have
+
+Capacity. The read path was measured at 2.2 ms per Health Card, which is **400,000–1,300,000
+daily users on a single $2/month VM**. Whichever group is picked, the machine is not the reason.
+The binding constraints are coverage — 250 buildings today, a hard architectural cliff at
+~40,000 — and the per-request cost of the LLM endpoints. Full working in
+`docs/reflection/capacity-and-ceilings.md`.
 
 ## Question 3 — *(pending)*
 

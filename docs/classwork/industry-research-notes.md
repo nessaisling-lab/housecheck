@@ -2,7 +2,7 @@
 
 **Industry:** property data pointed at the tenant, not the owner.
 **Researched:** 2026-07-29, extended 2026-08-08. **Living document** — the open questions in
-§6 are the current edge, not a closing summary.
+§7 are the current edge, not a closing summary.
 
 **Standard used throughout:** every figure carries its source, and confidence is stated where
 a source is weak. Nothing here is estimated and then presented as measured. Where a claim
@@ -307,7 +307,69 @@ what Rentlogic's twelve years at nine people demonstrates.
 
 ---
 
-## 6. Open questions — the live edge of this document
+## 6. The signal worth naming
+
+Everything above points at one pattern, and it is the most interesting thing in this document
+because it is structural rather than circumstantial.
+
+> **Willingness to pay runs opposite to alignment.**
+>
+> The closer a buyer's interest is to the tenant's, the less they will pay for this data. The
+> further away it is, the more.
+
+The evidence is already in the tables above; laid end to end it is monotonic:
+
+| Buyer | Alignment with the tenant | Will pay | What the money would be for |
+|---|---|---|---|
+| **Tenant lawyers, organisers, court staff** | Highest — they act *for* the tenant | ~nothing (grant-funded) | Daily case and campaign work |
+| **Renters** | Perfect — it is about them | ~nothing; both comparables give it away | One decision every few years |
+| **Landlords** | Opposed on the thing that matters | Proven (Rentlogic) | Advertising a *good* grade |
+| **Brokers** | Aligned with *closing*, not with the tenant | Moderate (Openigloo's pivot) | Filling a unit |
+| **Insurers** | Inverted | Highest of all | Habitability exclusions — denying a claim |
+
+Read the last column downward. The willingness to pay rises exactly as the purpose rotates
+away from the person the record describes. At the top, the use is "help this tenant." At the
+bottom, it is "use this building's condition against the tenant living in it."
+
+### Why this is the answer rather than one of the others
+
+Four other signals in this document are real:
+
+- Every layer of the landscape has a settled payer except this one (§2b).
+- The in-market moment is 1 in 75, so reach was never Openigloo's constraint (§3).
+- The highest-frequency users have the lowest budget (§3).
+- Nobody turns violation *counts* into violation *meaning* (§4).
+
+The first three are **consequences of this one.** The layer has no settled payer because every
+available payer is somewhere down the gradient. The high-frequency, zero-budget worker sits at
+the top of it. Twelve years and two companies did not fail to find a business model; they found
+that the models which work require pointing the data away from the person it was collected
+about. Rentlogic went to landlords and inherited adverse selection — the worst buildings never
+buy. Openigloo went to the transaction. Neither of those is a mistake. They are what the
+gradient permits.
+
+The fourth — violation meaning — is a genuine product gap and not part of this pattern, which
+is why it is worth keeping separate rather than folding in.
+
+### Where the pattern might break, which is what makes it interesting rather than just bleak
+
+Two buyers in §4 do not obviously sit on the gradient:
+
+- **Lenders** pricing multifamily credit risk. A lender wants the loan priced correctly. A
+  building with a bad violation history is a genuine default signal. Nothing about that
+  requires harming the tenant.
+- **City agencies** targeting enforcement. The enforcement body already holds the data; the
+  value would be prioritisation, and its purpose is the same as ours.
+
+Whether those two are real exceptions or just less obvious points on the same line is the
+question this research does not answer.
+
+**Named, not solved.** Deciding what to do about it is the next block's work, and any answer
+that ignores the gradient is going to rediscover it the expensive way.
+
+---
+
+## 7. Open questions — the live edge of this document
 
 1. **Current pricing.** Rentlogic's public numbers are from 2018. Openigloo's subscription
    tiers and brokerage fee are described qualitatively, not published. Both need direct contact.

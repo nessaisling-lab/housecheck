@@ -35,7 +35,11 @@ p      {{ margin: 0 0 7pt 0; }}
 ul, ol {{ margin: 0 0 8pt 0; padding-left: 16pt; }}
 li     {{ margin-bottom: 3pt; }}
 a      {{ color: {accent}; }}
-code   {{ font-family: {mono}; font-size: 9pt; background: {rule}; }}
+/* No background chip. LibreOffice collapses every `code` into one character style,
+   SourceText, with a hard-coded light fill -- which inside a dark table header renders
+   near-white on near-white (~1.09:1). A `th code` selector cannot override it because the
+   character style is shared. Consolas alone distinguishes code on paper. */
+code   {{ font-family: {mono}; font-size: 9pt; }}
 /* Light, not the dark card. LibreOffice applies a block background to the paragraph but
    does not push the block's `color` down into the runs, so a dark code block renders
    dark-on-dark and unreadable. Light ground also survives photocopying and does not eat
@@ -99,7 +103,11 @@ def inline(s):
 
 
 def cells(row):
-    return [c.strip() for c in row.strip().strip("|").split("|")]
+    # Split on unescaped pipes only. A markdown-escaped `\|` inside a cell (the ledger row in
+    # chapter 14 uses one) otherwise produced an extra column, shifting every later cell right
+    # and leaving unbalanced ** and ` as literal text.
+    parts = re.split(r"(?<!\\)\|", row.strip().strip("|"))
+    return [c.strip().replace("\\|", "|") for c in parts]
 
 
 def md_to_html(md):
@@ -145,7 +153,8 @@ def md_to_html(md):
                 i += 1
             th = "".join("<th>%s</th>" % inline(c) for c in head)
             tr = "".join("<tr>%s</tr>" % "".join("<td>%s</td>" % inline(c) for c in r) for r in body)
-            out.append("<table><tr>%s</tr>%s</table>" % (th, tr))
+            out.append('<table width="100%%" cellpadding="6" cellspacing="0">'
+                       '<tr>%s</tr>%s</table>' % (th, tr))
             continue
         m = re.match(r"^(\s*)([-*]|\d+\.)\s+(.*)$", ln)
         if m:

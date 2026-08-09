@@ -97,7 +97,7 @@ The effective background at the top of every card is `rgb(73,73,75)` — **one u
 lighter than `--hc-sunken`**, the surface the palette was tuned against. And 0.01
 of margin does not absorb that:
 
-| token | on `--hc-sunken` | composited, card top | |
+| token | on `--hc-sunken` | composited, card top | verdict |
 |---|---:|---:|---|
 | `--hc-strong` | 4.51:1 | **4.44:1** | fails 1.4.3 |
 | `--hc-mixed` | 4.51:1 | **4.44:1** | fails 1.4.3 |

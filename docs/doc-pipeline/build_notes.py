@@ -19,12 +19,12 @@ cover = (
     '<p class="lede">Property data pointed at the tenant, not the owner &mdash; what exists, '
     'who it serves, and the gaps a renter falls through.</p>'
     '<p class="meta">Researched 29 July 2026 &middot; extended 8 August 2026</p>'
-    '<p class="meta">Living document. The open questions in &sect;6 are the current edge, '
+    '<p class="meta">Living document. The open questions in &sect;7 are the current edge, '
     'not a closing summary.</p>'
-    '<div class="callout"><p class="k">STANDARD USED THROUGHOUT</p>'
+    '<blockquote><p><b>STANDARD USED THROUGHOUT</b></p>'
     '<p>Every figure carries its source, and confidence is stated where a source is weak. '
     'Nothing here is estimated and then presented as measured. Claims from our own build are '
-    'marked and can be checked against a live URL.</p></div>'
+    'marked and can be checked against a live URL.</p></blockquote>'
     '<hr>'
 )
 

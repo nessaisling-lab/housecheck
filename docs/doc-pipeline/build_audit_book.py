@@ -61,10 +61,10 @@ fm = [
     'auditing it hard enough to find out it was wrong.</p>',
     '<p class="meta">Aisling &middot; Pursuit L2 Cycle 4 &middot; August 2026</p>',
     '<p class="meta">%s chapters &middot; %s words</p>' % (len(chapters), "{:,}".format(total)),
-    '<div class="callout"><p class="k">THE ARGUMENT, ONCE</p><p>Every load-bearing decision '
+    '<blockquote><p><b>THE ARGUMENT, ONCE</b></p><p>Every load-bearing decision '
     'in this codebase was forced by a trust constraint, not a performance one &mdash; and the '
     'places where the code is weakest are precisely the places where a trust constraint was '
-    'expressed in prose, a comment, or a <code>String</code> instead of in a type.</p></div>',
+    'expressed in prose, a comment, or a <code>String</code> instead of in a type.</p></blockquote>',
     '<div class="pagebreak"></div><h2>How to read this</h2>',
     '<p>Every chapter opens with the question it answers and closes by stating the strongest '
     'objection to itself and answering it. Those closing sections are the fastest way through '
@@ -96,7 +96,7 @@ for c in chapters:
     body_parts.append('<h1>%d. %s</h1>' % (c["n"], inline(c["title"])))
     if c["q"]:
         body_parts.append('<blockquote><p><b>The question this chapter answers:</b> %s</p>'
-                          '</blockquote>' % esc(c["q"]))
+                          '</blockquote>' % inline(c["q"]))
     body_parts.append(c["html"])
 
 doc = build("Confident, Fabricated Numbers — a HouseCheck build audit",

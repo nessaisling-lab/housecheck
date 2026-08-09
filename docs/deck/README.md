@@ -59,6 +59,29 @@ re-run while iterating.
 
 ## Change log
 
+- **2026-08-09** — **View toggle** added, bottom-left (`Mobile view` / `Desktop view`). Browser
+  device-emulation is not something to rely on, so the deck ships its own switch. It works in
+  **both** directions — phone layout forced on a desktop, desktop layout forced on a phone — and
+  the choice persists in `localStorage`.
+
+  A class alone cannot undo a media query, so the same rule set is emitted twice from one
+  source and mechanically prefixed, which is why the two can never drift:
+
+  ```
+  @media (max-width: 860px) { html:not(.hc-force-desktop) <rule> }   <- automatic
+  html.hc-force-mobile <rule>                                        <- forced on
+  ```
+
+  The sub-400px type step stays gated on *real* width in both modes, so previewing the phone
+  layout on a 1440px monitor gives the 860px scale (26px headings) rather than the 360px one
+  (23px). The button calls `stopPropagation()` because the stage listens for clicks to advance
+  slides — without it, switching views also skipped a slide.
+
+  Verified at 1440×900 and 390×844: toggles both ways, restores the previous layout exactly,
+  does not change the current slide, 18 links intact, no horizontal scroll, no collapsed SVGs,
+  no text under 11px.
+
+
 - **2026-08-09** — Mobile support added (`mobile_layer.py`, 8.2 KB of CSS). Verified at
   **360×740, 390×844, 1024×768, 1280×720 and 1440×900**: no horizontal scroll at any size, no
   unreachable content, no text under 11px, all 18 links intact, Back/Next and dots both

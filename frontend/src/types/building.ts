@@ -16,6 +16,19 @@ export interface SearchResult {
  * the strongest claim the product makes about a building. Absence has to survive to the
  * render or the render invents a fact.
  */
+/** One open violation, in HPD's own wording. */
+export interface ViolationDetail {
+  /** "A" | "B" | "C". Not a union: an unknown class from the wire must survive to the UI
+   *  as itself rather than being coerced into a class it is not. */
+  class: string;
+  /** HPD's notice text. `null` where the record carries none. */
+  description: string | null;
+  issued_on: string | null;
+  /** `null` when the issue date is missing — 7.3% of citywide rows. Renders as
+   *  "age unknown", never as 0 days. */
+  days_open: number | null;
+}
+
 export interface ViolationCounts {
   a: number | null;
   b: number | null;
@@ -79,6 +92,10 @@ export interface BuildingCard {
   score: number | null;
   sub_scores: SubScores;
   open_violations: ViolationCounts;
+  /** The conditions behind the counts, newest first. Capped by the API at 50. */
+  open_violation_details: ViolationDetail[];
+  /** Every open violation, so a capped list can say what it is a slice of. */
+  open_violation_total: number | null;
   access_likelihood?: AccessLikelihood | null;
   stabilization?: Stabilization | null;
   stabilization_message?: string | null;

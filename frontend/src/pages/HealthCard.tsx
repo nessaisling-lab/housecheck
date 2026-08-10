@@ -83,7 +83,15 @@ function subStatus(b: Building, key: "condition" | "legal" | "neighborhood" | "a
     case "condition": {
       const c = b.open_violations.c;
       if (c === null) return "No violation data";
-      return c > 0 ? `${c} hazardous violation${c > 1 ? "s" : ""} open` : "No hazardous violations";
+      if (c > 0) return `${c} hazardous violation${c > 1 ? "s" : ""} open`;
+      // "No hazardous violations" beside a floor-level score reads as "this building is
+      // fine". 603 Putnam Avenue scores 0 with 33 open violations, none of them Class C.
+      // Both facts are true; shown alone the caption inverts the score's meaning, so when
+      // there are other open violations the count comes with it.
+      const total = b.open_violation_total ?? 0;
+      return total > 0
+        ? `${total} open violation${total > 1 ? "s" : ""}, none hazardous`
+        : "No hazardous violations";
     }
     case "legal":
       return b.stabilization === "likely"
@@ -296,6 +304,52 @@ export default function HealthCard() {
             C violations are the strongest public signal of neglect — ask the landlord about repair
             timelines and check again before signing.
           </p>
+          {building.open_violation_details.length > 0 && (
+            <div className="mt-4">
+              <h4 className="hc-row-label" style={{ marginBottom: 8 }}>
+                What the violations actually say
+              </h4>
+              <ul className="space-y-2.5">
+                {building.open_violation_details.map((d, i) => (
+                  <li
+                    key={`${d.issued_on ?? "undated"}-${i}`}
+                    className="rounded-xl p-3"
+                    style={{
+                      background: "var(--hc-surface-2, rgba(255,255,255,0.04))",
+                      border: "1px solid var(--hc-hairline, rgba(255,255,255,0.08))",
+                    }}
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="hc-row-label">Class {d.class}</span>
+                      <span
+                        className="text-[0.8125rem] tabular-nums"
+                        style={{ color: "var(--hc-ink-3, var(--hc-ink-2))" }}
+                      >
+                        {/* An unknown age must read as unknown. 7.3% of citywide rows
+                            carry no issue date, and "0 days" would say "raised today". */}
+                        {d.days_open == null
+                          ? "age unknown"
+                          : `open ${d.days_open.toLocaleString()} day${d.days_open === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+                    <p
+                      className="mt-1 text-[0.875rem] leading-relaxed"
+                      style={{ color: "var(--hc-ink-2)" }}
+                    >
+                      {d.description ?? "HPD recorded no description for this violation."}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              {building.open_violation_total != null &&
+                building.open_violation_total > building.open_violation_details.length && (
+                  <p className="mt-2 text-[0.8125rem]" style={{ color: "var(--hc-ink-3, var(--hc-ink-2))" }}>
+                    Showing {building.open_violation_details.length} of{" "}
+                    {building.open_violation_total.toLocaleString()} open violations.
+                  </p>
+                )}
+            </div>
+          )}
           <dl className="mt-4 space-y-2.5">
             {[
               ["Class C — immediately hazardous", v.c ?? "—"],
@@ -422,11 +476,17 @@ export default function HealthCard() {
             <span className="block text-[0.9375rem] leading-snug" style={{ color: "var(--hc-ink-2)" }}>
               {building.year_built ? `${building.year_built} ` : ""}
               {building.has_elevator ? "elevator building" : "walk-up"}
+              {/* "a clean hazardous-violation record" is true of Class C and false of the
+                  building: 603 Putnam has zero Class C and 33 other open violations, and
+                  reading only this sentence would tell someone it is fine. Same defect as
+                  the sub-score caption, in a second place. */}
               {v.c === null
                 ? " with no violation data on record"
                 : v.c > 0
                   ? ` with ${v.c} hazardous violation${v.c > 1 ? "s" : ""} open`
-                  : " with a clean hazardous-violation record"}
+                  : (building.open_violation_total ?? 0) > 0
+                    ? ` with ${building.open_violation_total} open violation${building.open_violation_total === 1 ? "" : "s"}, none hazardous`
+                    : " with a clean violation record"}
               {building.stabilization === "likely" ? "; likely rent-stabilized" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}
               {building.good_cause ? ", with Good Cause coverage" : ""}.
             </span>

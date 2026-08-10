@@ -146,6 +146,18 @@ function normalizeBuilding(raw: any): BuildingCard {
       c: numOrNull(v.c ?? v.class_c ?? v.C),
       open_since: v.open_since ?? v.since ?? null,
     },
+    // Absent on an older API build, so default to an empty list rather than undefined:
+    // the card checks `.length`, and a crash here would take out the whole page.
+    open_violation_details: Array.isArray(raw.open_violation_details)
+      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        raw.open_violation_details.map((d: any) => ({
+          class: String(d.class ?? ""),
+          description: d.description ?? null,
+          issued_on: d.issued_on ?? null,
+          days_open: numOrNull(d.days_open),
+        }))
+      : [],
+    open_violation_total: numOrNull(raw.open_violation_total),
     access_likelihood: raw.access_likelihood ?? null,
     stabilization:
       // Narrowed rather than cast: the union is closed now, so an unrecognised value from a

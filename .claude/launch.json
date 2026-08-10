@@ -4,8 +4,25 @@
     {
       "name": "deck",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8931", "--directory", "docs/deck"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8931",
+        "--directory",
+        "docs/deck"
+      ],
       "port": 8931
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "frontend"
+      ],
+      "port": 3000
     }
   ]
 }

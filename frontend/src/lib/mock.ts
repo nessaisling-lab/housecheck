@@ -19,6 +19,22 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     score: 57,
     sub_scores: { condition: 56, legal: 100, neighborhood: 40, accessibility: 30 },
     open_violations: { a: 0, b: 1, c: 1, open_since: 2025 },
+    open_violation_details: [
+      {
+        class: "C",
+        description:
+          "§ 27-2005 ADM CODE PROPERLY REPAIR THE BROKEN OR DEFECTIVE MECHANICAL VENTILATION SYSTEM IN THE BATHROOM LOCATED AT APT 3R, 3rd STORY",
+        issued_on: "2025-11-02",
+        days_open: 280,
+      },
+      {
+        class: "B",
+        description: "§ 27-2005 HMC: PROPERLY REPAIR OR REPLACE THE BROKEN OR DEFECTIVE DOOR KNOB IN THE BATHROOM",
+        issued_on: "2025-06-18",
+        days_open: 417,
+      },
+    ],
+    open_violation_total: 2,
     access_likelihood: "Lower",
     stabilization: "likely",
     stabilization_message: "Confirm stabilization with NYS DHCR before signing.",
@@ -40,6 +56,11 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     score: 68,
     sub_scores: { condition: 72, legal: 88, neighborhood: 52, accessibility: 44 },
     open_violations: { a: 1, b: 0, c: 0, open_since: 2024 },
+    open_violation_details: [
+      // No issue date on the wire -- the card must say "age unknown", never "0 days".
+      { class: "A", description: "(A) § HMC: FILE ANNUAL BEDBUG REPORT IN ACCORDANCE WITH HPD RULE", issued_on: null, days_open: null },
+    ],
+    open_violation_total: 1,
     access_likelihood: "Mixed",
     stabilization: "likely",
     stabilization_message: "Confirm stabilization with NYS DHCR before signing.",
@@ -61,6 +82,13 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     score: 41,
     sub_scores: { condition: 30, legal: 60, neighborhood: 48, accessibility: 35 },
     open_violations: { a: 2, b: 3, c: 4, open_since: 2023 },
+    open_violation_details: [
+      { class: "C", description: "§ 27-2033 ADM CODE PROVIDE ADEQUATE HEAT AT APT 2F", issued_on: "2023-12-04", days_open: 979 },
+      // A record with no text at all: the card falls back rather than rendering blank.
+      { class: "B", description: null, issued_on: "2024-02-11", days_open: 910 },
+    ],
+    // Fewer details than the total, so the "showing N of M" line renders.
+    open_violation_total: 9,
     access_likelihood: "Lower",
     stabilization: "unverified",
     stabilization_message:
@@ -83,6 +111,8 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     score: 82,
     sub_scores: { condition: 88, legal: 78, neighborhood: 66, accessibility: 84 },
     open_violations: { a: 0, b: 0, c: 0, open_since: null },
+    open_violation_details: [],
+    open_violation_total: 0,
     access_likelihood: "Higher",
     stabilization: "none_on_record",
     stabilization_message: "No stabilization on record — Good Cause protections may still apply.",

@@ -225,7 +225,27 @@ const MONTHS: [&str; 12] = [
 /// this workspace (see `scoring`'s top doc comment): the guarantee that no scoring path can
 /// read a clock is enforced by the crate simply not being available, and adding it here to
 /// format one string would put a clock one `use` away from the code that must not have it.
-fn civil_from_days(z: i64) -> (i64, u32) {
+/// Today as `YYYY-MM-DD`, for measuring how long a violation has been open.
+///
+/// Read here rather than inside `days_open` so the model stays a pure function of the
+/// record and can be tested without freezing the clock.
+fn today_iso() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let (y, m, d) = civil_ymd(secs.div_euclid(86_400));
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Civil date from days since the epoch. Howard Hinnant's algorithm.
+///
+/// This returns the day as well as the month, which the older `civil_from_days` did not —
+/// it existed only to name a month for the provenance line. Building an ISO date on top of
+/// it produced `2026-00-08`: an invalid month, silently rejected downstream, so every
+/// violation reported an unknown age. The unit test did not catch it because it hands the
+/// date in as a literal, which tests the arithmetic and not its caller.
+fn civil_ymd(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097;
@@ -233,8 +253,14 @@ fn civil_from_days(z: i64) -> (i64, u32) {
     let y = yoe + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    (if m <= 2 { y + 1 } else { y }, m as u32)
+    (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
+}
+
+fn civil_from_days(z: i64) -> (i64, u32) {
+    let (y, m, _) = civil_ymd(z);
+    (y, m)
 }
 
 impl Provenance {
@@ -408,8 +434,13 @@ fn card_for(
     let (accessibility, access_likelihood) = scoring::access_likelihood(&building);
     let total = scoring::total_score(condition, legal, neighborhood, accessibility);
 
+    let (open_violation_details, open_violation_total) =
+        model::ViolationDetail::from_open(&violations, &today_iso());
+
     Ok(Some(HealthCard {
         open_violations: ViolationCounts::open_from(&violations),
+        open_violation_details,
+        open_violation_total,
         score: ScoreBreakdown {
             total,
             condition,
@@ -2393,6 +2424,39 @@ mod tests {
         // Whitespace-only address trims to empty → 400 before any upstream call.
         let res = server.get("/search?address=%20%20").await;
         res.assert_status_bad_request();
+    }
+
+    /// `today_iso` feeds every "open for N days" on the card, and it shipped broken once:
+    /// it was built on a helper that returns only a month, so it produced `2026-00-08` and
+    /// every violation reported an unknown age. The model's own test could not catch that,
+    /// because it passes the date in as a literal — it tested the arithmetic, not the
+    /// caller. So this pins the caller.
+    #[test]
+    fn today_iso_is_a_date_the_model_can_actually_parse() {
+        // Known epoch days, checked against the Gregorian calendar.
+        assert_eq!(civil_ymd(0), (1970, 1, 1));
+        assert_eq!(civil_ymd(19_723), (2024, 1, 1));
+        assert_eq!(civil_ymd(19_782), (2024, 2, 29)); // a real leap day
+        assert_eq!(civil_ymd(20_674), (2026, 8, 9));
+
+        let today = today_iso();
+        assert_eq!(today.len(), 10, "expected YYYY-MM-DD, got {today}");
+        let month: u32 = today[5..7].parse().expect("month parses");
+        let day: u32 = today[8..10].parse().expect("day parses");
+        assert!((1..=12).contains(&month), "month {month} out of range in {today}");
+        assert!((1..=31).contains(&day), "day {day} out of range in {today}");
+
+        // The real check: the model must be able to measure an age against it.
+        let v = model::Violation {
+            class: "C".into(),
+            open: true,
+            issued_on: Some("2020-01-01".into()),
+            ..Default::default()
+        };
+        assert!(
+            v.days_open(&today).is_some(),
+            "days_open returned None for today={today} — the date is unparseable"
+        );
     }
 
     #[test]

@@ -215,8 +215,56 @@ pub struct HealthCard {
     pub building: Building,
     pub score: ScoreBreakdown,
     pub open_violations: ViolationCounts,
+    /// The conditions behind the counts, newest first, capped at [`OPEN_DETAIL_CAP`].
+    ///
+    /// `open_violations` says how many. This says *what* — which is the difference between
+    /// a number and an argument, and the reason a count can be read backwards: a building
+    /// can truthfully show "no hazardous violations" beside a floor-level score when it
+    /// has thirty-three non-hazardous ones.
+    pub open_violation_details: Vec<ViolationDetail>,
+    /// How many open violations exist in total, so a truncated list can say so rather than
+    /// implying the capped list is all of them. One pilot building has 754.
+    pub open_violation_total: u32,
     pub access_likelihood: String, // "Higher" | "Mixed" | "Lower"
     pub stabilization: Stabilization,
+}
+
+/// The most detail any one card returns. A building in the pilot has 754 open violations,
+/// and serialising every one would make a single card response larger than the entire
+/// database was two commits ago. The total travels alongside so nothing is hidden.
+pub const OPEN_DETAIL_CAP: usize = 50;
+
+/// One open violation, as the card shows it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ViolationDetail {
+    pub class: String,
+    /// HPD's own wording. `None` where the record carries no text.
+    pub description: Option<String>,
+    pub issued_on: Option<String>,
+    /// `None` when the issue date is missing — 7.3% of citywide rows — because an unknown
+    /// age has to read as unknown rather than as zero days.
+    pub days_open: Option<i64>,
+}
+
+impl ViolationDetail {
+    /// Newest first, capped. Violations with no issue date sort last: they are the ones
+    /// whose age is unknown, and leading with them would bury the recent ones.
+    pub fn from_open(violations: &[Violation], today: &str) -> (Vec<Self>, u32) {
+        let mut open: Vec<&Violation> = violations.iter().filter(|v| v.open).collect();
+        let total = open.len() as u32;
+        open.sort_by(|a, b| b.issued_on.cmp(&a.issued_on));
+        let details = open
+            .into_iter()
+            .take(OPEN_DETAIL_CAP)
+            .map(|v| ViolationDetail {
+                class: v.class.clone(),
+                description: v.description.clone(),
+                issued_on: v.issued_on.clone(),
+                days_open: v.days_open(today),
+            })
+            .collect();
+        (details, total)
+    }
 }
 
 /// Current HUD Fair Market Rents by bedroom count for the building's metro area. Second
@@ -349,6 +397,49 @@ mod tests {
     /// silently becoming zero: 7.3% of citywide rows have no `novissueddate`, and a
     /// decade-old violation rendering as "raised today" is worse than rendering as
     /// unknown.
+    /// One pilot building has 754 open violations, so the card caps the detail it returns.
+    /// The cap is only safe if the total travels with it — otherwise a truncated list
+    /// reads as the whole story, which is the same defect as reporting a count with no
+    /// meaning, just in the other direction.
+    #[test]
+    fn violation_detail_caps_the_list_but_never_the_count() {
+        let v = |issued: Option<&str>, open: bool| Violation {
+            class: "C".into(),
+            open,
+            year: 2026,
+            description: Some("ABATE THE NUISANCE".into()),
+            issued_on: issued.map(str::to_string),
+            ..Default::default()
+        };
+        // 60 real dates: 2025-01-01 through 2025-02-29 would not exist, so walk months.
+        let mut vs: Vec<Violation> = (0..60)
+            .map(|i| v(Some(&format!("2025-{:02}-{:02}", i / 28 + 1, i % 28 + 1)), true))
+            .collect();
+        let newest = vs
+            .iter()
+            .filter_map(|x| x.issued_on.clone())
+            .max()
+            .expect("dates");
+        vs.push(v(None, true)); // no issue date
+        vs.push(v(Some("2026-06-01"), false)); // closed: must not appear at all
+
+        let (details, total) = ViolationDetail::from_open(&vs, "2026-08-09");
+        assert_eq!(total, 61, "total counts every OPEN violation, not the capped list");
+        assert_eq!(details.len(), OPEN_DETAIL_CAP);
+
+        // Newest first, so the freshest violation is also the fewest days open.
+        assert_eq!(details[0].issued_on.as_deref(), Some(newest.as_str()));
+        assert!(details[0].days_open.unwrap() < details[1].days_open.unwrap());
+
+        // The undated one sorts last, so it cannot displace a recent violation.
+        let (all, _) = ViolationDetail::from_open(&vs[58..], "2026-08-09");
+        assert_eq!(all.last().unwrap().issued_on, None);
+        assert_eq!(all.last().unwrap().days_open, None);
+
+        // Closed violations are absent, since the card lists what is still wrong.
+        assert!(details.iter().all(|d| d.issued_on.as_deref() != Some("2026-06-01")));
+    }
+
     #[test]
     fn days_open_is_none_rather_than_zero_when_the_date_is_missing() {
         let no_date = Violation {

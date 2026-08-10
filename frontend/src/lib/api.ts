@@ -195,6 +195,35 @@ export async function getBuilding(bbl: string): Promise<ApiResult<BuildingCard>>
   }
 }
 
+/**
+ * Fetch the verifiable export document for a building.
+ *
+ * Deliberately does NOT fall back to demo data the way `getBuilding` does. Every other
+ * endpoint degrades to a mock so the UI keeps working offline, and that is right for a
+ * score someone is browsing. It would be indefensible here: this document is meant to be
+ * handed to a court, and a fabricated exhibit that looks real is far worse than an error
+ * message. A failure has to surface as a failure.
+ *
+ * Returns the raw text rather than a parsed object, because the bytes are what the hash
+ * chain covers — re-serialising through JS could reorder keys and invalidate the signature
+ * for whoever verifies it later.
+ */
+export async function exportRecord(bbl: string): Promise<{ text: string; filename: string }> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}/building/${encodeURIComponent(bbl)}/export`, {
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
+    const text = await res.text();
+    const today = new Date().toISOString().slice(0, 10);
+    return { text, filename: `housecheck-${bbl}-${today}.json` };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function listBuildings(): Promise<ApiResult<BuildingSummary[]>> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

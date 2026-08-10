@@ -6,7 +6,7 @@ import { Sheet } from "@/components/Sheet";
 import { SpectrumTrack } from "@/components/SpectrumTrack";
 import { StatusPill } from "@/components/StatusPill";
 import { SubScoreTile } from "@/components/SubScoreRow";
-import { checkRentFairness, getBuilding, getMeta, type ArtifactMeta } from "@/lib/api";
+import { checkRentFairness, exportRecord, getBuilding, getMeta, type ArtifactMeta } from "@/lib/api";
 import { useAgent } from "@/lib/agent-context";
 import { bandMeta, fmtDistance, fmtMoney, fmtPct, pctToPosition, scoreWash } from "@/lib/score";
 import { store, useIsSaved, useOnboarding, useTray, type Priority } from "@/lib/store";
@@ -126,6 +126,9 @@ export default function HealthCard() {
   const dataMonth = meta?.data_month ?? DATA_MONTH_FALLBACK;
   const [state, setState] = useState<"loading" | "ready" | "notfound" | "error">("loading");
   const [detail, setDetail] = useState<SectionId | null>(null);
+  // "idle" | "working" | an error message. Deliberately not a boolean: a failed export has
+  // to say so, because the alternative is a user believing they downloaded evidence.
+  const [exportState, setExportState] = useState<"idle" | "working" | string>("idle");
   const [toast, setToast] = useState<string | null>(null);
 
   const [rentInput, setRentInput] = useState("");
@@ -177,6 +180,37 @@ export default function HealthCard() {
   }, [bbl]);
 
   useEffect(load, [load]);
+
+  /**
+   * Download the verifiable record.
+   *
+   * Refuses outright on demo data. Everything else on this page degrades to a mock when the
+   * API is unreachable, which is right for a score someone is browsing and indefensible for
+   * a document meant to be handed to a court -- a fabricated exhibit that looks real is far
+   * worse than a missing one.
+   */
+  const doExport = useCallback(async () => {
+    if (!building) return;
+    if (source === "demo") {
+      setExportState("Not available on demo data — this page is not showing live records.");
+      return;
+    }
+    setExportState("working");
+    try {
+      const { text, filename } = await exportRecord(building.bbl);
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setExportState("idle");
+    } catch {
+      setExportState("Could not produce the record. Nothing was downloaded.");
+    }
+  }, [building, source]);
 
   useEffect(() => {
     setAgentBuilding(building);
@@ -350,6 +384,30 @@ export default function HealthCard() {
                 )}
             </div>
           )}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={doExport}
+              disabled={exportState === "working"}
+              className="w-full rounded-xl px-4 py-3 text-[0.9375rem] font-semibold"
+              style={{
+                background: "var(--hc-ink)",
+                color: "var(--hc-bg, #fff)",
+                opacity: exportState === "working" ? 0.6 : 1,
+              }}
+            >
+              {exportState === "working" ? "Preparing record…" : "Download verifiable record"}
+            </button>
+            <p className="mt-2 text-[0.8125rem] leading-relaxed" style={{ color: "var(--hc-ink-3, var(--hc-ink-2))" }}>
+              A signed file listing every open violation with the dataset and date it came
+              from. Anyone can re-check it — change one character and verification fails.
+            </p>
+            {exportState !== "idle" && exportState !== "working" && (
+              <p className="mt-2 text-[0.8125rem] font-semibold" style={{ color: "var(--hc-warn, #b4413c)" }} role="alert">
+                {exportState}
+              </p>
+            )}
+          </div>
           <dl className="mt-4 space-y-2.5">
             {[
               ["Class C — immediately hazardous", v.c ?? "—"],

@@ -486,6 +486,22 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         store::set_meta(&conn, k, &v)?;
     }
 
+    // Per-source provenance: what each dataset gave us, and when.
+    //
+    // This is what lets an exported record attest to a fact rather than to a file. A hash
+    // chain proves nobody edited our output; only the dataset id and retrieval time make
+    // the document about HPD's data at a stated moment. Recorded per dataset because this
+    // artifact is one full snapshot -- see the schema comment in `store` for why that
+    // assumption breaks under incremental refresh.
+    for (dataset, rows, note) in [
+        ("wvxf-dwi5", stored_violations as i64, Some("HPD violations, classes A/B/C, by borough + tax block")),
+        ("erm2-nwe9", points_311.len() as i64, Some("311 service requests near the curated buildings")),
+        ("64uk-42ks", buildings.len() as i64, Some("PLUTO lots, residential, community district")),
+        ("43nn-pn8j", restaurants.len() as i64, Some("DOHMH graded restaurants within ~200 m")),
+    ] {
+        store::set_source_provenance(&conn, dataset, ingested_at as i64, rows, note)?;
+    }
+
     println!("wrote {} buildings to {}", buildings.len(), cfg.out);
     println!(
         "provenance: {} violations (A/B/C; {} class-I skipped), {} 311 points, ingested_at_unix={}",

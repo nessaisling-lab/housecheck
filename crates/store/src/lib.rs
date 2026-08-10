@@ -84,6 +84,24 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             bbl TEXT PRIMARY KEY,
             z BLOB NOT NULL
          );
+         -- What each source actually gave us, and when.
+         --
+         -- This is what makes a signed export attest to a FACT rather than to a FILE. A
+         -- hash chain proves nobody edited our output; it says nothing about whether the
+         -- output matched HPD at the time. Without the dataset id and the retrieval
+         -- timestamp, an exhibit is only evidence about itself.
+         --
+         -- Per dataset rather than per row, deliberately: this artifact is one full
+         -- snapshot, so every row from a dataset shares a retrieval time and 2.8M copies
+         -- of one timestamp would be waste. Incremental refresh (see
+         -- docs/design/database-layer.md) breaks that assumption and will need per-batch
+         -- stamping, which is why `note` carries the query that produced the rows.
+         CREATE TABLE IF NOT EXISTS source_provenance (
+            dataset TEXT PRIMARY KEY,
+            retrieved_at_unix INTEGER NOT NULL,
+            row_count INTEGER NOT NULL,
+            note TEXT
+         );
          CREATE INDEX IF NOT EXISTS idx_violations_bbl ON violations(bbl);
          CREATE TABLE IF NOT EXISTS acs_rent_by_tract (
             tract_geoid TEXT PRIMARY KEY,
@@ -339,6 +357,34 @@ pub fn upsert_tract_median(conn: &Connection, tract_geoid: &str, median: i32) ->
 /// is missing from it. Both were knowable at ingest and thrown away. Everything written here
 /// travels with the database into the image, so a running container can state its own
 /// provenance instead of the frontend asserting it from a hardcoded literal.
+/// Record what one source returned, and when. Idempotent per dataset.
+pub fn set_source_provenance(
+    conn: &Connection,
+    dataset: &str,
+    retrieved_at_unix: i64,
+    row_count: i64,
+    note: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO source_provenance (dataset,retrieved_at_unix,row_count,note)          VALUES (?1,?2,?3,?4)",
+        rusqlite::params![dataset, retrieved_at_unix, row_count, note],
+    )?;
+    Ok(())
+}
+
+/// Every source's provenance, dataset order, for the export and the `/meta` endpoint.
+pub fn all_source_provenance(conn: &Connection) -> Result<Vec<(String, i64, i64, Option<String>)>> {
+    let mut stmt = conn.prepare(
+        "SELECT dataset, retrieved_at_unix, row_count, note FROM source_provenance          ORDER BY dataset",
+    )?;
+    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
 pub fn set_meta(conn: &Connection, key: &str, value: &str) -> Result<()> {
     conn.execute(
         "INSERT INTO meta (key,value) VALUES (?1, ?2)

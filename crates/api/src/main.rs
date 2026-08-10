@@ -348,6 +348,8 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/health", get(|| async { "ok" }))
         .route("/meta", get(meta_handler))
         .route("/building/{bbl}", get(building_handler))
+        .route("/building/{bbl}/export", get(export_handler))
+        .route("/verify", axum::routing::post(verify_handler))
         .route("/buildings", get(buildings_handler))
         .route("/compare", get(compare_handler))
         .route("/rank", get(rank_handler))
@@ -474,6 +476,79 @@ async fn building_handler(
         Ok(None) => (StatusCode::NOT_FOUND, "building not found").into_response(),
         Err(e) => internal_error("database query failed", e),
     }
+}
+
+/// Environment variable holding the hex Ed25519 secret key that signs exports.
+///
+/// Unset by default, and that is deliberate: an unset key produces an **unsigned but still
+/// hash-chained** document rather than a signature-shaped value that proves nothing. Same
+/// fail-closed choice as Resona's licence verification. The key is never read from the
+/// database, never logged, and never travels in a response — only the public half does.
+const EXPORT_SIGNING_KEY_ENV: &str = "HOUSECHECK_EXPORT_SIGNING_KEY";
+
+/// `GET /building/{bbl}/export` — the building's open violations as a checkable document.
+///
+/// The point of this endpoint is that its output survives leaving us. A lawyer hands the
+/// file to opposing counsel, who re-runs `POST /verify` (or the same check offline) and
+/// finds out whether a single character moved since we produced it.
+async fn export_handler(
+    State(state): State<AppState>,
+    Path(bbl): Path<String>,
+) -> impl IntoResponse {
+    let snapshot_year = state.snapshot_year;
+    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+
+    let building = match store::get_building(&conn, &bbl) {
+        Ok(Some(b)) => b,
+        Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
+        Err(e) => return internal_error("database query failed", e),
+    };
+    let _ = snapshot_year;
+
+    let violations = match store::get_open_violations(&conn, &bbl) {
+        Ok(v) => v,
+        Err(e) => return internal_error("database query failed", e),
+    };
+    let (details, total) = model::ViolationDetail::from_open(&violations, &today_iso());
+
+    let sources = match store::all_source_provenance(&conn) {
+        Ok(rows) => rows
+            .into_iter()
+            .map(|(dataset, retrieved_at_unix, row_count, note)| model::export::SourceStamp {
+                dataset,
+                retrieved_at_unix,
+                row_count,
+                note,
+            })
+            .collect(),
+        Err(e) => return internal_error("database query failed", e),
+    };
+
+    let exported_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    let mut doc = model::export::ExportDocument::build(
+        &building, &details, total, sources, exported_at,
+    );
+    // An absent key leaves the document unsigned. It is still chained, so tampering is still
+    // detectable -- what is missing is proof of who produced it, and saying so is honest.
+    if let Ok(key) = std::env::var(EXPORT_SIGNING_KEY_ENV) {
+        doc.sign_with(&key);
+    }
+    (StatusCode::OK, Json(doc)).into_response()
+}
+
+/// `POST /verify` — recompute a document's chain and check its signature.
+///
+/// Offered as a convenience, not as the authority. The same check runs entirely offline from
+/// the document alone, which is the property that matters: a verifier who has to ask us
+/// whether our own document is genuine has not verified anything.
+async fn verify_handler(
+    Json(doc): Json<model::export::ExportDocument>,
+) -> impl IntoResponse {
+    (StatusCode::OK, Json(doc.verify())).into_response()
 }
 
 /// Maximum number of buildings a single `/compare` request will score, to bound work.

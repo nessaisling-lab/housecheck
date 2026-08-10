@@ -4,6 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+# Hash chain over exported rows. Pure Rust, no C toolchain.
+sha2 = "0.10"
+# Detached signature over the chain head. Verification is offline by design: an exhibit
+# has to be checkable by someone who does not trust — and cannot reach — our servers.
+ed25519-dalek = "2"
+hex = "0.4"
 serde.workspace = true
 
 # Test-only. `[dependencies]` stays at exactly one crate — the property that lets `model` be

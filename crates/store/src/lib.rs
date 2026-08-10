@@ -372,8 +372,11 @@ pub fn set_source_provenance(
     Ok(())
 }
 
+/// One source's provenance row: dataset id, retrieval time, row count, and the query note.
+pub type SourceProvenanceRow = (String, i64, i64, Option<String>);
+
 /// Every source's provenance, dataset order, for the export and the `/meta` endpoint.
-pub fn all_source_provenance(conn: &Connection) -> Result<Vec<(String, i64, i64, Option<String>)>> {
+pub fn all_source_provenance(conn: &Connection) -> Result<Vec<SourceProvenanceRow>> {
     let mut stmt = conn.prepare(
         "SELECT dataset, retrieved_at_unix, row_count, note FROM source_provenance          ORDER BY dataset",
     )?;

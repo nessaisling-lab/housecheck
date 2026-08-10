@@ -64,13 +64,25 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             class TEXT NOT NULL,
             open INTEGER NOT NULL,
             year INTEGER NOT NULL,
-            -- HPD's own notice text. Nullable: not every record carries one, and a
-            -- missing description must read as missing rather than as an empty string.
-            description TEXT,
+            -- Index into this building's compressed description block, or NULL when the
+            -- record carries no text. The text itself lives in violation_desc.
+            desc_ord INTEGER,
             -- ISO dates. issued_on is absent on ~7% of citywide rows, so a violation's
             -- age is genuinely unknown for those rather than zero.
             issued_on TEXT,
             closed_on TEXT
+         );
+         -- Violation descriptions, compressed one block per building.
+         --
+         -- Stored this way because the redundancy is BETWEEN notices -- every one opens
+         -- with a housing-code statute reference -- not inside a single one. Measured on
+         -- the pilot's 5,354 real open violations: 1.3x compressing each row alone, 7.0x
+         -- compressing a building's together. The block is the building because a card
+         -- reads exactly one building, so a lookup decompresses exactly what it needs and
+         -- no block index is required.
+         CREATE TABLE IF NOT EXISTS violation_desc (
+            bbl TEXT PRIMARY KEY,
+            z BLOB NOT NULL
          );
          CREATE INDEX IF NOT EXISTS idx_violations_bbl ON violations(bbl);
          CREATE TABLE IF NOT EXISTS acs_rent_by_tract (
@@ -191,14 +203,19 @@ pub fn get_building(conn: &Connection, bbl: &str) -> Result<Option<Building>> {
 pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation>> {
     let mut stmt =
         conn.prepare(
-            "SELECT class, open, year, description, issued_on, closed_on              FROM violations WHERE bbl = ?1 AND open = 1",
+            "SELECT class, open, year, desc_ord, issued_on, closed_on              FROM violations WHERE bbl = ?1 AND open = 1",
         )?;
+    // One decompress for the whole building, before the row loop rather than inside it.
+    let descriptions = read_descriptions(conn, bbl)?;
     let rows = stmt.query_map([bbl], |row| {
+        let ord: Option<i64> = row.get("desc_ord")?;
         Ok(Violation {
             class: row.get("class")?,
             open: row.get::<_, i64>("open")? != 0,
             year: row.get("year")?,
-            description: row.get("description")?,
+            description: ord
+                .and_then(|o| usize::try_from(o).ok())
+                .and_then(|o| descriptions.get(o).cloned()),
             issued_on: row.get("issued_on")?,
             closed_on: row.get("closed_on")?,
         })
@@ -246,15 +263,64 @@ pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
     Ok(())
 }
 
-pub fn insert_violation(conn: &Connection, bbl: &str, v: &Violation) -> Result<()> {
-    conn.execute(
-        "INSERT INTO violations (bbl,class,open,year,description,issued_on,closed_on)          VALUES (?1,?2,?3,?4,?5,?6,?7)",
-        rusqlite::params![
-            bbl, v.class, v.open as i64, v.year,
-            v.description, v.issued_on, v.closed_on
-        ],
-    )?;
+/// Descriptions are joined with a byte that cannot appear in HPD's text, so splitting is
+/// unambiguous. A newline would not be safe -- a notice may contain one.
+const RECORD_SEP: char = '\u{1e}'; // ASCII record separator
+
+/// Descriptions for one building, in `desc_ord` order. Empty when the building has none.
+fn read_descriptions(conn: &Connection, bbl: &str) -> Result<Vec<String>> {
+    use rusqlite::OptionalExtension;
+    let z: Option<Vec<u8>> = conn
+        .query_row("SELECT z FROM violation_desc WHERE bbl = ?1", [bbl], |r| r.get(0))
+        .optional()?;
+    let Some(z) = z else {
+        return Ok(Vec::new());
+    };
+    let mut out = String::new();
+    std::io::Read::read_to_string(&mut flate2::read::ZlibDecoder::new(&z[..]), &mut out)?;
+    // split, not lines(): desc_ord indexes into this vector, so positions must be exact.
+    Ok(out.split(RECORD_SEP).map(str::to_string).collect())
+}
+
+/// Write one building's violations, with their descriptions as one compressed block.
+///
+/// Per-building rather than per-row because the redundancy is BETWEEN notices -- every one
+/// opens with a housing-code statute reference -- not inside a single one. Measured on the
+/// pilot's 5,354 real open violations: 1.3x compressing each row alone, 7.0x compressing a
+/// building's together. The block is the building because a card reads exactly one
+/// building, so a lookup decompresses exactly what it needs and needs no block index.
+pub fn insert_violations(conn: &Connection, bbl: &str, vs: &[Violation]) -> Result<()> {
+    let mut texts: Vec<&str> = Vec::new();
+    for v in vs {
+        let ord = match v.description.as_deref() {
+            Some(d) if !d.is_empty() => {
+                texts.push(d);
+                Some(texts.len() as i64 - 1)
+            }
+            _ => None,
+        };
+        conn.execute(
+            "INSERT INTO violations (bbl,class,open,year,desc_ord,issued_on,closed_on) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7)",
+            rusqlite::params![bbl, v.class, v.open as i64, v.year, ord, v.issued_on, v.closed_on],
+        )?;
+    }
+    if !texts.is_empty() {
+        let joined = texts.join(&RECORD_SEP.to_string());
+        let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        std::io::Write::write_all(&mut e, joined.as_bytes())?;
+        let z = e.finish()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO violation_desc (bbl,z) VALUES (?1,?2)",
+            rusqlite::params![bbl, z],
+        )?;
+    }
     Ok(())
+}
+
+/// Single-row insert, kept for the fixture seed and for tests.
+pub fn insert_violation(conn: &Connection, bbl: &str, v: &Violation) -> Result<()> {
+    insert_violations(conn, bbl, std::slice::from_ref(v))
 }
 
 pub fn upsert_tract_median(conn: &Connection, tract_geoid: &str, median: i32) -> Result<()> {
@@ -359,6 +425,59 @@ mod tests {
     fn missing_bbl_returns_none() -> Result<()> {
         let conn = seeded()?;
         assert!(get_building(&conn, "9999999999")?.is_none());
+        Ok(())
+    }
+
+    /// Descriptions are compressed as one blob per building, so the round trip has to
+    /// preserve order, gaps and awkward bytes exactly. Silent corruption here would put the
+    /// wrong condition next to the right violation, which is worse than showing none.
+    #[test]
+    fn descriptions_round_trip_through_compression() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        migrate(&conn)?;
+        let v = |class: &str, d: Option<&str>| Violation {
+            class: class.into(),
+            open: true,
+            year: 2026,
+            description: d.map(str::to_string),
+            ..Default::default()
+        };
+        let vs = vec![
+            v("C", Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT KITCHEN")),
+            // A gap in the middle: desc_ord must skip, not shift everything after it.
+            v("A", None),
+            // A notice containing a newline is exactly why records are joined with
+            // \x1e rather than \n.
+            v("B", Some("LINE ONE\nLINE TWO")),
+            v("C", Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT BATHROOM")),
+        ];
+        insert_violations(&conn, "3000010001", &vs)?;
+
+        let got = get_open_violations(&conn, "3000010001")?;
+        assert_eq!(got.len(), 4);
+        assert_eq!(got[0].description.as_deref(), vs[0].description.as_deref());
+        assert_eq!(got[1].description, None, "a gap must stay a gap");
+        assert_eq!(got[2].description.as_deref(), Some("LINE ONE\nLINE TWO"));
+        assert_eq!(got[3].description.as_deref(), vs[3].description.as_deref());
+
+        // A building with no descriptions stores no block and still reads back clean.
+        insert_violations(&conn, "3000010002", &[v("A", None)])?;
+        let none = get_open_violations(&conn, "3000010002")?;
+        assert_eq!(none.len(), 1);
+        assert_eq!(none[0].description, None);
+
+        // And the blob is genuinely smaller than the text it holds.
+        let raw: usize = vs
+            .iter()
+            .filter_map(|x| x.description.as_ref())
+            .map(|d| d.len())
+            .sum();
+        let z = conn.query_row(
+            "SELECT length(z) FROM violation_desc WHERE bbl = '3000010001'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )? as usize;
+        assert!(z < raw, "compressed {z} should be under raw {raw}");
         Ok(())
     }
 

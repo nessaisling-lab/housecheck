@@ -432,9 +432,9 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             }
         }
         store::upsert_building(&conn, b)?;
-        for v in violations.remove(&b.bbl).unwrap_or_default() {
-            store::insert_violation(&conn, &b.bbl, &v)?;
-        }
+        // One call per building so the descriptions compress as a block.
+        let vs = violations.remove(&b.bbl).unwrap_or_default();
+        store::insert_violations(&conn, &b.bbl, &vs)?;
         if let Some(m) = medians.get(&b.tract_geoid) {
             if tracts_written.insert(b.tract_geoid.clone()) {
                 store::upsert_tract_median(&conn, &b.tract_geoid, *m)?;

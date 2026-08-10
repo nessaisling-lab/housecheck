@@ -129,6 +129,7 @@ mod tests {
             class: "C".into(),
             open: true,
             year: 2026,
+            ..Default::default()
         }];
         // recent (within 2 yrs of 2026) C = 15 * 2 = 30 penalty -> 70
         assert_eq!(condition_score(&vs, 2026), 70);
@@ -140,6 +141,7 @@ mod tests {
             class: "C".into(),
             open: false,
             year: 2026,
+            ..Default::default()
         }];
         assert_eq!(condition_score(&vs, 2026), 100);
     }
@@ -151,6 +153,7 @@ mod tests {
                 class: "C".into(),
                 open: true,
                 year: 2026,
+                ..Default::default()
             })
             .collect();
         assert_eq!(condition_score(&vs, 2026), 0);

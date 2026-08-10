@@ -135,7 +135,12 @@ pub fn hpd_block_query(boroid: u32, blocks: &[u32]) -> Query {
     let params = vec![
         (
             "$select".to_string(),
-            "boroid,block,lot,class,violationstatus,novissueddate".to_string(),
+            // novdescription is the notice's own wording -- the difference between a
+            // count and a condition. currentstatusdate is when the status last changed,
+            // which for a closed violation is when it closed, and is what time-to-close
+            // is computed from.
+            "boroid,block,lot,class,violationstatus,novissueddate,novdescription,             currentstatusdate"
+                .to_string(),
         ),
         (
             "$where".to_string(),
@@ -171,7 +176,17 @@ pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
         .and_then(|d| d.get(0..4).map(|y| y.to_string()))
         .and_then(|y| y.parse::<i32>().ok())
         .unwrap_or(0);
-    Some(Violation { class, open, year })
+    // Dates arrive as "2014-01-06T00:00:00.000"; keep the ISO date and drop the time,
+    // which is always midnight and carries no information.
+    let date = |k: &str| s(v, k).map(|d| d.chars().take(10).collect::<String>());
+    Some(Violation {
+        class,
+        open,
+        year,
+        description: s(v, "novdescription"),
+        issued_on: date("novissueddate"),
+        closed_on: date("currentstatusdate"),
+    })
 }
 
 /// A `bbl in (...)` Socrata query (used for DOB, whose `bbl` is a clean 10-digit column).

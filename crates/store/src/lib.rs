@@ -63,7 +63,14 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             bbl TEXT NOT NULL,
             class TEXT NOT NULL,
             open INTEGER NOT NULL,
-            year INTEGER NOT NULL
+            year INTEGER NOT NULL,
+            -- HPD's own notice text. Nullable: not every record carries one, and a
+            -- missing description must read as missing rather than as an empty string.
+            description TEXT,
+            -- ISO dates. issued_on is absent on ~7% of citywide rows, so a violation's
+            -- age is genuinely unknown for those rather than zero.
+            issued_on TEXT,
+            closed_on TEXT
          );
          CREATE INDEX IF NOT EXISTS idx_violations_bbl ON violations(bbl);
          CREATE TABLE IF NOT EXISTS acs_rent_by_tract (
@@ -183,12 +190,17 @@ pub fn get_building(conn: &Connection, bbl: &str) -> Result<Option<Building>> {
 
 pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation>> {
     let mut stmt =
-        conn.prepare("SELECT class, open, year FROM violations WHERE bbl = ?1 AND open = 1")?;
+        conn.prepare(
+            "SELECT class, open, year, description, issued_on, closed_on              FROM violations WHERE bbl = ?1 AND open = 1",
+        )?;
     let rows = stmt.query_map([bbl], |row| {
         Ok(Violation {
             class: row.get("class")?,
             open: row.get::<_, i64>("open")? != 0,
             year: row.get("year")?,
+            description: row.get("description")?,
+            issued_on: row.get("issued_on")?,
+            closed_on: row.get("closed_on")?,
         })
     })?;
     let mut out = Vec::new();
@@ -236,8 +248,11 @@ pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
 
 pub fn insert_violation(conn: &Connection, bbl: &str, v: &Violation) -> Result<()> {
     conn.execute(
-        "INSERT INTO violations (bbl,class,open,year) VALUES (?1,?2,?3,?4)",
-        rusqlite::params![bbl, v.class, v.open as i64, v.year],
+        "INSERT INTO violations (bbl,class,open,year,description,issued_on,closed_on)          VALUES (?1,?2,?3,?4,?5,?6,?7)",
+        rusqlite::params![
+            bbl, v.class, v.open as i64, v.year,
+            v.description, v.issued_on, v.closed_on
+        ],
     )?;
     Ok(())
 }
@@ -451,6 +466,7 @@ mod tests {
                 class: "C".into(),
                 open: true,
                 year: 2025,
+                ..Default::default()
             },
         )?;
         upsert_tract_median(&conn, "36047025300", 1850)?;

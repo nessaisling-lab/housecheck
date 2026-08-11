@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { CoverageMap } from "@/components/CoverageMap";
 import { COVERAGE_POINTS } from "@/lib/coverage-points";
 import { Sheet } from "@/components/Sheet";
-import { searchAddress } from "@/lib/api";
+import { ApiError, searchAddress } from "@/lib/api";
 import type { SearchResult } from "@/types/building";
 
 export default function Home() {
@@ -15,7 +15,11 @@ export default function Home() {
   const [searching, setSearching] = useState(false);
   /** Whether the reader has asked to look past the pilot. Resets whenever they retype. */
   const [citywide, setCitywide] = useState(false);
+  /** Set when the lookup could not run at all, as distinct from running and finding nothing. */
+  const [failed, setFailed] = useState<string | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>(null);
+  /** Monotonic id of the newest in-flight search, so a slow older one cannot win. */
+  const searchEpoch = useRef(0);
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -30,17 +34,46 @@ export default function Home() {
           return;
         }
         setSearching(true);
-        const { data } = await searchAddress(query, citywide ? "city" : undefined);
-        setSearching(false);
-        // Show every match, in-pilot or not, and let the user choose.
+        // Every exit from here clears the previous query's results first.
         //
-        // This used to filter to in-pilot results and open the out-of-coverage
-        // sheet automatically. Because it runs on a 300ms debounce, the sheet
-        // fired mid-typing: "450" geocodes to 450 Broadway, Manhattan, so the
-        // modal interrupted you before you had finished the address. A partial
-        // query is not a decision. The sheet now opens only from pick().
-        setResults(data.length ? data : null);
-        setNotFound(data.length === 0);
+        // Observed on production 2026-08-11, not theorised: this `await` had no catch, so a
+        // 404 -- "Joe's Pizza", any business name, any typo the geocoder cannot place --
+        // threw past `setResults` and left the *previous* address's five buildings sitting
+        // in the dropdown under the new text. The input read "Joe's Pizza" and the list
+        // still offered five 869 Park Avenue results, one tap from a Health Card for a
+        // building nobody searched for. Quieter than a hang and worse: the same
+        // confident-wrong-answer failure the borough fix exists to prevent.
+        const epoch = ++searchEpoch.current;
+        try {
+          const { data } = await searchAddress(query, citywide ? "city" : undefined);
+          // A slower earlier request must never overwrite a newer one. Debouncing narrows
+          // this window; it does not close it, because the geocoder path takes seconds while
+          // the local path takes milliseconds, so an out-of-coverage query can still land
+          // after the covered one typed behind it.
+          if (epoch !== searchEpoch.current) return;
+          setSearching(false);
+          // Show every match, in-pilot or not, and let the user choose.
+          //
+          // This used to filter to in-pilot results and open the out-of-coverage
+          // sheet automatically. Because it runs on a 300ms debounce, the sheet
+          // fired mid-typing: "450" geocodes to 450 Broadway, Manhattan, so the
+          // modal interrupted you before you had finished the address. A partial
+          // query is not a decision. The sheet now opens only from pick().
+          setResults(data.length ? data : null);
+          setNotFound(data.length === 0);
+          setFailed(null);
+        } catch (e) {
+          if (epoch !== searchEpoch.current) return;
+          setSearching(false);
+          setResults(null);
+          // Two different failures that must not read the same. A 404 means the city has no
+          // such address; anything else means we could not ask. Telling someone their
+          // address does not exist when the truth is that our server is down is a wrong
+          // answer stated confidently, which is the thing this product cannot do.
+          const notAnAddress = e instanceof ApiError && e.status === 404;
+          setNotFound(notAnAddress);
+          setFailed(notAnAddress ? null : "We couldn't reach the address service. Try again in a moment.");
+        }
       },
       query.length < 3 ? 0 : 300
     );
@@ -200,6 +233,15 @@ export default function Home() {
         {notFound && (
           <p className="mt-3 px-2 text-[0.875rem]" style={{ color: "var(--hc-canvas-ink-2)" }}>
             Address not found — try street + house number.
+          </p>
+        )}
+
+        {/* Never merged into the message above. "Not found" is an answer about the city;
+            this is an admission about us, and conflating them tells someone their home
+            does not exist when the truth is that our server is down. */}
+        {failed && (
+          <p className="mt-3 px-2 text-[0.875rem]" style={{ color: "var(--hc-canvas-ink-2)" }}>
+            {failed}
           </p>
         )}
         </div>

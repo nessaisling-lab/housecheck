@@ -184,15 +184,24 @@ export default function More() {
   // Home and the out-of-coverage sheet both deep-link straight to the list.
   const openListOnArrival = (location.state as { openList?: boolean } | null)?.openList === true;
   const [buildings, setBuildings] = useState<BuildingSummary[]>([]);
+  /** The list could not be fetched, as distinct from being fetched and empty. */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [source, setSource] = useState<DataSource>("live");
   const [sortDesc, setSortDesc] = useState(false);
   const [showList, setShowList] = useState(openListOnArrival);
 
   useEffect(() => {
-    listBuildings().then(({ data, source }) => {
-      setBuildings(data);
-      setSource(source);
-    });
+    listBuildings()
+      .then(({ data, source }) => {
+        setBuildings(data);
+        setSource(source);
+        setLoadFailed(false);
+      })
+      // Same unguarded-promise class as the search box, and this is the sheet the
+      // out-of-coverage path sends people to. With no catch, a failed fetch left the header
+      // reading "Showing 0 of 250" over an empty list -- which looks like an answer about
+      // the pilot rather than a failure to load it.
+      .catch(() => setLoadFailed(true));
   }, []);
 
   const sorted = [...buildings].sort((a, b) =>
@@ -269,10 +278,11 @@ export default function More() {
               {/* Both numbers, so the line stays true when the API is
                   unreachable and the list is the 4-building fixture. */}
               <p className="mt-0.5 text-[0.8125rem]" style={{ color: "var(--hc-ink-2)" }}>
-                {buildings.length === COVERAGE_POINTS.length
-                  ? `${buildings.length} in the Bed-Stuy pilot`
-                  : `Showing ${buildings.length} of ${COVERAGE_POINTS.length} in the Bed-Stuy pilot`}{" "}
-                · links to public NYC data
+                {loadFailed
+                  ? "We couldn't load the building list. Check your connection and reload."
+                  : buildings.length === COVERAGE_POINTS.length
+                    ? `${buildings.length} in the Bed-Stuy pilot · links to public NYC data`
+                    : `Showing ${buildings.length} of ${COVERAGE_POINTS.length} in the Bed-Stuy pilot · links to public NYC data`}
               </p>
             </div>
             <button

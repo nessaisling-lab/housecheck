@@ -58,6 +58,20 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       `869 Park Avenue` additionally returns `in_curated_set: true` in 147 ms — one tap from a
       full Health Card for a building in the wrong borough. Fix is `size=5`, show the candidates,
       let the person choose. No schema change, no re-ingest.
+- [x] **A failed lookup left the previous address's results on screen.** *Fixed in `33f3686`.*
+      **Observed on production, and the prior guess about it was wrong.** `Home.tsx` awaited
+      `searchAddress` with no catch, so a 404 threw past `setResults`. This was assumed to hang
+      the spinner; it does not. The spinner clears and the dropdown silently keeps the *last*
+      query's buildings. Measured live: input reading `Joe's Pizza`, list still offering five
+      `869 PARK AVENUE` results, one tap from a Health Card for a building nobody searched for —
+      the same confident-wrong-answer failure as the borough bug, reached another way.
+      Now: every exit clears prior results; a 404 and a transport failure say different things
+      (verified by taking the backend down and typing `464 Madison Street`, a **real covered
+      address**, which reports *"we couldn't reach the address service"* and not *"not found"*);
+      and a monotonic request epoch drops a slow older response, because debouncing narrows that
+      window without closing it — the geocoder path takes seconds and the local path
+      milliseconds. `More.tsx` had the same unguarded promise, rendering `Showing 0 of 250` over
+      nothing, which reads as a fact about the pilot rather than a failure to load it.
 - [ ] **Five of 250 buildings have an address with no house number, and one is the empty string.**
       Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
       `FULTON STREET`), `3017790022` (`DEKALB AVE`), `3018110070` (`GATES AVENUE`). The empty one

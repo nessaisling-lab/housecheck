@@ -208,17 +208,22 @@ export async function getBuilding(bbl: string): Promise<ApiResult<BuildingCard>>
  * chain covers — re-serialising through JS could reorder keys and invalidate the signature
  * for whoever verifies it later.
  */
-export async function exportRecord(bbl: string): Promise<{ text: string; filename: string }> {
+export async function exportRecord(
+  bbl: string,
+  format: "json" | "text" = "json",
+): Promise<{ text: string; filename: string }> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(`${BASE}/building/${encodeURIComponent(bbl)}/export`, {
+    const qs = format === "text" ? "?format=text" : "";
+    const res = await fetch(`${BASE}/building/${encodeURIComponent(bbl)}/export${qs}`, {
       signal: ctrl.signal,
     });
     if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
     const text = await res.text();
     const today = new Date().toISOString().slice(0, 10);
-    return { text, filename: `housecheck-${bbl}-${today}.json` };
+    const ext = format === "text" ? "txt" : "json";
+    return { text, filename: `housecheck-${bbl}-${today}.${ext}` };
   } finally {
     clearTimeout(t);
   }

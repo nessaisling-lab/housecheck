@@ -491,9 +491,21 @@ const EXPORT_SIGNING_KEY_ENV: &str = "HOUSECHECK_EXPORT_SIGNING_KEY";
 /// The point of this endpoint is that its output survives leaving us. A lawyer hands the
 /// file to opposing counsel, who re-runs `POST /verify` (or the same check offline) and
 /// finds out whether a single character moved since we produced it.
+#[derive(Deserialize, Default)]
+struct ExportParams {
+    /// `json` (default) or `text`.
+    ///
+    /// Two formats because they answer different needs, discovered by asking rather than
+    /// assumed: JSON is the verifiable artifact a third party recomputes, and text is what a
+    /// paralegal pastes into a petition. The transcript carries the record hash so the two
+    /// can be tied together, and says in its own footer that it is not the verifiable one.
+    format: Option<String>,
+}
+
 async fn export_handler(
     State(state): State<AppState>,
     Path(bbl): Path<String>,
+    Query(params): Query<ExportParams>,
 ) -> impl IntoResponse {
     let snapshot_year = state.snapshot_year;
     let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
@@ -537,7 +549,18 @@ async fn export_handler(
     if let Ok(key) = std::env::var(EXPORT_SIGNING_KEY_ENV) {
         doc.sign_with(&key);
     }
-    (StatusCode::OK, Json(doc)).into_response()
+
+    match params.format.as_deref() {
+        Some("text") => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            doc.to_plain_text(),
+        )
+            .into_response(),
+        // Unknown formats fall through to JSON rather than erroring: a typo in a query
+        // string should not deny someone their own record.
+        _ => (StatusCode::OK, Json(doc)).into_response(),
+    }
 }
 
 /// `POST /verify` — recompute a document's chain and check its signature.

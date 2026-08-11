@@ -189,28 +189,65 @@ export default function HealthCard() {
    * a document meant to be handed to a court -- a fabricated exhibit that looks real is far
    * worse than a missing one.
    */
-  const doExport = useCallback(async () => {
-    if (!building) return;
-    if (source === "demo") {
-      setExportState("Not available on demo data — this page is not showing live records.");
-      return;
-    }
-    setExportState("working");
-    try {
-      const { text, filename } = await exportRecord(building.bbl);
-      const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setExportState("idle");
-    } catch {
-      setExportState("Could not produce the record. Nothing was downloaded.");
-    }
-  }, [building, source]);
+  const doExport = useCallback(
+    async (how: "copy" | "file" | "print") => {
+      if (!building) return;
+      if (source === "demo") {
+        setExportState("Not available on demo data — this page is not showing live records.");
+        return;
+      }
+      setExportState("working");
+      try {
+        // The file stays JSON because that is the artifact a third party recomputes.
+        // Copy and print use the transcript, because a petition takes prose, not a payload.
+        const format = how === "file" ? "json" : "text";
+        const { text, filename } = await exportRecord(building.bbl, format);
+
+        if (how === "copy") {
+          await navigator.clipboard.writeText(text);
+          setExportState("copied");
+          setTimeout(() => setExportState("idle"), 2500);
+          return;
+        }
+
+        if (how === "print") {
+          // A new window rather than an iframe, so the user's own print dialog owns the
+          // page size and margins and can save a PDF without us shipping a PDF library.
+          const w = window.open("", "_blank", "noopener,noreferrer,width=820,height=900");
+          if (!w) {
+            setExportState("Your browser blocked the print window. Allow pop-ups for this site.");
+            return;
+          }
+          const esc = (t: string) =>
+            t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          w.document.write(
+            `<!doctype html><meta charset="utf-8"><title>${esc(filename)}</title>` +
+              `<style>@page{margin:0.6in}body{font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;` +
+              `white-space:pre-wrap;word-break:break-word;color:#111}</style>` +
+              `<body>${esc(text)}</body>`,
+          );
+          w.document.close();
+          w.focus();
+          w.print();
+          setExportState("idle");
+          return;
+        }
+
+        const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setExportState("idle");
+      } catch {
+        setExportState("Could not produce the record. Nothing was copied or downloaded.");
+      }
+    },
+    [building, source],
+  );
 
   useEffect(() => {
     setAgentBuilding(building);
@@ -385,22 +422,40 @@ export default function HealthCard() {
             </div>
           )}
           <div className="mt-4">
-            <button
-              type="button"
-              onClick={doExport}
-              disabled={exportState === "working"}
-              className="w-full rounded-xl px-4 py-3 text-[0.9375rem] font-semibold"
-              style={{
-                background: "var(--hc-ink)",
-                color: "var(--hc-bg, #fff)",
-                opacity: exportState === "working" ? 0.6 : 1,
-              }}
-            >
-              {exportState === "working" ? "Preparing record…" : "Download verifiable record"}
-            </button>
+            <h4 className="hc-row-label" style={{ marginBottom: 8 }}>
+              Take this record with you
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["copy", exportState === "copied" ? "Copied" : "Copy as text"],
+                  ["print", "Print / save as PDF"],
+                  ["file", "Download the file"],
+                ] as const
+              ).map(([how, label]) => (
+                <button
+                  key={how}
+                  type="button"
+                  onClick={() => doExport(how)}
+                  disabled={exportState === "working"}
+                  className="rounded-xl px-4 py-2.5 text-[0.875rem] font-semibold"
+                  style={{
+                    background: how === "copy" ? "var(--hc-ink)" : "transparent",
+                    color: how === "copy" ? "var(--hc-bg, #fff)" : "var(--hc-ink)",
+                    border: how === "copy" ? "none" : "1px solid var(--hc-hairline, rgba(255,255,255,0.18))",
+                    opacity: exportState === "working" ? 0.6 : 1,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <p className="mt-2 text-[0.8125rem] leading-relaxed" style={{ color: "var(--hc-ink-3, var(--hc-ink-2))" }}>
-              A signed file listing every open violation with the dataset and date it came
-              from. Anyone can re-check it — change one character and verification fails.
+              Every version lists the open violations with the dataset and date each came from.
+              {" "}
+              <strong>The downloaded file is the verifiable one</strong> — anyone can re-check it
+              offline, and changing one character makes verification fail. The text and PDF carry
+              the same record hash so they can be tied back to it.
             </p>
             {exportState !== "idle" && exportState !== "working" && (
               <p className="mt-2 text-[0.8125rem] font-semibold" style={{ color: "var(--hc-warn, #b4413c)" }} role="alert">

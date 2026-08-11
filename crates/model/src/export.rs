@@ -227,6 +227,114 @@ impl ExportDocument {
     }
 }
 
+
+/// Civil date from days since the epoch (Howard Hinnant). Local to this module so the
+/// document can stamp itself without the API having to pre-format anything.
+fn ymd(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
+}
+
+fn iso(unix: i64) -> String {
+    let (y, m, d) = ymd(unix.div_euclid(86_400));
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+impl ExportDocument {
+    /// A transcript for pasting into a filing.
+    ///
+    /// **This text is not the verifiable artifact and says so in its own footer.** The JSON
+    /// document is what `verify` recomputes; a paragraph of prose cannot carry a hash chain
+    /// through a copy-paste without becoming unreadable. What the transcript carries instead
+    /// is the record hash, so a reader holding both can confirm they describe the same
+    /// export. Claiming more than that would be exactly the kind of unearned assurance this
+    /// feature exists to avoid.
+    pub fn to_plain_text(&self) -> String {
+        let mut out = String::new();
+        out.push_str(&format!("HOUSECHECK RECORD - {}
+", self.address));
+        out.push_str(&format!("BBL {} - exported {}
+
+", self.bbl, iso(self.exported_at_unix)));
+
+        let hazardous = self.rows.iter().filter(|r| r.class.eq_ignore_ascii_case("C")).count();
+        out.push_str(&format!(
+            "{} open HPD violation{} on record. {} immediately hazardous (Class C).
+
+",
+            self.open_violation_total,
+            if self.open_violation_total == 1 { "" } else { "s" },
+            hazardous
+        ));
+
+        for (i, r) in self.rows.iter().enumerate() {
+            let age = match r.days_open {
+                Some(d) => format!("open {d} day{}", if d == 1 { "" } else { "s" }),
+                None => "age unknown (no issue date on record)".to_string(),
+            };
+            out.push_str(&format!(
+                "{:>3}. Class {} - issued {} - {}
+     {}
+",
+                i + 1,
+                r.class,
+                r.issued_on.as_deref().unwrap_or("date not recorded"),
+                age,
+                r.description.as_deref().unwrap_or("(HPD recorded no description)")
+            ));
+        }
+        if (self.rows.len() as u32) < self.open_violation_total {
+            out.push_str(&format!(
+                "
+     ... showing {} of {} open violations.
+",
+                self.rows.len(),
+                self.open_violation_total
+            ));
+        }
+
+        out.push_str("
+SOURCES
+");
+        for s in &self.sources {
+            out.push_str(&format!(
+                "  {:<12} {:>9} rows  retrieved {}
+",
+                s.dataset,
+                s.row_count,
+                iso(s.retrieved_at_unix)
+            ));
+        }
+
+        out.push_str("
+VERIFICATION
+");
+        out.push_str(&format!("  Record hash: {}
+", self.chain_head));
+        match self.public_key.as_deref() {
+            Some(pk) => out.push_str(&format!("  Signed by:   {pk}
+")),
+            None => out.push_str("  Unsigned (hash-chained, but not attributed to an issuer).
+"),
+        }
+        out.push_str("  This text is a transcript. The verifiable document is the JSON
+");
+        out.push_str("  export of the same record, which anyone can check offline without
+");
+        out.push_str("  contacting HouseCheck.
+");
+        out
+    }
+}
+
 const GENESIS_FORMAT: &str = "housecheck.export.v1";
 
 /// Three outcomes, deliberately not two.
@@ -295,6 +403,44 @@ mod tests {
             }],
             1_786_400_000,
         )
+    }
+
+    /// The transcript is the version most likely to be read by someone who never sees the
+    /// JSON, so its honesty matters more than its formatting. It must carry the record hash,
+    /// must not claim to be the verifiable artifact, and must never print a confident zero
+    /// for an age it does not know.
+    #[test]
+    fn the_transcript_is_honest_about_what_it_is() {
+        let t = doc().to_plain_text();
+
+        assert!(t.contains("603 PUTNAM AVENUE"));
+        assert!(t.contains("3016440063"));
+        // The hash is what ties this paper to the checkable document.
+        assert!(t.contains(&doc().chain_head), "record hash must appear");
+        assert!(t.contains("transcript"), "must not pass itself off as the verifiable artifact");
+        assert!(t.contains("wvxf-dwi5"), "sources must travel with the record");
+
+        // Row two has no issue date; it must read as unknown, never as zero days.
+        assert!(t.contains("age unknown"), "missing age must say so");
+        assert!(!t.contains("open 0 days"));
+
+        // Unsigned documents must say they are unsigned rather than staying quiet.
+        assert!(t.contains("Unsigned"));
+
+        let mut signed = doc();
+        signed.sign_with(&hex::encode([7u8; 32]));
+        assert!(signed.to_plain_text().contains("Signed by:"));
+    }
+
+    /// A capped list must say what it is a slice of, in the transcript too — the paper copy
+    /// is exactly where a truncated list would otherwise read as the whole story.
+    #[test]
+    fn the_transcript_states_when_it_is_truncated() {
+        let mut d = doc();
+        d.open_violation_total = 754;
+        let t = d.to_plain_text();
+        assert!(t.contains("754"), "the true total must appear");
+        assert!(t.contains("showing 2 of 754"));
     }
 
     #[test]

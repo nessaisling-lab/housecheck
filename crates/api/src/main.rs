@@ -696,6 +696,20 @@ async fn rent_fairness_handler(
 #[derive(Deserialize)]
 struct SearchParams {
     address: String,
+    /// `city` widens the search past our own rows to all five boroughs.
+    ///
+    /// This exists because the two halves of the ambiguity have different costs. Our pilot is
+    /// one Brooklyn community district, so a curated hit is *always* Brooklyn — and a reader
+    /// who typed a Manhattan address gets a real Brooklyn building back, correctly labelled
+    /// but still not theirs. Reaching the one they meant needs the geocoder.
+    ///
+    /// It is a parameter rather than the default because the local answer is **4.5 ms** and
+    /// the geocoder is **5-6 s** (measured 2026-08-11). Putting the geocoder in front of every
+    /// query would be the exact regression the comment in `search_handler` records fixing.
+    /// So: answer instantly from our own rows, and let the reader open the wider door if the
+    /// answer was not theirs.
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -703,6 +717,29 @@ struct SearchResult {
     bbl: String,
     label: String,
     in_curated_set: bool,
+    /// Which borough this BBL is in, in plain words.
+    ///
+    /// Not decoration. A typed address almost never names a borough, and NYC reuses street
+    /// names across all five: `869 Park Avenue`, `350 5 Avenue` and `1 Court Square` each
+    /// exist in two boroughs at once. Without this the interface shows one of them and gives
+    /// the reader no way to tell it picked.
+    borough: &'static str,
+}
+
+/// Borough from a BBL's leading digit, which is what the digit means by definition.
+///
+/// Total rather than fallible: an unrecognised first digit yields `"New York City"` instead of
+/// an error, because a search result is worth showing with a vague label and not worth dropping
+/// over one. The five codes are fixed by the city and have never changed.
+fn borough_of_bbl(bbl: &str) -> &'static str {
+    match bbl.as_bytes().first() {
+        Some(b'1') => "Manhattan",
+        Some(b'2') => "the Bronx",
+        Some(b'3') => "Brooklyn",
+        Some(b'4') => "Queens",
+        Some(b'5') => "Staten Island",
+        _ => "New York City",
+    }
 }
 
 /// Pull a BBL out of a GeoSearch feature's `properties`. GeoSearch exposes it either at
@@ -837,6 +874,7 @@ fn search_curated(
                 rank,
                 hay,
                 SearchResult {
+                    borough: borough_of_bbl(&b.bbl),
                     bbl: b.bbl,
                     label: b.address,
                     in_curated_set: true,
@@ -850,6 +888,15 @@ fn search_curated(
 
 /// Maximum suggestions returned for a curated-set match.
 const SEARCH_LIMIT: usize = 8;
+
+/// How many candidates to ask GeoSearch for.
+///
+/// Five, not one. Measured on the three ambiguous addresses in this module's search handler,
+/// the borough a reader actually meant was the **second** result every time, tied at identical
+/// confidence with the first. One is not a smaller answer than five — it is the same tie with
+/// the alternatives hidden. Five covers every observed collision (an address string is shared
+/// by at most a handful of boroughs) without turning a search box into a list to read.
+const GEOSEARCH_CANDIDATES: &str = "5";
 
 async fn search_handler(
     State(state): State<AppState>,
@@ -869,23 +916,43 @@ async fn search_handler(
     // Street", which IS in the pilot, would sometimes report as out of
     // coverage. Answering from our own rows removes the network from the path
     // that matters, and is exact rather than fuzzy.
-    let local = {
-        let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
-        match search_curated(&conn, text, SEARCH_LIMIT) {
-            Ok(v) => v,
-            Err(e) => return internal_error("database query failed", e),
+    // ...unless the reader has told us our own rows are not what they meant.
+    let citywide = params.scope.as_deref() == Some("city");
+    if !citywide {
+        let local = {
+            let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+            match search_curated(&conn, text, SEARCH_LIMIT) {
+                Ok(v) => v,
+                Err(e) => return internal_error("database query failed", e),
+            }
+        };
+        if !local.is_empty() {
+            return (StatusCode::OK, Json(local)).into_response();
         }
-    };
-    if !local.is_empty() {
-        return (StatusCode::OK, Json(local)).into_response();
     }
 
     // Nothing of ours matches. Ask the geocoder whether it is a real address at
     // all, so the client can say "outside the pilot" instead of "not found".
+    //
+    // `size` is 5, not 1, and that single character was a correctness bug rather
+    // than a tuning choice. A typed address almost never names a borough, and NYC
+    // reuses street names across all five, so for an ambiguous query GeoSearch
+    // returns several candidates **tied at the same confidence** and in no
+    // meaningful order. Measured 2026-08-11:
+    //
+    //   350 5 Avenue    -> Brooklyn 0.8, then Manhattan 0.8
+    //   869 Park Avenue -> Brooklyn 0.8, then Manhattan 0.8
+    //   1 Court Square  -> Brooklyn 0.8, then Queens    0.8
+    //
+    // Asking for one answer to a question that has several equally-ranked ones
+    // does not make the answer right; it hides the tie and prints the arbitrary
+    // pick as fact. On a tool whose whole claim is that its records are checkable,
+    // a confident wrong building is worse than no building. So we take the tie to
+    // the reader, who is the only one who knows which borough they meant.
     let resp = match state
         .http
         .get("https://geosearch.planninglabs.nyc/v2/search")
-        .query(&[("text", text), ("size", "1")])
+        .query(&[("text", text), ("size", GEOSEARCH_CANDIDATES)])
         .send()
         .await
         .and_then(|r| r.error_for_status())
@@ -904,44 +971,61 @@ async fn search_handler(
         }
     };
 
-    let feature = json
-        .get("features")
-        .and_then(|f| f.as_array())
-        .and_then(|a| a.first());
-    let Some(props) = feature.and_then(|f| f.get("properties")) else {
+    // Every candidate that carries a BBL, deduplicated, in the order GeoSearch
+    // returned them. Features without a BBL are skipped rather than fatal: one
+    // unaddressable result must not deny the reader the four usable ones next to
+    // it, which is what `.first()` plus a hard 404 used to do.
+    let mut seen: Vec<String> = Vec::new();
+    let mut candidates: Vec<(String, String)> = Vec::new();
+    for feature in json.get("features").and_then(|f| f.as_array()).into_iter().flatten() {
+        let Some(props) = feature.get("properties") else { continue };
+        let Some(bbl) = geosearch_bbl(props) else { continue };
+        if seen.contains(&bbl) {
+            continue;
+        }
+        let label = props
+            .get("label")
+            .and_then(|l| l.as_str())
+            .unwrap_or("")
+            .to_string();
+        seen.push(bbl.clone());
+        candidates.push((bbl, label));
+    }
+    if candidates.is_empty() {
         return (StatusCode::NOT_FOUND, "no match for address").into_response();
-    };
-    let Some(bbl) = geosearch_bbl(props) else {
-        return (StatusCode::NOT_FOUND, "no BBL for address").into_response();
-    };
-    let label = props
-        .get("label")
-        .and_then(|l| l.as_str())
-        .unwrap_or("")
-        .to_string();
+    }
 
     // The geocoder can resolve to a BBL we do hold even when the text did not
-    // match any stored address, so this membership check stays.
-    // Locked AFTER the awaits — the guard never crosses one.
-    let in_curated_set = {
+    // match any stored address, so this membership check stays. One lock for the
+    // whole set — taken AFTER the awaits, so the guard never crosses one.
+    let results = {
         let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
-        match get_building(&conn, &bbl) {
-            Ok(b) => b.is_some(),
-            Err(e) => return internal_error("database query failed", e),
+        let mut out = Vec::with_capacity(candidates.len());
+        for (bbl, label) in candidates {
+            let in_curated_set = match get_building(&conn, &bbl) {
+                Ok(b) => b.is_some(),
+                Err(e) => return internal_error("database query failed", e),
+            };
+            out.push(SearchResult {
+                borough: borough_of_bbl(&bbl),
+                bbl,
+                label,
+                in_curated_set,
+            });
         }
+        out
     };
+
+    // Covered buildings first, original geocoder order preserved within each
+    // group. `sort_by_key` is stable, so this promotes what we can actually
+    // answer for without inventing a ranking among the ties we just refused to
+    // resolve ourselves.
+    let mut results = results;
+    results.sort_by_key(|r| !r.in_curated_set);
 
     // An array here too, so the response shape does not depend on which path
     // answered. Clients get a list of candidates either way.
-    (
-        StatusCode::OK,
-        Json(vec![SearchResult {
-            bbl,
-            label,
-            in_curated_set,
-        }]),
-    )
-        .into_response()
+    (StatusCode::OK, Json(results)).into_response()
 }
 
 /// System prompt for `/summary`. Honest and hedged — it must not invent facts.
@@ -3390,6 +3474,103 @@ mod tests {
             .json(&json!({"bbl": "9999999999"}))
             .await;
         res.assert_status_not_found();
+    }
+
+    /// The bug this whole change exists for, pinned as a test.
+    ///
+    /// These are the real GeoSearch responses measured on 2026-08-11, trimmed to the fields
+    /// that matter. In every one the borough a New Yorker would have meant by that address is
+    /// the **second** feature, and both candidates carry the same confidence — so there is no
+    /// ranking signal to exploit and no clever first-pick that gets it right. The only correct
+    /// behaviour is to return both and let the reader choose.
+    ///
+    /// If someone ever "optimises" this back to a single candidate, this test fails and says
+    /// why.
+    #[test]
+    fn an_ambiguous_address_yields_every_borough_it_could_mean() {
+        // 869 Park Avenue: Brooklyn first, Manhattan second, both confidence 0.8.
+        let geosearch_said = json!({"features": [
+            {"properties": {"label": "869 PARK AVENUE, Brooklyn, NY, USA",
+                            "confidence": 0.8, "pad_bbl": "3015797501"}},
+            {"properties": {"label": "869 PARK AVENUE, New York, NY, USA",
+                            "confidence": 0.8, "pad_bbl": "1013920038"}},
+            // A feature with no BBL at all, between two usable ones. It must be skipped
+            // rather than truncate the list -- the old `.first()` plus hard 404 would have
+            // thrown away everything after it.
+            {"properties": {"label": "PARK AVENUE, Brooklyn, NY, USA", "confidence": 0.7}},
+            {"properties": {"label": "869 MORRIS PARK AVENUE, Bronx, NY, USA",
+                            "confidence": 0.8, "pad_bbl": "2041350061"}},
+        ]});
+
+        let mut seen: Vec<String> = Vec::new();
+        let mut got: Vec<(String, &'static str)> = Vec::new();
+        for f in geosearch_said["features"].as_array().unwrap() {
+            let props = f.get("properties").unwrap();
+            let Some(bbl) = geosearch_bbl(props) else { continue };
+            if seen.contains(&bbl) {
+                continue;
+            }
+            seen.push(bbl.clone());
+            got.push((bbl.clone(), borough_of_bbl(&bbl)));
+        }
+
+        assert_eq!(got.len(), 3, "the BBL-less feature must be skipped, not fatal");
+        assert_eq!(got[0].1, "Brooklyn");
+        assert_eq!(got[1].1, "Manhattan", "the borough the reader meant must survive");
+        assert_eq!(got[2].1, "the Bronx");
+        assert!(
+            got.iter().any(|(_, b)| *b == "Manhattan"),
+            "returning only the first candidate is the bug: it drops Manhattan silently"
+        );
+    }
+
+    /// The default path must never pay for the geocoder.
+    ///
+    /// Without `scope=city` a curated hit answers from our own rows and the request never
+    /// leaves the process — which is what makes it 4.5 ms instead of 5 seconds. This asserts
+    /// the short-circuit still happens, because the day it stops happening the search box
+    /// becomes unusable and nothing else in the suite would notice.
+    #[tokio::test]
+    async fn a_curated_hit_answers_locally_and_carries_its_borough() {
+        let server = test_server();
+        let res = server.get("/search?address=1%20Fixture%20Ave").await;
+        res.assert_status_ok();
+        let hits: Vec<serde_json::Value> = res.json();
+        assert!(!hits.is_empty());
+        assert_eq!(hits[0]["in_curated_set"], json!(true));
+        assert_eq!(
+            hits[0]["borough"],
+            json!("Brooklyn"),
+            "every curated row is Brooklyn, and saying so is how a reader spots a wrong-borough match"
+        );
+    }
+
+    #[test]
+    fn every_borough_code_reads_as_a_place_and_an_unknown_one_is_not_fatal() {
+        assert_eq!(borough_of_bbl("1013920038"), "Manhattan");
+        assert_eq!(borough_of_bbl("2041350061"), "the Bronx");
+        assert_eq!(borough_of_bbl("3016440063"), "Brooklyn");
+        assert_eq!(borough_of_bbl("4001234567"), "Queens");
+        assert_eq!(borough_of_bbl("5001234567"), "Staten Island");
+        // A result is worth showing with a vague label and not worth dropping over one digit.
+        assert_eq!(borough_of_bbl("9999999999"), "New York City");
+        assert_eq!(borough_of_bbl(""), "New York City");
+    }
+
+    /// Every curated result is Brooklyn, because the pilot is one Brooklyn community district.
+    /// That is exactly why the label matters: someone typing a Manhattan address gets a real
+    /// Brooklyn building back, and the borough word is the only thing on screen that tells
+    /// them so before they tap it.
+    #[test]
+    fn curated_results_carry_their_borough() {
+        let state = AppState::in_memory_fixture().unwrap();
+        let conn = state.conn.lock().unwrap();
+        let hits = search_curated(&conn, "1 Fixture", 8).unwrap();
+        assert!(!hits.is_empty(), "fixture should match");
+        for h in &hits {
+            assert_eq!(h.borough, "Brooklyn");
+            assert!(h.in_curated_set);
+        }
     }
 
     #[test]

@@ -4,6 +4,13 @@ export interface SearchResult {
   bbl: string;
   label: string;
   in_curated_set: boolean;
+  /**
+   * Which borough this result is in, in plain words.
+   *
+   * Optional because a cached or older API response will not carry it, and a search result is
+   * worth showing without a borough rather than crashing over one.
+   */
+  borough?: string;
 }
 
 /**

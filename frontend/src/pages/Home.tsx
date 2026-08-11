@@ -13,6 +13,8 @@ export default function Home() {
   const [notFound, setNotFound] = useState(false);
   const [coverage, setCoverage] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
+  /** Whether the reader has asked to look past the pilot. Resets whenever they retype. */
+  const [citywide, setCitywide] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function Home() {
           return;
         }
         setSearching(true);
-        const { data } = await searchAddress(query);
+        const { data } = await searchAddress(query, citywide ? "city" : undefined);
         setSearching(false);
         // Show every match, in-pilot or not, and let the user choose.
         //
@@ -45,7 +47,7 @@ export default function Home() {
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [q]);
+  }, [q, citywide]);
 
   const pick = (r: SearchResult) => {
     if (!r.in_curated_set) {
@@ -98,7 +100,13 @@ export default function Home() {
           </svg>
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              // Reset the scope here rather than in an effect on `q`: a new query is a new
+              // question, and doing it at the source means the search effect never observes
+              // a scope belonging to the previous one.
+              setCitywide(false);
+              setQ(e.target.value);
+            }}
             placeholder="look up a building"
             className="w-full bg-transparent text-[1.0625rem] outline-none placeholder:text-white/40"
             style={{ color: "#F5F5F7" }}
@@ -144,7 +152,19 @@ export default function Home() {
                   <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" />
                   <circle cx="12" cy="10" r="2.5" />
                 </svg>
-                <span className="flex-1">{r.label}</span>
+                {/* Borough on its own line, always, never only when it looks ambiguous.
+                    NYC reuses street names across all five boroughs and a typed address
+                    almost never names one, so "869 Park Avenue" is a real building in both
+                    Brooklyn and Manhattan. The reader is the only person who knows which one
+                    they meant, and this word is what lets them tell before they tap. */}
+                <span className="flex-1">
+                  <span className="block">{r.label}</span>
+                  {r.borough && (
+                    <span className="block text-[0.8125rem]" style={{ color: "var(--hc-ink-3)" }}>
+                      {r.borough}
+                    </span>
+                  )}
+                </span>
                 {/* Say which results we actually hold data for, rather than
                     hiding them and springing a modal on the user. */}
                 {!r.in_curated_set && (
@@ -157,6 +177,23 @@ export default function Home() {
                 )}
               </button>
             ))}
+            {/* The other half of the borough problem, and the half a label alone cannot fix.
+                Our pilot is one Brooklyn community district, so a match from our own rows is
+                always Brooklyn — someone who typed a Manhattan address gets a real building
+                back, correctly labelled, that is still not theirs. This is their way out.
+                It is a button rather than the default because answering from our own rows
+                takes milliseconds and asking the city geocoder takes seconds. */}
+            {results.every((r) => r.in_curated_set) && !citywide && (
+              <button
+                type="button"
+                onClick={() => setCitywide(true)}
+                disabled={searching}
+                className="w-full px-5 py-3 text-left text-[0.8125rem] font-semibold"
+                style={{ color: "var(--hc-ink-2)", borderTop: "1px solid var(--hc-hairline, rgba(0,0,0,0.08))" }}
+              >
+                {searching ? "Searching all five boroughs…" : "Not this one? Search all five boroughs"}
+              </button>
+            )}
           </div>
         )}
 

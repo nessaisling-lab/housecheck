@@ -186,10 +186,20 @@ function normalizeBuilding(raw: any): BuildingCard {
   };
 }
 
-export async function searchAddress(query: string): Promise<ApiResult<SearchResult[]>> {
+/**
+ * @param scope `"city"` widens past the pilot to all five boroughs.
+ *
+ * Left off by default on purpose. A curated hit answers in milliseconds because it never
+ * leaves the server; the citywide path calls NYC GeoSearch and takes seconds. The reader
+ * opens the wider door only when the fast answer was not the building they meant.
+ */
+export async function searchAddress(
+  query: string,
+  scope?: "city"
+): Promise<ApiResult<SearchResult[]>> {
   try {
     const raw = await req<SearchResult | SearchResult[]>(
-      `/search?address=${encodeURIComponent(query)}`
+      `/search?address=${encodeURIComponent(query)}${scope ? `&scope=${scope}` : ""}`
     );
     return { data: asArray(raw), source: "live" };
   } catch (e) {

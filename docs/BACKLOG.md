@@ -72,6 +72,29 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       window without closing it — the geocoder path takes seconds and the local path
       milliseconds. `More.tsx` had the same unguarded promise, rendering `Showing 0 of 250` over
       nothing, which reads as a fact about the pilot rather than a failure to load it.
+- [ ] **The agent takes 25-67 seconds on the questions people actually ask, and shows nothing
+      while it works.** Measured on production 2026-08-11. The cause is not a slow model — it is
+      the sequential tool loop, and the citation count is a clean proxy for how many rounds ran
+      (`citations_for` seeds 4; each tool that runs adds one):
+
+      | question | citations | rounds | latency |
+      |---|---|---|---|
+      | "what is the condition score" | 4 | 0 | **2.8 s** |
+      | "how many open violations" | 4 | 0 | **5.8 s** |
+      | "what does NYC law say about heat season" | 5 | 1 | **18.5 s** |
+      | "is this building safe" | 6 | 2 | **25.8 s** |
+      | "there is no heat in my apartment, what should I do" | 6 | 2 | **34.8 s** |
+
+      One round trip is 3-6 s, so the model is fine. Each extra tool round costs ~12-15 s, and
+      **the questions a tenant actually asks are the ones that trigger rounds** — the fast ones
+      are the ones nobody needs an agent for. Worst observed: **66.7 s**, which is 3.3 s from
+      the client's `LLM_TIMEOUT_MS = 70000` abort.
+      Two fixes, in order. **Stream the answer** — `main.rs:116` records the deliberate choice
+      not to (`"we do not stream"`), which was right when the loop was one call and is now the
+      difference between 3 s to first token and 35 s of blank. **And align the deadlines:**
+      `MAX_TOOL_ITERATIONS = 5` at a 30 s per-call timeout is a **150 s** server ceiling against
+      a 70 s client abort, so the server can keep working — and billing — for 80 s after the
+      reader has gone.
 - [ ] **Five of 250 buildings have an address with no house number, and one is the empty string.**
       Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
       `FULTON STREET`), `3017790022` (`DEKALB AVE`), `3018110070` (`GATES AVENUE`). The empty one

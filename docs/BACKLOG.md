@@ -80,7 +80,15 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       common reply to a question about heat. The failure is now stated first and the canned
       material offered second. Verified on a production build with only `/agent/chat` forced to
       fail, so the branch under test was the only thing exercised.
-- [ ] **`/summary` fails every time, so the agent panel opens on an error message.** Measured on
+- [x] **`/summary` fails every time, so the agent panel opens on an error message.** *Fixed in
+      `8b55a72`* — the hardcoded `20` became `LLM_CALL_TIMEOUT_SECS` (30), so one attempt plus
+      its retry is 61 s, the same arithmetic already const-asserted to fit the client's 70 s.
+      **Still needs the model diagnosed**: `OPENROUTER_MODEL` *is* set as a Fly secret, so the
+      `claude-haiku-4.5` default is being overridden, and a `:free` slug would explain a
+      >20 s generation exactly as `main.rs:79-84` warns. Read it from the startup log after the
+      next deploy (`flyctl logs -a housecheck-nessa`, look for `LLM: enabled`), because Fly
+      secrets are write-only and cannot be read back.
+      *Original measurement:* measured on
       production 2026-08-11: **HTTP 502 on 2 of 2 runs, both at 40.9 s**. That decomposes as
       `20 s + 0.7 s pause + 20 s` against the per-call timeout at `crates/api/src/main.rs:2520`,
       so both attempts timed out. The panel then renders *"The agent couldn't summarize this

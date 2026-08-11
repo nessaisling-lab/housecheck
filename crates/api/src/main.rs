@@ -1095,7 +1095,33 @@ async fn openrouter_attempt(
     };
 
     let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
+    // Read the body as its own fallible step.
+    //
+    // This was `resp.text().await.unwrap_or_default()`, and that one call cost a whole
+    // misdiagnosis on 2026-08-11. `send()` resolves when the headers arrive, so a slow
+    // generation times out during the *body* read — and `unwrap_or_default()` turned that
+    // timeout into an empty string, which then failed to parse and logged
+    // `openrouter response was not valid JSON ... body=`. Production was reporting "the
+    // upstream sent us garbage" when the truth was "we ran out of time reading the reply", and
+    // the two have opposite fixes. The giveaway was `latency=40704ms` twice, exact to the
+    // millisecond: 20000 + 700 + 20000 + overhead, which is a clock, not a flaky server.
+    //
+    // Same rule as everywhere else in this codebase — a failure must not be able to disguise
+    // itself as a different failure.
+    let body = match resp.text().await {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                timeout_secs,
+                timed_out = e.is_timeout(),
+                model = %state.llm.model,
+                "openrouter body read failed -- this is a timeout or a dropped connection, \
+                 NOT a malformed response"
+            );
+            return Err(Transient);
+        }
+    };
 
     if !status.is_success() {
         tracing::error!(

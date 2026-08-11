@@ -80,6 +80,20 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       common reply to a question about heat. The failure is now stated first and the canned
       material offered second. Verified on a production build with only `/agent/chat` forced to
       fail, so the branch under test was the only thing exercised.
+- [ ] **`/summary` fails every time, so the agent panel opens on an error message.** Measured on
+      production 2026-08-11: **HTTP 502 on 2 of 2 runs, both at 40.9 s**. That decomposes as
+      `20 s + 0.7 s pause + 20 s` against the per-call timeout at `crates/api/src/main.rs:2520`,
+      so both attempts timed out. The panel then renders *"The agent couldn't summarize this
+      building — the raw data on the card is still your best source."* — **the first thing every
+      visitor sees when they open the agent.** Confirmed in a browser on production.
+      This is deterministic, not intermittent, which makes it worse than the chat 502s and puts
+      it ahead of them. Note the per-call timeouts are inconsistent across call sites: **20 s**
+      for summary (`:2520`), **25 s** for the law lookup (`:1559`), **30 s** in the agent loop
+      (`:2337`) — the tightest budget is on the call that runs first and unprompted.
+      **Diagnose before changing code.** The model is not in `fly.toml`, so it is a Fly secret or
+      the `anthropic/claude-haiku-4.5` default. `main.rs:79-84` already warns that a `:free` slug
+      drops long generations at ~22 s, which matches this signature exactly. Check with
+      `flyctl secrets list -a housecheck-nessa` (names and digests only, never values).
 - [ ] **The 30 s per-call timeout is now the binding constraint, and the upstream exceeds it.**
       Measured 2026-08-11 after the budget fix: the same question returned **200 at 27.4 s**,
       then **502 at 59.2 s** and **502 at 60.5 s** — which decomposes exactly as

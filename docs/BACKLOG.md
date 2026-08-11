@@ -14,8 +14,10 @@ An item with no reason is a wish, not a task.
 
 Found by measuring the deployed product rather than reading the repo. **The repo is not the demo.**
 
-- [ ] **The Fly backend is one commit behind `main`, and it breaks two of the three export
-      destinations.** Measured: `GET /building/3016440063/export?format=text` returns
+- [x] **The Fly backend is one commit behind `main`, and it breaks two of the three export
+      destinations.** *Fixed by deploy, 2026-08-11.* Re-measured after: `?format=text` returns
+      `text/plain; charset=utf-8`, 6,905 bytes, the real transcript. Copy and Print work again.
+      Measured before: `GET /building/3016440063/export?format=text` returned
       `content-type: application/json`. The frontend asks for `format=text` for both Copy and
       Print (`frontend/src/lib/api.ts:241`, `pages/HealthCard.tsx:203`), so **Copy puts ~13 KB of
       raw JSON on the clipboard and Print renders that JSON at 11px monospace.** Download is
@@ -28,8 +30,19 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       signature-shaped lie. But the live product currently proves *non-alteration* and not
       *authorship*, so "signed, verifiable record" overstates what a visitor can actually get.
       Whether the cause is an unset secret or the stale binary is **not** established; nobody has
-      run `flyctl secrets list -a housecheck-nessa`.
-- [ ] **Ambiguous addresses resolve to an arbitrary borough, presented as fact.** `search_handler`
+      run `flyctl secrets list -a housecheck-nessa`. **Update, 2026-08-11:** now established.
+      The backend was redeployed at `main`, the signing code is present, and the export is
+      still unsigned — so the cause is an **unset secret**, not a stale binary. Setting it is a
+      key-handling step for the repo owner alone.
+- [x] **Ambiguous addresses resolve to an arbitrary borough, presented as fact.** *Fixed in
+      `8aacc48`.* GeoSearch is now asked for five candidates; every one carrying a BBL is
+      returned with its borough in plain words, covered buildings first via a stable sort.
+      A feature with no BBL is skipped rather than fatal. Because the curated path short-circuits
+      before the geocoder — and must, since it is **2.7 ms** against the geocoder's **5-7 s** —
+      the second half needed `?scope=city`, surfaced as *"Not this one? Search all five
+      boroughs"*. Verified in a browser against a local backend: the Manhattan building comes
+      back in 4.0 s, flagged outside the pilot. Original measurement below.
+      `search_handler`
       asks GeoSearch for `size=1` (`crates/api/src/main.rs:887`). Measured against GeoSearch with
       `size=5`, the correct borough is the **second** result in all three cases tried, at
       *identical* confidence 0.8:

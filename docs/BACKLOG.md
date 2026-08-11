@@ -6,7 +6,7 @@ not maintained; this is what is actually open.
 **Rule for this file:** every item says *why*, and anything derived rather than measured says so.
 An item with no reason is a wish, not a task.
 
-**Last updated:** 2026-08-09.
+**Last updated:** 2026-08-11.
 
 ---
 
@@ -56,35 +56,42 @@ From `classwork/solution-design-sprint.md`. The single core feature:
 Raised 10 August 2026. These are the gaps between "the capstone works" and "a stranger can
 rely on it", and several are accessibility issues rather than features.
 
-- [ ] **Remove the demo-data fallback from the shipping build.**
-      `getBuilding` silently falls back to mock buildings when the API is unreachable and
-      labels the card `demo data`. That was right for a capstone that had to survive a live
-      demo on bad wifi. It is wrong for a product: a person checking a real address can be
-      shown a **fabricated building** and the only signal is two small words. The export
-      already refuses on demo data — the card should too. **Recommendation: keep the mocks
-      for local development, gate them behind an env flag, and have production show a plain
-      "we could not reach the record" instead.** This is the single highest-value item here.
-- [ ] **Real PDF generation, server-side.** Printing currently hands off to the browser
-      dialog, which works but puts the output under the reader's control and produces nothing
-      an agent can attach. A generated PDF would let the record carry a header, the record
-      hash in the footer, and **live links back to each cited statute and dataset** — the
-      thing a lawyer would actually file. Needs a Rust PDF crate; `printpdf` is the obvious
-      candidate and adds a dependency, so it is a deliberate call rather than a drive-by.
+- [x] **Remove the demo-data fallback from the shipping build.** *Shipped `ee3802d`.* Gated behind
+      `DEMO_DATA_ALLOWED` (`import.meta.env.DEV || VITE_ALLOW_DEMO_DATA`). Verified with a
+      production build against an unreachable API: the card now says "We couldn't reach the data
+      service" instead of rendering a fabricated building. `getBuilding` also stopped reporting a
+      backend outage as a 404 — an outage is a 503 and says so.
+      *Original reasoning, kept because it is the argument:* a person checking a real address
+      could be shown a **fabricated building** and the only signal was two small words.
+- [ ] **Real PDF generation, server-side.** **Scoped 2026-08-11 — see `design/pdf-export.md`.**
+      Printing currently hands off to the browser dialog, which works but puts the output under
+      the reader's control and produces nothing an agent can attach. Decision: `printpdf` 0.12.5
+      (**MIT**, released 29 July 2026, ~995k recent downloads) in a new `crates/render`, with
+      `default-features = false`. Rejected `pdf-writer` (MIT/Apache-2.0, but every glyph width and
+      line break would be hand-written) and `genpdf` (unmaintained). **Three gates before it
+      ships:** the stripped feature set must build clean and not blow up the artifact; no C
+      toolchain may enter the graph; and every link pattern must be fetched and return 200 before
+      it is written into a document. The design rule is that the PDF is a *rendering* — it carries
+      the record hash and says the JSON is the checkable artifact, because a typeset document that
+      implies verification it cannot carry is the exact failure the export exists to prevent.
 - [ ] **Let the agent hand over documents, not just prose.** When the agent cites a statute
       or a dataset it should be able to offer the source itself — a link the user can open, or
       a PDF of the relevant page — so someone who wants to read the law can, without knowing
       how to find it. Pairs with the PDF work above: the same links belong in the exported
       document.
-- [ ] **Save a conversation.** Users have asked. There is nowhere to keep an agent thread, so
-      anything learned is lost on refresh. Needs a decision about *where* it is saved, since
-      the product has no accounts by design — local-first (download or `localStorage`) keeps
-      that property; anything server-side re-opens the per-user-state question.
-- [ ] **Copy from the agent.** Multiple people have reported being unable to copy the agent's
-      answers. **Treat this as an accessibility defect, not a convenience.** The OS can do it,
-      but the users who most need this record — elderly tenants, people with low vision, people
-      who are not confident with a computer — are exactly the ones who will not fight a
-      selection handle on a phone. A copy button per answer is small and removes a whole class
-      of exclusion.
+- [x] **Save a conversation.** *Shipped `d69b701`.* Downloads a plain-text transcript; the
+      product has no accounts by design, so the reader's own machine is the only honest place
+      to keep one. The header carries the building, the BBL, the date, and a line stating it is
+      an assistant transcript and not legal advice. Verified live: a 996-byte file headed
+      `Building: 603 PUTNAM AVENUE (BBL 3016440063)`.
+- [x] **Copy from the agent.** *Shipped `d69b701`.* A copy button per answer, treated as an
+      accessibility defect rather than a convenience: the OS can already select text, but a
+      selection handle on a phone is exactly the interaction an elderly tenant or a person with
+      low vision cannot reliably perform. **Falls back to a hidden textarea + `execCommand`**
+      where `navigator.clipboard` is unavailable (older Safari, any non-HTTPS origin) — failing
+      silently there would break the fix precisely on the browsers least-served users have.
+      **Zero new dependencies:** `navigator.clipboard`, `Blob` and `localStorage` are platform
+      APIs, so neither of these two items carries a licence.
 
 ---
 

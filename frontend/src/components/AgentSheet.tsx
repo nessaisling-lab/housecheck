@@ -250,7 +250,84 @@ function Typing() {
 export function AgentSheet() {
   const { open, closeAgent, building, rent } = useAgent();
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  /** Index of the answer just copied, so the button can confirm rather than stay silent. */
+  const [copiedAt, setCopiedAt] = useState<number | null>(null);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /**
+   * Copy one answer.
+   *
+   * This is an accessibility fix, not a convenience. Every operating system can already
+   * select text — but the people who most need a housing record are elderly tenants and
+   * people with low vision, and a text-selection handle on a phone is exactly the
+   * interaction they cannot reliably perform. A button removes the whole problem.
+   *
+   * Falls back to a hidden textarea + execCommand where the clipboard API is unavailable
+   * (older Safari, and any non-HTTPS origin), because failing silently on the browsers
+   * least-served users are most likely to have would defeat the point.
+   */
+  const copyAnswer = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } finally {
+        ta.remove();
+      }
+    }
+    setCopiedAt(index);
+    setTimeout(() => setCopiedAt((c) => (c === index ? null : c)), 2000);
+  };
+
+  /**
+   * Save the whole conversation as a plain-text transcript.
+   *
+   * Plain text rather than a proprietary format, and a download rather than an account:
+   * the product has no user records by design, so the only honest place to keep a
+   * conversation is on the reader's own machine. The header carries the building and the
+   * date, because a transcript that does not say what it is about is not evidence of
+   * anything a week later.
+   */
+  const saveConversation = () => {
+    if (!msgs.length) return;
+    const when = new Date();
+    const head = [
+      "HouseCheck — saved conversation",
+      building ? `Building: ${building.address} (BBL ${building.bbl})` : "No building selected",
+      `Saved: ${when.toISOString().slice(0, 16).replace("T", " ")}`,
+      "",
+      "This is a transcript of an assistant conversation. It is not legal advice, and the",
+      "assistant does not predict case outcomes. Figures come from public NYC records.",
+      "",
+      "".padEnd(72, "-"),
+      "",
+    ].join("\n");
+    const body = msgs
+      .map((m) => `${m.role === "agent" ? "HouseCheck" : "You"}:\n${m.text}\n${m.source ? m.source + "\n" : ""}`)
+      .join("\n");
+    const blob = new Blob([head + body], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `housecheck-conversation-${building?.bbl ?? "session"}-${when
+      .toISOString()
+      .slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setSaveNote("Saved to your downloads");
+    setTimeout(() => setSaveNote(null), 2500);
+  };
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedFor = useRef<string | null>(null);
@@ -392,11 +469,25 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
             HouseCheck Agent
           </span>
         </span>
-        <button onClick={closeAgent} aria-label="Close agent" className="p-2" style={{ color: "var(--hc-ink-3)" }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Only offered once there is something to save. A disabled button on an empty
+              conversation is a control that has to be explained; absence explains itself. */}
+          {msgs.length > 0 && (
+            <button
+              type="button"
+              onClick={saveConversation}
+              className="rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold"
+              style={{ color: "var(--hc-ink)", border: "1px solid rgba(255,255,255,0.18)" }}
+            >
+              {saveNote ? "Saved" : "Save conversation"}
+            </button>
+          )}
+          <button onClick={closeAgent} aria-label="Close agent" className="p-2" style={{ color: "var(--hc-ink-3)" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {building && (
@@ -450,6 +541,18 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
                   {m.source}
                 </p>
               )}
+              <button
+                type="button"
+                onClick={() => copyAnswer(m.text, i)}
+                className="mt-2 rounded-lg px-2.5 py-1 text-[0.75rem] font-semibold"
+                style={{
+                  background: "rgba(255,255,255,0.10)",
+                  color: "var(--hc-ink, #fff)",
+                  border: "1px solid rgba(255,255,255,0.16)",
+                }}
+              >
+                {copiedAt === i ? "Copied" : "Copy answer"}
+              </button>
             </div>
           ) : (
             <div

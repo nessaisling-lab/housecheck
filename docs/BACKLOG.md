@@ -18,11 +18,38 @@ From `classwork/solution-design-sprint.md`. The single core feature:
 > long each has been open, and exports it as a file a stranger can independently verify was not
 > altered after retrieval.
 
-- [ ] **Call a Legal Aid housing attorney or paralegal — before any code.**
-      Two questions: how long the manual HPD Online pass actually takes, and whether an exported
-      file fits how a case is really built. If the count is sufficient, the whole MVP is aimed at
-      nothing. Cheapest possible way to be wrong. Also closes open question 1 in
+- [ ] **Call a Legal Aid housing attorney or paralegal — before any more export work.**
+      Cheapest possible way to be wrong. Also closes open question 1 in
       `classwork/problem-definition-notes.md`.
+
+      **The assumption under test:** that the expensive part of a tenant lawyer's job here is
+      producing a *trustworthy* record of what HPD says, and that a portable independently
+      checkable file is a form they can use. Two separate claims, and either can fail alone —
+      the manual pass may not cost enough time to matter, and the provenance of an HPD printout
+      may never be challenged in the first place.
+
+      **Ask about the workflow, never about the product.** "Would you use this" gets a polite
+      yes and teaches nothing. Ask instead: walk me through the last time you needed a
+      building's violation history — what did you do, how long did it take, what did you do
+      with the output, did anyone ever question where it came from? And one artifact question:
+      would you rather have a PDF, or a document you can edit into a filing?
+
+      **Kill conditions, pre-registered so they cannot be argued away afterwards:**
+      - *"Nobody has ever challenged where an HPD printout came from."* → the hash chain
+        solves a problem that does not exist. It stays (it is built and costs nothing to keep)
+        but stops being the headline; the product's value becomes speed and legibility, and
+        `design/pdf-export.md` becomes **more** important rather than less.
+      - *"We would need a certified copy from HPD / a sworn declaration."* → the mechanism is
+        right and the packaging is wrong. Add a declaration page and find out what the accepted
+        authentication route actually is. Do not defend the chain.
+      - *"The lookup takes two minutes and we already have a way."* → the MVP is aimed at
+        nothing, and the honest response is to change the primary user rather than the feature.
+        That pivot is not free: the renter-at-the-moment-of-decision is the other candidate and
+        is itself an open question below.
+
+      **What a bad call does not invalidate:** ingest, scoring, the card, the agent, address
+      resolution and the provenance stamp are all user-agnostic. The export is one route plus
+      one module. That is the whole reason this call is cheap.
 - [ ] **Ingest: fetch `novdescription`.**
       Measured 100% populated across 800 sampled rows, mean 120 chars. One column on the SoQL
       select in `crates/ingest/src/run.rs`.

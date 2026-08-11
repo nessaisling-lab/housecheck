@@ -29,6 +29,21 @@ import {
 const BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ??
   "https://housecheck-nessa.fly.dev";
+/**
+ * Whether this build may substitute demo data when the API cannot be reached.
+ *
+ * **Off in production, deliberately.** Falling back to fixtures is right for a laptop with
+ * no backend running and indefensible on a live site: someone checking a real address
+ * before signing a lease could be shown a *fabricated building*, and the only signal was
+ * the words "demo data" in small text under the score. A person who cannot reach the
+ * record is far better served by being told so.
+ *
+ * Local `npm run dev` keeps the fixtures, so the UI is still workable offline. A preview
+ * build can opt in with `VITE_ALLOW_DEMO_DATA=true` when demoing without a backend.
+ */
+export const DEMO_DATA_ALLOWED =
+  import.meta.env.DEV || import.meta.env.VITE_ALLOW_DEMO_DATA === "true";
+
 /** Default budget for the fast, DB-backed endpoints. */
 const TIMEOUT_MS = 8000;
 /**
@@ -177,8 +192,9 @@ export async function searchAddress(query: string): Promise<ApiResult<SearchResu
       `/search?address=${encodeURIComponent(query)}`
     );
     return { data: asArray(raw), source: "live" };
-  } catch {
-    return { data: mockSearch(query), source: "demo" };
+  } catch (e) {
+    if (DEMO_DATA_ALLOWED) return { data: mockSearch(query), source: "demo" };
+    throw e;
   }
 }
 
@@ -187,11 +203,18 @@ export async function getBuilding(bbl: string): Promise<ApiResult<BuildingCard>>
     const raw = await req<unknown>(`/building/${encodeURIComponent(bbl)}`);
     return { data: normalizeBuilding(raw), source: "live" };
   } catch (e) {
-    const demo = mockBuilding(bbl);
-    if (demo) return { data: demo, source: "demo" };
+    if (DEMO_DATA_ALLOWED) {
+      const demo = mockBuilding(bbl);
+      if (demo) return { data: demo, source: "demo" };
+    }
+    // Two different failures that used to look identical. A 404 means the city has the
+    // building and our pilot does not cover it; anything else means we could not reach the
+    // record at all. Collapsing them into "Building not found" told people their address
+    // was outside coverage when the truth was that the server was down — a wrong answer
+    // dressed as a definite one.
     throw e instanceof ApiError && e.status === 404
       ? e
-      : new ApiError("Building not found", 404);
+      : new ApiError("Could not reach the building record", 503);
   }
 }
 
@@ -242,7 +265,8 @@ export async function listBuildings(): Promise<ApiResult<BuildingSummary[]>> {
       score: typeof b.score === "number" ? b.score : b.score?.total ?? null,
     }));
     return { data, source: "live" };
-  } catch {
+  } catch (e) {
+    if (!DEMO_DATA_ALLOWED) throw e;
     return { data: mockSummaries(), source: "demo" };
   }
 }
@@ -257,7 +281,8 @@ export async function checkRentFairness(
       body: JSON.stringify({ bbl, monthly_rent: rent }),
     });
     return { data: raw, source: "live" };
-  } catch {
+  } catch (e) {
+    if (!DEMO_DATA_ALLOWED) throw e;
     const demo = mockRentFairness(bbl, rent);
     if (demo) return { data: demo, source: "demo" };
     throw new ApiError("Rent fairness unavailable for this building");
@@ -272,10 +297,11 @@ export async function compareBuildings(bbls: string[]): Promise<ApiResult<Buildi
     const wrapped = (raw as any)?.buildings;
     const list = asArray(wrapped ?? (raw as object | object[]));
     return { data: list.map(normalizeBuilding), source: "live" };
-  } catch {
+  } catch (e) {
     const demo = bbls
       .map(mockBuilding)
       .filter((b): b is BuildingCard => b !== null);
+    if (!DEMO_DATA_ALLOWED) throw e;
     if (demo.length) return { data: demo, source: "demo" };
     throw new ApiError("Compare unavailable");
   }
@@ -291,7 +317,8 @@ export async function getSummary(bbl: string): Promise<ApiResult<string>> {
     const text = typeof raw === "string" ? raw : raw.summary ?? raw.text ?? "";
     if (!text) throw new ApiError("Empty summary");
     return { data: text, source: "live" };
-  } catch {
+  } catch (e) {
+    if (!DEMO_DATA_ALLOWED) throw e;
     const demo = mockSummary(bbl);
     if (demo) return { data: demo, source: "demo" };
     throw new ApiError("Summary unavailable");

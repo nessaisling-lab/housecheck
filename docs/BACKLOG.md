@@ -72,6 +72,23 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       window without closing it — the geocoder path takes seconds and the local path
       milliseconds. `More.tsx` had the same unguarded promise, rendering `Showing 0 of 250` over
       nothing, which reads as a fact about the pilot rather than a failure to load it.
+- [x] **On failure the agent answered a different question.** *Fixed in `0a54446`.* The catch
+      pushed `offlineAnswer(t)`, which for a typed question falls through to
+      `answerChip(CHIPS[0], …)` — the canned score explanation — whatever was asked. Measured
+      while the upstream was slow: **two of three runs** of "there is no heat in my apartment,
+      what should I do" returned 502, so a score paragraph tagged *"offline answer"* was the
+      common reply to a question about heat. The failure is now stated first and the canned
+      material offered second. Verified on a production build with only `/agent/chat` forced to
+      fail, so the branch under test was the only thing exercised.
+- [ ] **The 30 s per-call timeout is now the binding constraint, and the upstream exceeds it.**
+      Measured 2026-08-11 after the budget fix: the same question returned **200 at 27.4 s**,
+      then **502 at 59.2 s** and **502 at 60.5 s** — which decomposes exactly as
+      `30 s + 0.7 s pause + 30 s`, i.e. one generation exceeding the per-attempt timeout twice.
+      **The old code called `openrouter_post(.., 30)` for every round too, so these runs would
+      have failed identically before any of the deadline work** — this is upstream slowness, not
+      a regression. It is also the strongest argument for streaming: a response that emits its
+      first token in ~3 s never trips a no-response timeout, so streaming converts this entire
+      hard-failure class into a slow-but-successful answer.
 - [ ] **The agent takes 25-67 seconds on the questions people actually ask, and shows nothing
       while it works.** Measured on production 2026-08-11. The cause is not a slow model — it is
       the sequential tool loop, and the citation count is a clean proxy for how many rounds ran

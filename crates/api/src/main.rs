@@ -1659,9 +1659,6 @@ const MAX_TOOL_ITERATIONS: usize = 5;
 /// reads the real value out of that file and fails if the two ever drift apart.
 const CLIENT_ABORT_SECS: u64 = 70;
 
-/// Room left for TLS, JSON and the trip home, so a finished answer is also a *delivered* one.
-const AGENT_RESPONSE_HEADROOM_SECS: u64 = 15;
-
 /// Wall-clock budget for one agent turn, across every upstream round trip and every retry.
 ///
 /// Measured on production 2026-08-11: 25.5 s, 66.7 s, 26.5 s. The 66.7 s run finished 3.3 s
@@ -1673,14 +1670,31 @@ const AGENT_RESPONSE_HEADROOM_SECS: u64 = 15;
 /// response, nobody will ever read the answer, and every token is still billed. A request that
 /// cannot be delivered should not be paid for.
 ///
-/// **Derived from the client's abort rather than written next to it**, so "the server stops
-/// first" is arithmetic instead of a promise. Raising this past `CLIENT_ABORT_SECS` underflows
-/// in const evaluation and fails to compile — the mistake is unavailable rather than merely
-/// tested for.
-const AGENT_TOTAL_BUDGET_SECS: u64 = CLIENT_ABORT_SECS - AGENT_RESPONSE_HEADROOM_SECS;
+/// **The constraint is two-sided, and the first version of this got one side wrong.** It was
+/// `CLIENT_ABORT_SECS - 15`, a headroom figure chosen rather than derived, which left the first
+/// round only 27 s — so a single slow upstream call spent its retry and consumed the whole
+/// budget. Measured on production 2026-08-11: a question that had answered in 34.8 s came back
+/// **502 at 53.2 s**. A deadline that turns successes into failures inside the window the
+/// client was still waiting in is not a fix.
+///
+/// So the budget is the *smallest* one that cannot cripple the first round — one full-length
+/// attempt plus its retry — and the headroom is whatever is left over. Both sides are asserted
+/// at compile time below, so neither can be quietly traded away for the other.
+const AGENT_TOTAL_BUDGET_SECS: u64 = 2 * AGENT_PER_CALL_MAX_SECS + AGENT_RETRY_PAUSE_SECS;
+
+/// What remains for TLS, JSON and the trip home. **Emergent, not chosen** — this is the number
+/// that was wrong when it was picked by hand.
+const AGENT_RESPONSE_HEADROOM_SECS: u64 = CLIENT_ABORT_SECS - AGENT_TOTAL_BUDGET_SECS;
 
 /// Longest a single upstream attempt may take, budget permitting.
 const AGENT_PER_CALL_MAX_SECS: u64 = 30;
+
+/// Upper side: the server must stop before the browser does. Underflows and fails to compile
+/// if the budget ever exceeds the abort.
+const _: () = assert!(
+    AGENT_RESPONSE_HEADROOM_SECS >= 5,
+    "too little left to deliver the answer the budget just finished computing"
+);
 
 /// The reason the budget exists: without it the loop's own ceiling already overruns the client.
 /// If a future change makes the uncapped loop fit anyway, this stops compiling and the whole
@@ -3682,6 +3696,25 @@ mod tests {
     /// production ("there is no heat in my apartment, what should I do") took **two** rounds.
     /// This asserts real headroom over that, so the budget bites on pathological questions and
     /// never on ordinary ones.
+    /// The regression this test exists because of, measured on production before it was found.
+    ///
+    /// The first budget was `CLIENT_ABORT_SECS - 15`, which left round one only 27 s. One slow
+    /// upstream call then spent its retry and consumed the entire budget, so a question that
+    /// had answered in **34.8 s** came back **502 at 53.2 s** — a failure manufactured inside
+    /// the window the client was still happily waiting in.
+    ///
+    /// The rule that prevents it: the first round must always get the full per-call allowance,
+    /// retry included. A budget that cannot afford that is too small however tidy the
+    /// arithmetic looks.
+    #[test]
+    fn the_first_round_gets_the_full_per_call_allowance() {
+        assert_eq!(
+            round_timeout_secs(AGENT_TOTAL_BUDGET_SECS),
+            Some(AGENT_PER_CALL_MAX_SECS),
+            "round one is being short-changed, which fails turns the unbounded code completed"
+        );
+    }
+
     #[test]
     fn the_budget_affords_more_rounds_than_any_measured_question_needs() {
         /// Rounds used by the deepest question measured on production, 2026-08-11.

@@ -452,7 +452,26 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
         },
       ]);
     } catch {
-      setMsgs((m) => [...m, offlineAnswer(t)]);
+      // Say the question went unanswered *before* offering what we can still say.
+      //
+      // This used to push `offlineAnswer(t)` alone, which for a typed question falls through
+      // to `answerChip(CHIPS[0], ...)` — the canned score explanation — no matter what was
+      // asked. So "there is no heat in my apartment, what should I do" came back as a
+      // paragraph about the score, labelled only "offline answer". Measured on production
+      // 2026-08-11 while the upstream was slow: two of three runs of that exact question
+      // failed, so this was the common path, not the rare one.
+      //
+      // A reply that answers a different question is not a degraded answer, it is a wrong
+      // one — the same failure as the stale search results and the arbitrary borough, and the
+      // worst possible version of it on a page about someone's housing.
+      setMsgs((m) => [
+        ...m,
+        {
+          role: "agent",
+          text: "I couldn't reach the assistant to answer that one. Here's what I can tell you from this building's record without it:",
+        },
+        offlineAnswer(t),
+      ]);
     } finally {
       setBusy(false);
     }

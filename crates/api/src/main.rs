@@ -1653,6 +1653,71 @@ fn legal_help_directory() -> serde_json::Value {
 /// read-only tools here — a legitimate answer needs one or two.
 const MAX_TOOL_ITERATIONS: usize = 5;
 
+/// The browser's own abort, mirrored from `frontend/src/lib/api.ts` (`LLM_TIMEOUT_MS`).
+///
+/// Duplicated across a language boundary, so `the_server_gives_up_before_the_client_does`
+/// reads the real value out of that file and fails if the two ever drift apart.
+const CLIENT_ABORT_SECS: u64 = 70;
+
+/// Room left for TLS, JSON and the trip home, so a finished answer is also a *delivered* one.
+const AGENT_RESPONSE_HEADROOM_SECS: u64 = 15;
+
+/// Wall-clock budget for one agent turn, across every upstream round trip and every retry.
+///
+/// Measured on production 2026-08-11: 25.5 s, 66.7 s, 26.5 s. The 66.7 s run finished 3.3 s
+/// before the client gave up, which is luck rather than design — the loop's own ceiling is
+/// `MAX_TOOL_ITERATIONS` x (timeout + retry pause + retry), and `openrouter_post` retries once,
+/// so that is 5 x (30 + 0.7 + 30) ≈ **303 s** against a 70 s abort.
+///
+/// Past the abort the work is not merely late, it is unobservable: the browser has dropped the
+/// response, nobody will ever read the answer, and every token is still billed. A request that
+/// cannot be delivered should not be paid for.
+///
+/// **Derived from the client's abort rather than written next to it**, so "the server stops
+/// first" is arithmetic instead of a promise. Raising this past `CLIENT_ABORT_SECS` underflows
+/// in const evaluation and fails to compile — the mistake is unavailable rather than merely
+/// tested for.
+const AGENT_TOTAL_BUDGET_SECS: u64 = CLIENT_ABORT_SECS - AGENT_RESPONSE_HEADROOM_SECS;
+
+/// Longest a single upstream attempt may take, budget permitting.
+const AGENT_PER_CALL_MAX_SECS: u64 = 30;
+
+/// The reason the budget exists: without it the loop's own ceiling already overruns the client.
+/// If a future change makes the uncapped loop fit anyway, this stops compiling and the whole
+/// mechanism can be deleted rather than maintained for no reason.
+const _: () = assert!(
+    MAX_TOOL_ITERATIONS as u64 * (2 * AGENT_PER_CALL_MAX_SECS + AGENT_RETRY_PAUSE_SECS)
+        > CLIENT_ABORT_SECS,
+    "the uncapped tool loop now fits inside the client's timeout; this budget is dead weight"
+);
+
+/// `openrouter_post`'s pause between an attempt and its retry (700 ms), rounded up so the
+/// budget arithmetic can never under-count it.
+const AGENT_RETRY_PAUSE_SECS: u64 = 1;
+
+/// Below this, do not start another round: a round that cannot finish inside the budget spends
+/// tokens on an answer that will never be delivered.
+const AGENT_MIN_ROUND_SECS: u64 = 8;
+
+/// Timeout for one upstream round given `remaining_secs` of budget, or `None` when there is
+/// not enough left to be worth starting.
+///
+/// Halves the remainder because a "round" is really *two* attempts plus the pause between
+/// them — `openrouter_post` retries once on a transient failure. Sizing a round at the full
+/// remainder is the obvious version and the wrong one: a single retried round would then
+/// overrun the very budget it was meant to respect, by almost exactly a factor of two.
+///
+/// Pure, and separated from the loop for exactly that reason — the property that matters
+/// (`2 x timeout + pause <= remaining`, always) is arithmetic, and arithmetic can be proved
+/// over its whole domain in a test instead of hoped for against a live LLM.
+fn round_timeout_secs(remaining_secs: u64) -> Option<u64> {
+    if remaining_secs < AGENT_MIN_ROUND_SECS {
+        return None;
+    }
+    let for_attempts = remaining_secs.saturating_sub(AGENT_RETRY_PAUSE_SECS);
+    Some((for_attempts / 2).clamp(1, AGENT_PER_CALL_MAX_SECS))
+}
+
 /// Tool definitions advertised to the model, in OpenAI/OpenRouter function-calling format.
 ///
 /// The `description` text is load-bearing: it is the only thing the model uses to decide which
@@ -2219,7 +2284,35 @@ async fn agent_chat_handler(
     // Tool-calling loop. The model may ask for data; *we* execute the call and hand back the
     // result. The model never touches the database — that separation is what makes grounding
     // enforceable rather than aspirational.
+    // One clock for the whole turn, not one per call. The iteration cap bounds how many times
+    // we may ask; this bounds how long the asking may take, which is the bound the reader's
+    // browser actually enforces.
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_secs(AGENT_TOTAL_BUDGET_SECS);
+
     for iteration in 0..MAX_TOOL_ITERATIONS {
+        let remaining = deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_secs();
+        let Some(call_timeout) = round_timeout_secs(remaining) else {
+            // Stop here rather than start a round we cannot finish. The frontend degrades to a
+            // local answer on any error, so the reader is not left staring at a spinner — and
+            // the log line is where an operator learns the loop is running long.
+            tracing::warn!(
+                iteration,
+                remaining,
+                budget = AGENT_TOTAL_BUDGET_SECS,
+                "agent ran out of time budget before settling on an answer"
+            );
+            return (
+                StatusCode::GATEWAY_TIMEOUT,
+                Json(serde_json::json!({
+                    "error": "the agent ran out of time — try asking something more specific"
+                })),
+            )
+                .into_response();
+        };
+
         let payload = serde_json::json!({
             "model": state.llm.model,
             "max_tokens": AGENT_MAX_TOKENS,
@@ -2227,7 +2320,7 @@ async fn agent_chat_handler(
             "tools": tools,
         });
 
-        let json = match openrouter_post(&state, api_key, &payload, 30).await {
+        let json = match openrouter_post(&state, api_key, &payload, call_timeout).await {
             Ok(j) => j,
             Err(()) => {
                 tracing::error!(iteration, "agent upstream failed");
@@ -3542,6 +3635,110 @@ mod tests {
             hits[0]["borough"],
             json!("Brooklyn"),
             "every curated row is Brooklyn, and saying so is how a reader spots a wrong-borough match"
+        );
+    }
+
+    /// The invariant, checked over the whole domain rather than at three convenient points.
+    ///
+    /// A round is two attempts plus the pause between them, because `openrouter_post` retries
+    /// once. So for every budget the loop could ever hold, the round it schedules must still
+    /// fit inside that budget after a retry. This is the property the fix exists to establish,
+    /// and it is exhaustively checkable — there is no reason to sample it.
+    #[test]
+    fn a_retried_round_can_never_outlive_the_budget_that_scheduled_it() {
+        for remaining in 0..=600u64 {
+            match round_timeout_secs(remaining) {
+                None => assert!(
+                    remaining < AGENT_MIN_ROUND_SECS,
+                    "refused to start a round at {remaining}s, which was long enough"
+                ),
+                Some(t) => {
+                    assert!(t >= 1, "a zero-second timeout would fail instantly at {remaining}s");
+                    assert!(
+                        t <= AGENT_PER_CALL_MAX_SECS,
+                        "{t}s exceeds the per-call ceiling at {remaining}s"
+                    );
+                    let worst_case = 2 * t + AGENT_RETRY_PAUSE_SECS;
+                    assert!(
+                        worst_case <= remaining,
+                        "a retried {t}s round takes {worst_case}s, over the {remaining}s left"
+                    );
+                }
+            }
+        }
+    }
+
+    /// How many rounds the budget actually affords — and it is fewer than
+    /// `MAX_TOOL_ITERATIONS`, deliberately.
+    ///
+    /// The first version of this test asserted the budget could afford all five rounds. It
+    /// could not, and the assertion was the thing that was wrong: five rounds at the measured
+    /// 12-15 s each is 60-75 s, which does not fit inside a reader's patience no matter how the
+    /// budget is arranged. **The budget is the binding cap and `MAX_TOOL_ITERATIONS` is now the
+    /// secondary one**, which is the honest ordering — a limit on how long a person waits
+    /// should outrank a limit on how many times we felt like asking.
+    ///
+    /// Four is not a practical constraint either way: the deepest question measured on
+    /// production ("there is no heat in my apartment, what should I do") took **two** rounds.
+    /// This asserts real headroom over that, so the budget bites on pathological questions and
+    /// never on ordinary ones.
+    #[test]
+    fn the_budget_affords_more_rounds_than_any_measured_question_needs() {
+        /// Rounds used by the deepest question measured on production, 2026-08-11.
+        const OBSERVED_DEEPEST: usize = 2;
+
+        let mut spent = 0u64;
+        let mut rounds = 0usize;
+        while let Some(t) = round_timeout_secs(AGENT_TOTAL_BUDGET_SECS.saturating_sub(spent)) {
+            spent += t; // the ordinary case: one attempt, no retry
+            rounds += 1;
+            assert!(rounds <= 100, "round_timeout_secs never returns None -- loop cannot end");
+        }
+        assert!(
+            rounds > OBSERVED_DEEPEST,
+            "budget affords {rounds} rounds; the deepest measured question needs {OBSERVED_DEEPEST}"
+        );
+        assert!(
+            rounds <= MAX_TOOL_ITERATIONS,
+            "if the budget affords more rounds than the cap allows, the budget is not the binding \
+             limit and this test is checking the wrong thing"
+        );
+        assert!(
+            spent <= AGENT_TOTAL_BUDGET_SECS,
+            "{spent}s spent from a {AGENT_TOTAL_BUDGET_SECS}s budget"
+        );
+    }
+
+    /// `CLIENT_ABORT_SECS` is a copy of a TypeScript constant, and copies drift.
+    ///
+    /// Read the real value out of the frontend and fail if it moved. Skipped rather than failed
+    /// when the file is absent, so the API crate still builds and tests on its own — the point
+    /// is to catch a change to the frontend, not to make Rust depend on it.
+    #[test]
+    fn the_server_gives_up_before_the_client_does() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/src/lib/api.ts");
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("skipping: {path} not present in this checkout");
+            return;
+        };
+        let line = src
+            .lines()
+            .find(|l| l.contains("const LLM_TIMEOUT_MS"))
+            .expect("frontend no longer declares LLM_TIMEOUT_MS -- this coupling needs revisiting");
+        let ms: u64 = line
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse()
+            .expect("could not read a number out of the LLM_TIMEOUT_MS line");
+        assert_eq!(
+            ms / 1000,
+            CLIENT_ABORT_SECS,
+            "the client now aborts at {ms}ms; CLIENT_ABORT_SECS says {CLIENT_ABORT_SECS}s"
+        );
+        assert!(
+            AGENT_TOTAL_BUDGET_SECS * 1000 < ms,
+            "server budget {AGENT_TOTAL_BUDGET_SECS}s does not fit inside the client's {ms}ms"
         );
     }
 

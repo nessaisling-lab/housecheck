@@ -10,6 +10,56 @@ An item with no reason is a wish, not a task.
 
 ---
 
+## Live defects — measured against production on 2026-08-11
+
+Found by measuring the deployed product rather than reading the repo. **The repo is not the demo.**
+
+- [ ] **The Fly backend is one commit behind `main`, and it breaks two of the three export
+      destinations.** Measured: `GET /building/3016440063/export?format=text` returns
+      `content-type: application/json`. The frontend asks for `format=text` for both Copy and
+      Print (`frontend/src/lib/api.ts:241`, `pages/HealthCard.tsx:203`), so **Copy puts ~13 KB of
+      raw JSON on the clipboard and Print renders that JSON at 11px monospace.** Download is
+      unaffected — JSON is what it is meant to produce. The missing commit is `6617151`. Fixed by
+      a `flyctl deploy` from the owning account, not by code. *This also invalidates the premise
+      of `design/pdf-export.md` §1, which describes the browser print path as working.*
+- [ ] **Production exports are unsigned.** Measured: `signature: null`, `public_key: null`,
+      chain intact. The fail-closed path is behaving correctly — an absent
+      `HOUSECHECK_EXPORT_SIGNING_KEY` produces an unsigned-but-chained document rather than a
+      signature-shaped lie. But the live product currently proves *non-alteration* and not
+      *authorship*, so "signed, verifiable record" overstates what a visitor can actually get.
+      Whether the cause is an unset secret or the stale binary is **not** established; nobody has
+      run `flyctl secrets list -a housecheck-nessa`.
+- [ ] **Ambiguous addresses resolve to an arbitrary borough, presented as fact.** `search_handler`
+      asks GeoSearch for `size=1` (`crates/api/src/main.rs:887`). Measured against GeoSearch with
+      `size=5`, the correct borough is the **second** result in all three cases tried, at
+      *identical* confidence 0.8:
+
+      | typed | result 1 (what we show) | result 2 (also 0.8) |
+      |---|---|---|
+      | `350 5 Avenue` | 350 5 AVENUE, **Brooklyn** | 350 5 AVENUE, **Manhattan** |
+      | `869 Park Avenue` | 869 PARK AVENUE, **Brooklyn** | 869 PARK AVENUE, **Manhattan** |
+      | `1 Court Square` | 1 COURT SQUARE, **Brooklyn** | 1 COURT SQUARE, **Queens** |
+
+      We are not being misled by the geocoder. **We ask for one answer to a question that has
+      several equally-ranked ones, then print the arbitrary pick with no borough label.**
+      `869 Park Avenue` additionally returns `in_curated_set: true` in 147 ms — one tap from a
+      full Health Card for a building in the wrong borough. Fix is `size=5`, show the candidates,
+      let the person choose. No schema change, no re-ingest.
+- [ ] **Five of 250 buildings have an address with no house number, and one is the empty string.**
+      Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
+      `FULTON STREET`), `3017790022` (`DEKALB AVE`), `3018110070` (`GATES AVENUE`). The empty one
+      can never be reached by search — an empty haystack never contains a non-empty needle — and
+      renders an empty heading.
+- [ ] **HPD ships `0x1A` inside violation text, and it renders as nothing.** Measured: 6 of 33
+      rows for BBL 3016440063 contain `U+001A` where an apostrophe belongs, so
+      `HPD'S WEBSITE` displays as `HPDS WEBSITE`. **Confirmed identical in HPD's own API** (6 rows
+      in `wvxf-dwi5` for the same block/lot) — our ingest is faithful, this is the city's data.
+      The fix is display-layer only: normalising it at ingest would make the signed bytes stop
+      matching the source, which is the one option that is off the table. A control character in
+      a PDF text stream is not the harmless no-op it is in HTML, so this blocks the PDF work.
+
+---
+
 ## Committed — the MVP
 
 From `classwork/solution-design-sprint.md`. The single core feature:
@@ -147,11 +197,15 @@ rely on it", and several are accessibility issues rather than features.
 
 ## Address resolution — from `design/address-to-bbl.md`
 
-- [ ] **Fix `normalize_address` to expand by position, not presence.** It currently corrupts real
-      NYC street names: `ST NICHOLAS AVENUE` becomes `STREET NICHOLAS AVENUE` (**167** PLUTO lots),
-      `AVENUE W` becomes `AVENUE WEST` (**403**), `AVENUE N` becomes `AVENUE NORTH` (**744**).
-      Street types should expand only in final position and never first; directionals only in
-      leading position. Wrong at any scale, so it does not wait for citywide.
+- [x] **Fix `normalize_address` to expand by position, not presence.** *Shipped `c18a1dc`* —
+      this box was stale. Verified in `crates/api/src/main.rs:751-808`: `ST`/`DR` expand only in
+      final position and never first, so `ST NICHOLAS AVENUE` (**167** lots) and `100 ST JOHNS PL`
+      both survive; directionals expand only when *not* last, so `AVENUE W` (**403**) and
+      `AVENUE N` (**744**) survive.
+      **Correction to `design/address-to-bbl.md:44-49`:** that doc prescribes "directionals only
+      in leading position." The rule that actually landed is the opposite and is the correct one —
+      it expands a directional *unless* it is last, so `AVE W` and `AVENUE W` reduce to the same
+      string. **Following the doc would reintroduce the bug.** The doc is wrong, not the code.
 - [ ] **Replace the linear scan with an index built at ingest.** `search_curated` loads every
       building and normalises every stored address *per query*. Invisible at 250; roughly two
       orders of magnitude past the 2.2 ms card budget at 222,433. Normalise once at ingest, store
@@ -195,7 +249,15 @@ Not "someday" — each has a specific blocker.
       grep for `login`, `jwt`, `session`, `user_id` returns no implementation in any of them. On a
       lawyer's tool a saved caseload is client-adjacent data, so getting it wrong is worse than
       not having it.
-- [ ] **Citywide coverage.** **Re-scoped 9 August 2026 — see `design/database-layer.md`.** The
+- [ ] **Citywide coverage.** **The ~266 MB figure below is wrong, and the error is in the plan, not
+      the arithmetic.** `design/database-layer.md:36-39` sizes the city assuming *open* violations
+      only (2,858,719 rows). `crates/ingest/src/run.rs:255-261` stores **every** A/B/C violation
+      regardless of status — visible in the shipped artifact, which holds 26,343 violations for
+      250 buildings of which only 5,168 are open. Citywide that is 10,352,768 rows, roughly 3.6×
+      the planned figure, and the artifact is 2.51 MB rather than the 1.21 MB the doc records.
+      **Either the ingest starts filtering to open, or the citywide size estimate is off by more
+      than the 256 MB machine can absorb.** That decision comes before any borough ingest.
+      *Original entry, re-scoped 9 August 2026 — see `design/database-layer.md`:* The
       "cliff at ~14,500 buildings" assumed descriptions stored as raw text; stored in blocks of
       ~128 rows they compress **6.6x** (per-row compression manages only 1.3x — the ratio lives
       in the repetition between rows). Measured citywide: 2,858,719 *open* violations (only 25.6%

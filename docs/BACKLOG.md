@@ -102,6 +102,29 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       the `anthropic/claude-haiku-4.5` default. `main.rs:79-84` already warns that a `:free` slug
       drops long generations at ~22 s, which matches this signature exactly. Check with
       `flyctl secrets list -a housecheck-nessa` (names and digests only, never values).
+- [x] **RESOLVED, and my diagnosis was wrong twice.** *2026-08-11.* `OPENROUTER_MODEL` was
+      `nvidia/nemotron-3-ultra-550b-a55b:free`. Changing it to `anthropic/claude-haiku-4.5`
+      fixed everything below at once:
+
+      | | on `nemotron:free` | on `claude-haiku-4.5` |
+      |---|---|---|
+      | `/summary` | **502 × 2** at 40.9 s | **200 × 3**, 2.3-4.3 s |
+      | "what is the condition score" | 4.4-6.8 s | **2.3 s** |
+      | "what does NYC law say about heat season" | 18.5-49.2 s | **6.6 s** |
+      | "there is no heat in my apartment…" | **502 on 2 of 3**, 25-60 s | **200 × 3**, 7.3-7.9 s |
+
+      **Correction 1:** I wrote "the cause is not a slow model — it is the sequential tool loop."
+      Wrong. The loop is real, but its per-round cost fell from 12-15 s to about 2 s, so the
+      same two-round question now finishes in under 8 seconds.
+      **Correction 2:** I read the 40.9 s failures as two attempts timing out against a 20 s
+      budget, and "fixed" the timeout. The timeout was a symptom. The `:free` endpoint was
+      returning `ResourceExhausted: Worker local total request limit reached (32/32)` and
+      dropping bodies; `main.rs:79-84` had warned about exactly this since it was written.
+      **Streaming is no longer justified.** It was the "final item" for four rounds on the
+      argument that a 25-60 s wait needs progressive rendering and that >30 s generations
+      hard-fail. At a 7.9 s worst case, neither holds. Re-open only if measurements move.
+      **Bonus:** the model is now paid, so OpenRouter no longer logs prompts — the privacy
+      caveat in `main.rs:79-84` is closed too.
 - [ ] **The 30 s per-call timeout is now the binding constraint, and the upstream exceeds it.**
       Measured 2026-08-11 after the budget fix: the same question returned **200 at 27.4 s**,
       then **502 at 59.2 s** and **502 at 60.5 s** — which decomposes exactly as

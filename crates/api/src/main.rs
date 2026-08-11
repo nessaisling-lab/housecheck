@@ -1556,7 +1556,9 @@ async fn search_law(state: &AppState, api_key: &str, query: &str) -> Option<serd
 
     // Shorter budget than the main call: this is a lookup, and a slow search should not push the
     // overall request past the client's patience.
-    let json = openrouter_post(state, api_key, &payload, 25).await.ok()?;
+    let json = openrouter_post(state, api_key, &payload, TOOL_CALL_TIMEOUT_SECS)
+        .await
+        .ok()?;
     let msg = &json["choices"][0]["message"];
 
     let sources: Vec<serde_json::Value> = msg["annotations"]
@@ -1680,14 +1682,42 @@ const CLIENT_ABORT_SECS: u64 = 70;
 /// So the budget is the *smallest* one that cannot cripple the first round — one full-length
 /// attempt plus its retry — and the headroom is whatever is left over. Both sides are asserted
 /// at compile time below, so neither can be quietly traded away for the other.
-const AGENT_TOTAL_BUDGET_SECS: u64 = 2 * AGENT_PER_CALL_MAX_SECS + AGENT_RETRY_PAUSE_SECS;
+const AGENT_TOTAL_BUDGET_SECS: u64 = 2 * LLM_CALL_TIMEOUT_SECS + AGENT_RETRY_PAUSE_SECS;
 
 /// What remains for TLS, JSON and the trip home. **Emergent, not chosen** — this is the number
 /// that was wrong when it was picked by hand.
 const AGENT_RESPONSE_HEADROOM_SECS: u64 = CLIENT_ABORT_SECS - AGENT_TOTAL_BUDGET_SECS;
 
-/// Longest a single upstream attempt may take, budget permitting.
-const AGENT_PER_CALL_MAX_SECS: u64 = 30;
+/// Longest a single upstream attempt may take, budget permitting. **One number for every
+/// top-level LLM call**, because three different magic numbers is how the summary ended up with
+/// the tightest budget of the three despite being the call that runs first and unprompted.
+const LLM_CALL_TIMEOUT_SECS: u64 = 30;
+
+/// Budget for a tool call made *inside* the agent's loop.
+///
+/// Deliberately lower than `LLM_CALL_TIMEOUT_SECS` and not merged with it. A tool call is not a
+/// turn: its result still has to be fed back for another round, so it must leave room for the
+/// round that consumes it. Raising this to match the top-level allowance would spend the loop's
+/// budget on the lookup and starve the answer.
+const TOOL_CALL_TIMEOUT_SECS: u64 = 25;
+
+const _: () = assert!(
+    TOOL_CALL_TIMEOUT_SECS < LLM_CALL_TIMEOUT_SECS,
+    "an in-loop lookup may not claim the same budget as the turn that contains it"
+);
+
+/// A single top-level call plus its retry has to fit the client's abort — and it is the *same*
+/// arithmetic as a whole agent turn's budget, so the two can never be maintained separately.
+///
+/// This is the property `/summary` was breaking from the unexpected direction: not by running
+/// too long, but by giving up at 40.7 s when the client would have waited 70, on a hardcoded
+/// 20 s that nothing tied to anything. **A timeout that is too small is as much a bug as one
+/// that is too large — it just fails quietly and looks like the upstream's fault.**
+const _: () = assert!(
+    2 * LLM_CALL_TIMEOUT_SECS + AGENT_RETRY_PAUSE_SECS == AGENT_TOTAL_BUDGET_SECS,
+    "the single-call worst case and the turn budget have diverged; one is being maintained and \
+     the other forgotten"
+);
 
 /// Upper side: the server must stop before the browser does. Underflows and fails to compile
 /// if the budget ever exceeds the abort.
@@ -1700,7 +1730,7 @@ const _: () = assert!(
 /// If a future change makes the uncapped loop fit anyway, this stops compiling and the whole
 /// mechanism can be deleted rather than maintained for no reason.
 const _: () = assert!(
-    MAX_TOOL_ITERATIONS as u64 * (2 * AGENT_PER_CALL_MAX_SECS + AGENT_RETRY_PAUSE_SECS)
+    MAX_TOOL_ITERATIONS as u64 * (2 * LLM_CALL_TIMEOUT_SECS + AGENT_RETRY_PAUSE_SECS)
         > CLIENT_ABORT_SECS,
     "the uncapped tool loop now fits inside the client's timeout; this budget is dead weight"
 );
@@ -1729,7 +1759,7 @@ fn round_timeout_secs(remaining_secs: u64) -> Option<u64> {
         return None;
     }
     let for_attempts = remaining_secs.saturating_sub(AGENT_RETRY_PAUSE_SECS);
-    Some((for_attempts / 2).clamp(1, AGENT_PER_CALL_MAX_SECS))
+    Some((for_attempts / 2).clamp(1, LLM_CALL_TIMEOUT_SECS))
 }
 
 /// Tool definitions advertised to the model, in OpenAI/OpenRouter function-calling format.
@@ -2517,7 +2547,17 @@ async fn summary_handler(
         ],
     });
 
-    let json = match openrouter_post(&state, api_key, &payload, 20).await {
+    // Was a hardcoded 20, which was the tightest of the three timeouts in this file and sat on
+    // the one call that runs first and unprompted. Measured on production 2026-08-11: **502 on
+    // 2 of 2 runs, both at 40.9 s** — exactly `20 + 0.7 + 20`, both attempts timing out — so
+    // every visitor who opened the agent panel was greeted by "The agent couldn't summarize
+    // this building". Meanwhile `getSummary` waits the full `LLM_TIMEOUT_MS`, so the server was
+    // giving up with 29 s of the reader's patience unspent.
+    //
+    // One attempt plus its retry is `2 x 30 + 1 = 61 s`, which is `AGENT_TOTAL_BUDGET_SECS` and
+    // already const-asserted to land inside the client's abort. The same arithmetic that bounds
+    // the agent turn bounds this one, so there is nothing separate to keep in step.
+    let json = match openrouter_post(&state, api_key, &payload, LLM_CALL_TIMEOUT_SECS).await {
         Ok(j) => j,
         Err(()) => return (StatusCode::BAD_GATEWAY, "summary upstream failed").into_response(),
     };
@@ -3669,7 +3709,7 @@ mod tests {
                 Some(t) => {
                     assert!(t >= 1, "a zero-second timeout would fail instantly at {remaining}s");
                     assert!(
-                        t <= AGENT_PER_CALL_MAX_SECS,
+                        t <= LLM_CALL_TIMEOUT_SECS,
                         "{t}s exceeds the per-call ceiling at {remaining}s"
                     );
                     let worst_case = 2 * t + AGENT_RETRY_PAUSE_SECS;
@@ -3710,7 +3750,7 @@ mod tests {
     fn the_first_round_gets_the_full_per_call_allowance() {
         assert_eq!(
             round_timeout_secs(AGENT_TOTAL_BUDGET_SECS),
-            Some(AGENT_PER_CALL_MAX_SECS),
+            Some(LLM_CALL_TIMEOUT_SECS),
             "round one is being short-changed, which fails turns the unbounded code completed"
         );
     }

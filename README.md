@@ -153,6 +153,10 @@ Rust · Axum · bundled SQLite (read-only, baked into the Docker image → the d
 
 - **Deploy:** [docs/DEPLOY.md](docs/DEPLOY.md) · **Design spec:** [docs/superpowers/specs/](docs/superpowers/specs) · **PRD:** [HouseCheck_PRD.docx](HouseCheck_PRD.docx)
 - **CI:** build + test on macOS/Windows/Linux, security scan, smoke + stability — green.
+- **Verification:** what is tested and what is not — **[docs/EVAL-CARD.md](docs/EVAL-CARD.md)**.
+  Golden example (603 Putnam → 27/100, three-state repair speed) and the adversarial case
+  (a re-signed forgery that passed every check inside itself), both mapped to the tests
+  that cover them.
 
 ## Team & branches
 

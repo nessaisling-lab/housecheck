@@ -24,7 +24,22 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       unaffected — JSON is what it is meant to produce. The missing commit is `6617151`. Fixed by
       a `flyctl deploy` from the owning account, not by code. *This also invalidates the premise
       of `design/pdf-export.md` §1, which describes the browser print path as working.*
-- [ ] **Production exports are unsigned.** Measured: `signature: null`, `public_key: null`,
+- [x] **Production exports are unsigned.** *Resolved 2026-08-11 — key set, and a second hole
+      found and closed in the same pass.* Live exports now carry `signature` and `public_key`,
+      and `POST /verify` returns `signed_and_intact` for a genuine document and
+      `tampered {row: 0, what: "row content"}` for one altered character.
+      **But signing alone was not enough.** Verified from outside with an independent Python
+      implementation: a forger who rewrites a row, **recomputes the whole chain**, and signs it
+      with their own keypair produces a document that verifies as `SIGNED AND INTACT` — it is
+      internally consistent, so every check inside it passes. A row rewritten to *"NO VIOLATIONS
+      OF ANY KIND AT THIS ADDRESS"* passed cleanly. The only defence is comparing the embedded
+      key against one published independently, and **nothing published it** — although
+      `ExportDocument::public_key`'s doc comment had said "the published one" since it was
+      written. Closed in `d24a028`: `/meta` now serves `export_public_key`, and the transcript
+      instructs the comparison. Re-verified after deploy: the same forgery is now
+      `REJECTED: signed by an unpublished key`, and the genuine document reads
+      `SIGNED AND INTACT, key matches /meta`.
+      *Original measurement:* `signature: null`, `public_key: null`,
       chain intact. The fail-closed path is behaving correctly — an absent
       `HOUSECHECK_EXPORT_SIGNING_KEY` produces an unsigned-but-chained document rather than a
       signature-shaped lie. But the live product currently proves *non-alteration* and not
@@ -212,30 +227,30 @@ From `classwork/solution-design-sprint.md`. The single core feature:
       **What a bad call does not invalidate:** ingest, scoring, the card, the agent, address
       resolution and the provenance stamp are all user-agnostic. The export is one route plus
       one module. That is the whole reason this call is cheap.
-- [ ] **Ingest: fetch `novdescription`.**
+- [x] **Ingest: fetch `novdescription`.**
       Measured 100% populated across 800 sampled rows, mean 120 chars. One column on the SoQL
       select in `crates/ingest/src/run.rs`.
-- [ ] **Ingest: fetch violation open and close dates.**
+- [x] **Ingest: fetch violation open and close dates.**
       Required for days-open and time-to-close. Free — same rows.
-- [ ] **Ingest: stamp dataset version and retrieval timestamp per row.**
+- [x] **Ingest: stamp dataset version and retrieval timestamp per row.**
       Not bookkeeping. Without it the export's signature attests to a file rather than to a fact,
       which is security theatre. This is what makes the export honest.
-- [ ] **Model: extend `Violation`.**
+- [x] **Model: extend `Violation`.**
       Currently `{ class, open, year }` in `crates/model/src/lib.rs` — there is nowhere for a
       description to go, so this is a schema change, not just a fetch.
-- [ ] **Run one real ingest on the 250 and read the actual artifact size.**
+- [x] **Run one real ingest on the 250 and read the actual artifact size.**
       Arithmetic says ~3.2 MB of text against a 1.3 MB artifact — roughly 3.4×, moving the 256 MB
       ceiling from ~40,000 buildings to ~14,500. That is *derived*. Confirm before it drives a
       decision.
-- [ ] **Card: render open violations** — class, raw notice text, days open.
+- [x] **Card: render open violations** — class, raw notice text, days open.
 - [ ] **Derived: median days-to-close per landlord**, computed from HPD dates alone.
       The single best value-per-effort item found in the sprint: it gives an operator-level
       credibility signal with no landlord participation, no identity verification and no legal
       exposure.
-- [ ] **Export: document plus hash chain, signed Ed25519.**
+- [x] **Export: document plus hash chain, signed Ed25519.**
       Reuses SiteAssure's `entry_hash = sha256(prev_hash + payload_hash)` and Resona's
       `verify_license_with` signing path. Both already exist and both were worked on this cycle.
-- [ ] **Public verifier** that takes an exported file and answers valid / tampered.
+- [x] **Public verifier** that takes an exported file and answers valid / tampered.
       The demo moment: hand someone the file, they change one character, verification fails.
 
 ---

@@ -64,3 +64,51 @@ pub fn card_for(
         building,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture() -> Connection {
+        let conn = store::open_db(":memory:").expect("open");
+        store::migrate(&conn).expect("migrate");
+        store::insert_fixture(&conn).expect("fixture");
+        conn
+    }
+
+    /// A BBL we do not cover must be `None`, not an empty card. An empty card renders as
+    /// a building with nothing wrong with it, which is the opposite of "we have no data".
+    #[test]
+    fn an_uncovered_bbl_is_none_rather_than_a_blank_card() {
+        let conn = fixture();
+        assert!(card_for(&conn, 2026, "9999999999", "2026-08-12")
+            .expect("query")
+            .is_none());
+    }
+
+    /// The card exists to be assembled once. This is the smoke test that the extraction
+    /// from the HTTP API kept it working at all.
+    #[test]
+    fn a_covered_bbl_produces_a_scored_card() {
+        let conn = fixture();
+        let first = store::get_all_buildings(&conn).expect("buildings");
+        let bbl = &first.first().expect("at least one fixture building").bbl;
+        let card = card_for(&conn, 2026, bbl, "2026-08-12")
+            .expect("query")
+            .expect("covered");
+        assert_eq!(&card.building.bbl, bbl);
+        assert!(card.score.total <= 100);
+    }
+
+    /// `today` is a parameter precisely so days-open does not depend on the wall clock.
+    /// If this ever starts failing, someone has reached for `SystemTime::now` in here.
+    #[test]
+    fn the_same_inputs_and_the_same_day_give_the_same_card() {
+        let conn = fixture();
+        let bbl = store::get_all_buildings(&conn).expect("buildings")[0].bbl.clone();
+        let a = card_for(&conn, 2026, &bbl, "2026-08-12").unwrap().unwrap();
+        let b = card_for(&conn, 2026, &bbl, "2026-08-12").unwrap().unwrap();
+        assert_eq!(a.score.total, b.score.total);
+        assert_eq!(a.open_violation_total, b.open_violation_total);
+    }
+}

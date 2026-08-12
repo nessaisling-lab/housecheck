@@ -22,11 +22,24 @@
 
 use anyhow::Result;
 use rmcp::{
-    handler::server::wrapper::Parameters, tool, tool_handler, tool_router, ServerHandler,
-    ServiceExt,
+    handler::server::wrapper::Parameters, model::*, service::RequestContext, tool, tool_handler,
+    tool_router, ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
 };
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
+
+/// The `ui://` scheme is the MCP Apps convention for a resource a host may render.
+const UI_CARD: &str = "ui://housecheck/card";
+/// MCP Apps' MIME type. A host that does not recognise it falls back to treating the
+/// resource as text, which is why the document below is readable on its own.
+const UI_MIME: &str = "text/html;profile=mcp-app";
+
+/// Where the rendered card actually lives. The frontend is already deployed, so the UI
+/// resource is a pointer rather than a second implementation of the card.
+fn app_base() -> String {
+    std::env::var("HOUSECHECK_APP_URL")
+        .unwrap_or_else(|_| "https://housecheck-wine.vercel.app".to_string())
+}
 
 /// Read-only, single-process, and behind a mutex: rusqlite `Connection` is not `Sync`,
 /// and an MCP server over stdio handles one request at a time anyway. A pool here would
@@ -184,20 +197,145 @@ impl HouseCheck {
                 .to_string(),
         });
 
+        // Point at the renderable card. The MCP Apps way to link a tool to its UI is
+        // `_meta.ui.resourceUri` on the tool definition, which rmcp's #[tool] macro does
+        // not currently expose -- so the URI is named in the response instead. A host that
+        // understands resources can fetch it; one that does not still has the full answer
+        // above rather than a dangling reference.
+        out.push_str(&format!(
+            "\nRenderable card: {UI_CARD}/{} (resource, {UI_MIME})\n",
+            card.building.bbl
+        ));
         out.push_str(&self.provenance());
         out
     }
 }
 
-#[tool_handler(
-    name = "housecheck",
-    version = "0.1.0",
-    instructions = "Look up NYC building conditions from public city data. Coverage is 250 \
-                    buildings in one Brooklyn community district. Every figure comes with \
-                    its source and its limits; present them together or not at all. This is \
-                    a signal, not a legal ruling, and it is not legal advice."
-)]
-impl ServerHandler for HouseCheck {}
+/// The document a host renders for a card.
+///
+/// An iframe pointing at the deployed route, not a re-render. The rendered card already
+/// carries its provenance line and its "a signal, not a legal ruling" caveat, so pointing
+/// at it means the honesty travels with the card instead of being re-attached by whatever
+/// is calling us — which is the whole reason to prefer a pointer over a copy.
+///
+/// The `<noscript>`-shaped fallback text matters: a host that ignores the MIME type shows
+/// this as plain text, and it should still say where the data came from.
+fn card_document(bbl: Option<&str>) -> String {
+    let base = app_base();
+    let (url, title) = match bbl {
+        Some(b) => (format!("{base}/building/{b}"), format!("Building Health Card — BBL {b}")),
+        None => (base.clone(), "HouseCheck".to_string()),
+    };
+    format!(
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\
+         <title>{title}</title>\
+         <style>html,body{{margin:0;height:100%}}iframe{{border:0;width:100%;height:100%}}\
+         p{{font:14px/1.5 system-ui;padding:16px}}</style></head>\
+         <body><iframe src=\"{url}\" title=\"{title}\" \
+         sandbox=\"allow-scripts allow-same-origin allow-popups\" \
+         referrerpolicy=\"no-referrer\"></iframe>\
+         <p>Scored from NYC open data. A signal, not a legal ruling. \
+         Open directly: {url}</p></body></html>"
+    )
+}
+
+#[tool_handler]
+impl ServerHandler for HouseCheck {
+    fn get_info(&self) -> ServerInfo {
+        let mut info = ServerInfo::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        );
+        info.server_info = Implementation::new("housecheck", env!("CARGO_PKG_VERSION"));
+        info.instructions = Some(
+            "Look up NYC building conditions from public city data. Coverage is 250 buildings \
+             in one Brooklyn community district. Every figure comes with its source and its \
+             limits; present them together or not at all. A rendered card is easier to read \
+             but is not a verified one — verification means checking an exported document \
+             against the public key at /meta. This is a signal, not a legal ruling, and it is \
+             not legal advice."
+                .into(),
+        );
+        info
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, McpError> {
+        Ok(ListResourcesResult {
+            resources: vec![Resource::new(UI_CARD, "building_health_card")
+                .with_title("Building Health Card")
+                .with_description(
+                    "The rendered card for a building. Append /{bbl} for a specific one.",
+                )
+                .with_mime_type(UI_MIME)],
+            ..Default::default()
+        })
+    }
+
+    async fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourceTemplatesResult, McpError> {
+        Ok(ListResourceTemplatesResult {
+            resource_templates: vec![ResourceTemplate::new(
+                format!("{UI_CARD}/{{bbl}}"),
+                "building_health_card_by_bbl",
+            )
+            .with_title("Building Health Card by BBL")
+            .with_description("Rendered card for one Borough-Block-Lot.")
+            .with_mime_type(UI_MIME)],
+            ..Default::default()
+        })
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, McpError> {
+        let uri = request.uri.as_str();
+        let bbl = match uri {
+            u if u == UI_CARD => None,
+            u if u.starts_with(&format!("{UI_CARD}/")) => Some(&u[UI_CARD.len() + 1..]),
+            _ => {
+                return Err(McpError::resource_not_found(
+                    "resource_not_found",
+                    Some(serde_json::json!({ "uri": uri })),
+                ))
+            }
+        };
+        // A BBL that is not covered gets no UI resource. Rendering an empty card would be
+        // worse than refusing: it looks like an answer.
+        if let Some(b) = bbl {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            let known = store::get_building(&conn, b.trim())
+                .map_err(|e| McpError::internal_error(e.to_string(), None))?
+                .is_some();
+            if !known {
+                return Err(McpError::resource_not_found(
+                    "outside the covered district",
+                    Some(serde_json::json!({ "uri": uri })),
+                ));
+            }
+        }
+        Ok(ReadResourceResult::new(vec![ResourceContents::TextResourceContents {
+            uri: uri.to_string(),
+            mime_type: Some(UI_MIME.into()),
+            text: card_document(bbl),
+            meta: None,
+        }])
+        .into())
+    }
+}
 
 /// Today as `YYYY-MM-DD`. Mirrors the API's own helper; days-open arithmetic needs a date
 /// the model can parse, not a timestamp.
@@ -265,4 +403,54 @@ async fn main() -> Result<()> {
     let service = server.serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_card_document_points_at_the_deployed_route_for_that_building() {
+        let doc = card_document(Some("3016440063"));
+        assert!(doc.contains("/building/3016440063"));
+        assert!(doc.contains("<iframe"));
+    }
+
+    /// A host that ignores the MIME type renders this as plain text. It must still say
+    /// where the numbers came from, because an unexplained score is the thing this whole
+    /// project argues against.
+    #[test]
+    fn the_document_states_its_limits_even_if_the_iframe_never_renders() {
+        let doc = card_document(Some("3016440063"));
+        assert!(doc.contains("A signal, not a legal ruling"), "missing the caveat");
+        assert!(doc.contains("NYC open data"), "missing the source");
+        // Not `hidden`: a hidden paragraph cannot serve as a fallback, which is the only
+        // thing it is for.
+        assert!(!doc.contains("<p hidden>"), "the fallback must not be hidden");
+    }
+
+    /// The iframe is a boundary we own: a host renders this inside its own surface.
+    #[test]
+    fn the_iframe_is_sandboxed_and_leaks_no_referrer() {
+        let doc = card_document(None);
+        assert!(doc.contains("sandbox="));
+        assert!(!doc.contains("allow-top-navigation"), "must not be able to navigate the host");
+        assert!(doc.contains("referrerpolicy=\"no-referrer\""));
+    }
+
+    /// Anchored on the artifact's real ingest timestamp, which `/meta` reports as
+    /// "Aug 2026". If this drifts, the provenance line an agent is handed is wrong about
+    /// when the data was taken -- which is worse than omitting the date.
+    #[test]
+    fn the_ingest_timestamp_renders_as_the_month_meta_reports() {
+        let (y, m, _) = civil_ymd(1_786_325_784_i64.div_euclid(86_400));
+        assert_eq!(y, 2026);
+        assert_eq!(MONTHS[(m as usize) - 1], "Aug");
+    }
+
+    /// Epoch day zero is 1970-01-01. Anchors the algorithm itself.
+    #[test]
+    fn the_epoch_is_where_it_should_be() {
+        assert_eq!(civil_ymd(0), (1970, 1, 1));
+    }
 }

@@ -269,6 +269,10 @@ From `classwork/solution-design-sprint.md`. The single core feature:
 - [ ] **Median days-to-close per *landlord*** — needs the HPD registration dataset for owner
       linkage. The per-building version above is the same arithmetic; only the grouping key is
       missing. Blocked on the owner/portfolio item below, not on effort.
+      **Update 2026-08-12: the grouping key is reachable.** `docs/owner-linkage.md` establishes
+      the two Socrata datasets and the matching rules. The honest name for the result is
+      *median days-to-close per registered contact*, not per landlord — the data cannot
+      support the stronger word.
       The single best value-per-effort item found in the sprint: it gives an operator-level
       credibility signal with no landlord participation, no identity verification and no legal
       exposure.
@@ -419,6 +423,24 @@ Not "someday" — each has a specific blocker.
       in a separate HPD registration dataset, so one landlord's twelve buildings are twelve
       unrelated records. Recorded as a gap in the research notes §4.6; the workflow behind it is
       inferred rather than observed.
+
+      **No longer blocked — see `docs/owner-linkage.md`.** The claim that the registration
+      dataset "has never been ingested" was true; the implication that it was unavailable was
+      not. Both halves are public on Socrata on the same path the ingest already uses, and
+      were queried live on 2026-08-12: **Multiple Dwelling Registrations `tesw-yqqr`
+      (203,236 rows)** and **Registration Contacts `feu5-w2e2` (782,024 rows)**, carrying
+      every column the linkage needs.
+
+      **And it is largely solved already.** JustFix's `who-owns-what` (GPL-3.0) builds a graph
+      over HPD contacts, joining on exact business address (high confidence) and on exact name
+      corroborated by a >0.9 trigram address match (low confidence), then splits any component
+      over 300 BBLs with Louvain. Their code cannot come into this tree without relicensing;
+      the public datasets underneath it are City open data and are fair game. At our scale —
+      250 buildings, one district — the fuzzy path and the splitting are both unnecessary.
+
+      **Naming discipline, if built:** the data supports *registered contact*, never *owner*.
+      Three states — `Linked` / `RegisteredAlone` / absent — because a lapsed registration and
+      a genuinely single-building landlord must not render the same.
 - [ ] **MCP server**, so another agent can call HouseCheck as a tool. Pattern already implemented
       in Ziqpu.
 - [ ] **The landlord ledger** (Sketch 3). Sell the right of reply, publish the silence. **Blocked

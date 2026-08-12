@@ -1,0 +1,17 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - heading [level=1] [ref=e12]: HouseCheck
+    - paragraph [ref=e13]: Public data. Honest signals.
+  - generic "Loading building health card" [ref=e14]: Loading
+  - navigation "Primary":
+    - generic [ref=e25]:
+      - link "Home" [ref=e26] [cursor=pointer]:
+        - /url: /
+      - link "Saved" [ref=e32] [cursor=pointer]:
+        - /url: /saved
+      - link "Compare" [ref=e37] [cursor=pointer]:
+        - /url: /compare
+      - link "About" [ref=e42] [cursor=pointer]:
+        - /url: /more
+    - button "Open HouseCheck agent" [ref=e47] [cursor=pointer]
+    - generic: "Current: /building/3016910012"

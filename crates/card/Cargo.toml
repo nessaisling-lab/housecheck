@@ -1,0 +1,12 @@
+[package]
+name = "card"
+version = "0.1.0"
+edition.workspace = true
+description = "Assembles a Building Health Card from the artifact. Shared by the HTTP API and the MCP server so both answer with the same card."
+
+[dependencies]
+model = { path = "../model" }
+scoring = { path = "../scoring" }
+store = { path = "../store" }
+rusqlite.workspace = true
+anyhow.workspace = true

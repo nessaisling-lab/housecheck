@@ -1,0 +1,108 @@
+- generic [ref=f5e2]:
+  - banner [ref=f5e3]:
+    - paragraph [ref=f5e4]: Pursuit AI-Native Builder · Inaugural cohort
+    - heading [level=1] [ref=f5e5]:
+      - text: Four cycles.Four
+      - emphasis [ref=f5e6]: shipped
+      - text: products.
+    - paragraph [ref=f5e7]: Every one runs. Two are live on the internet right now; two are desktop applications you compile and launch. Most of the work is Rust — not because it is fashionable, but because three of the four have a correctness property that a garbage collector and a loose type system make harder to defend.
+    - generic [ref=f5e8]:
+      - generic [ref=f5e9]: Stan (Aisling) Leiva-Davila
+      - link "github.com/nessaisling-lab" [ref=f5e10] [cursor=pointer]:
+        - /url: https://github.com/nessaisling-lab
+      - link "LinkedIn" [ref=f5e11] [cursor=pointer]:
+        - /url: https://linkedin.com/in/stan-leiva-davila
+      - link "ness.aisling@gmail.com" [ref=f5e12] [cursor=pointer]:
+        - /url: mailto:ness.aisling@gmail.com
+  - heading "The builds" [level=2] [ref=f5e13]
+  - generic [ref=f5e14]:
+    - link "HouseCheck CYCLE 04 Carfax for NYC apartments. Type an address, get a Building Health Card scored from public city data — and export a record a stranger can cryptographically verify. ● Live Rust · axum Ed25519 149 tests HouseCheck Building Health Card" [ref=f5e15] [cursor=pointer]:
+      - /url: https://github.com/nessaisling-lab/pursuit-l2-portfolio/tree/main/cycle-4-housecheck
+      - generic [ref=f5e16]:
+        - generic [ref=f5e17]:
+          - heading "HouseCheck" [level=3] [ref=f5e18]
+          - generic [ref=f5e19]: CYCLE 04
+        - paragraph [ref=f5e20]: Carfax for NYC apartments. Type an address, get a Building Health Card scored from public city data — and export a record a stranger can cryptographically verify.
+        - generic [ref=f5e21]:
+          - generic [ref=f5e22]: ● Live
+          - generic [ref=f5e23]: Rust · axum
+          - generic [ref=f5e24]: Ed25519
+          - generic [ref=f5e25]: 149 tests
+      - img "HouseCheck Building Health Card" [ref=f5e26]
+    - link "Ziqpu CYCLE 03 A consumer astrology decision tool with two visible agents — one measures, one interprets. The separation is the integrity guarantee, enforced by architecture rather than disclaimer. Rust Tool-calling Offline ephemeris Ziqpu birth-moment screen" [ref=f5e27] [cursor=pointer]:
+      - /url: https://github.com/nessaisling-lab/pursuit-l2-portfolio/tree/main/cycle-3-ziqpu
+      - generic [ref=f5e28]:
+        - generic [ref=f5e29]:
+          - heading "Ziqpu" [level=3] [ref=f5e30]
+          - generic [ref=f5e31]: CYCLE 03
+        - paragraph [ref=f5e32]: A consumer astrology decision tool with two visible agents — one measures, one interprets. The separation is the integrity guarantee, enforced by architecture rather than disclaimer.
+        - generic [ref=f5e33]:
+          - generic [ref=f5e34]: Rust
+          - generic [ref=f5e35]: Tool-calling
+          - generic [ref=f5e36]: Offline ephemeris
+      - img "Ziqpu birth-moment screen" [ref=f5e37]
+    - link "SiteAssure CYCLE 02 A tamper-evident, offline-first OSHA compliance logger driven by voice. Every create, amend and delete is chained and hash-verified — nothing is silently altered or removed. Rust Hash chain 3-OS CI SiteAssure audit trail" [ref=f5e38] [cursor=pointer]:
+      - /url: https://github.com/nessaisling-lab/pursuit-l2-portfolio/tree/main/cycle-2-siteassure
+      - generic [ref=f5e39]:
+        - generic [ref=f5e40]:
+          - heading "SiteAssure" [level=3] [ref=f5e41]
+          - generic [ref=f5e42]: CYCLE 02
+        - paragraph [ref=f5e43]: A tamper-evident, offline-first OSHA compliance logger driven by voice. Every create, amend and delete is chained and hash-verified — nothing is silently altered or removed.
+        - generic [ref=f5e44]:
+          - generic [ref=f5e45]: Rust
+          - generic [ref=f5e46]: Hash chain
+          - generic [ref=f5e47]: 3-OS CI
+      - img "SiteAssure audit trail" [ref=f5e48]
+    - link "Resona CYCLE 01 Privacy-first voice-to-text. 100% on-device via whisper.cpp — a property you can verify by unplugging the network and watching it keep working. Rust · Tauri 2 whisper.cpp On-device Resona interface" [ref=f5e49] [cursor=pointer]:
+      - /url: https://github.com/nessaisling-lab/pursuit-l2-portfolio/tree/main/cycle-1-resona
+      - generic [ref=f5e50]:
+        - generic [ref=f5e51]:
+          - heading "Resona" [level=3] [ref=f5e52]
+          - generic [ref=f5e53]: CYCLE 01
+        - paragraph [ref=f5e54]: Privacy-first voice-to-text. 100% on-device via whisper.cpp — a property you can verify by unplugging the network and watching it keep working.
+        - generic [ref=f5e55]:
+          - generic [ref=f5e56]: Rust · Tauri 2
+          - generic [ref=f5e57]: whisper.cpp
+          - generic [ref=f5e58]: On-device
+      - img "Resona interface" [ref=f5e59]
+  - heading "If you only read one thing" [level=2] [ref=f5e60]
+  - generic [ref=f5e61]:
+    - heading "The export that found its own hole" [level=3] [ref=f5e62]
+    - paragraph [ref=f5e63]: A tenant lawyer can read a building's violations on any city website. What they cannot do is put that reading in front of a court, because a printout is unverifiable. HouseCheck's export carries an append-only hash chain and an Ed25519 signature, so opposing counsel can re-check it offline — without trusting us and without reaching our servers.
+    - paragraph [ref=f5e64]:
+      - text: "The part I am prouder of than the cryptography: while verifying it in production I wrote an independent verifier in another language, and found that signing alone was not enough. A forger who rewrites a row, recomputes the whole chain and signs it with their own keypair produces a document that verifies as intact — because it is internally consistent. A row rewritten to"
+      - code [ref=f5e65]: NO VIOLATIONS OF ANY KIND AT THIS ADDRESS
+      - text: passed cleanly.
+    - paragraph [ref=f5e66]:
+      - text: The fix was publishing the public key at a stable endpoint, so a reader has something to compare against. That hole existed because the code's own comment said
+      - emphasis [ref=f5e67]: “compare with the published one”
+      - text: while nothing published it.
+  - heading "How I work" [level=2] [ref=f5e68]
+  - generic [ref=f5e69]:
+    - generic [ref=f5e70]:
+      - heading "Measure, don't estimate." [level=4] [ref=f5e71]
+      - paragraph [ref=f5e72]: "Figures in these repos are measured and say so. Anything derived is labelled derived; anything unverified says unverified. HouseCheck's backlog carries the rule in writing: an item with no reason is a wish, not a task."
+    - generic [ref=f5e73]:
+      - heading "Verify against production, not the repo." [level=4] [ref=f5e74]
+      - paragraph [ref=f5e75]: Nearly every real defect I found in the final week was invisible from inside the editor — a search box that answered a Manhattan address with a Brooklyn building, a failed lookup that silently kept the previous result on screen, an assistant that answered a different question than the one asked.
+    - generic [ref=f5e76]:
+      - heading "An absent answer is still an answer." [level=4] [ref=f5e77]
+      - paragraph [ref=f5e78]: "Repeatedly the honest design has three states rather than two: signed / unsigned-but-intact / tampered. A repair-time median / “nothing has been closed” / genuinely no data. Collapsing the middle state is how software ends up stating something reassuring it has not earned."
+  - heading "Stack" [level=2] [ref=f5e79]
+  - generic [ref=f5e80]:
+    - generic [ref=f5e81]:
+      - term [ref=f5e82]: Rust
+      - definition [ref=f5e83]: axum · rusqlite/SQLx · Tauri 2 · whisper-rs · ed25519-dalek · sha2
+    - generic [ref=f5e84]:
+      - term [ref=f5e85]: Front end
+      - definition [ref=f5e86]: TypeScript · React · Vite · Tailwind
+    - generic [ref=f5e87]:
+      - term [ref=f5e88]: Data
+      - definition [ref=f5e89]: SQLite · DuckDB · NYC Open Data (Socrata) · US Census ACS
+    - generic [ref=f5e90]:
+      - term [ref=f5e91]: AI
+      - definition [ref=f5e92]: LLM tool-calling with enforced grounding · structured outputs · agent guardrails
+    - generic [ref=f5e93]:
+      - term [ref=f5e94]: Ops
+      - definition [ref=f5e95]: Docker · GitHub Actions (3-OS matrix) · Fly.io · Vercel
+  - contentinfo [ref=f5e96]: Pursuit AI-Native Builder — inaugural cohort · 600+ hours over seven months Palette sampled from HouseCheck's deck and Ziqpu's interface.

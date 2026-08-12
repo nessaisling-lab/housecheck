@@ -11,6 +11,7 @@ path = "src/main.rs"
 model = { path = "../model" }
 scoring = { path = "../scoring" }
 store = { path = "../store" }
+card = { path = "../card" }
 rusqlite.workspace = true
 axum.workspace = true
 tokio.workspace = true

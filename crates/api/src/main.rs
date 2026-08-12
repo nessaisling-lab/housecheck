@@ -12,7 +12,7 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use model::{HealthCard, ScoreBreakdown, Stabilization, ViolationCounts};
+use model::HealthCard;
 use store::{
     get_all_buildings, get_building, get_open_violations, get_snapshot_year, get_tract_median,
 };
@@ -444,57 +444,18 @@ fn internal_error(context: &str, e: impl std::fmt::Display) -> axum::response::R
 ///
 /// `Ok(None)` means the BBL isn't in the curated set (→ 404 / skip); `Err` is a real DB failure
 /// (→ 500). Shared by `/building`, `/compare`, and `/summary` so all three stay in lockstep.
+/// Thin wrapper over [`card::card_for`], supplying this process's clock.
+///
+/// The assembly itself moved to `crates/card` so the MCP server answers with the same
+/// card rather than a second implementation of it. Two builders would drift, and the
+/// failure would be the quiet kind: an agent and the website reporting different scores
+/// for the same building, each internally consistent.
 fn card_for(
     conn: &rusqlite::Connection,
     snapshot_year: i32,
     bbl: &str,
 ) -> anyhow::Result<Option<HealthCard>> {
-    let building = match get_building(conn, bbl)? {
-        Some(b) => b,
-        None => return Ok(None),
-    };
-    let violations = get_open_violations(conn, bbl)?;
-
-    let condition = scoring::condition_score(&violations, snapshot_year);
-    let legal = scoring::legal_score(&building);
-    let neighborhood = scoring::neighborhood_score(building.complaints_311);
-    let (accessibility, access_likelihood) = scoring::access_likelihood(&building);
-    let total = scoring::total_score(condition, legal, neighborhood, accessibility);
-
-    let (open_violation_details, open_violation_total) =
-        model::ViolationDetail::from_open(&violations, &today_iso());
-
-    // Behaviour, not state. Absent rather than zero when the record cannot support the claim —
-    // 84 of the 250 pilot buildings have no closed violations at all, and a bold "0 days" on
-    // those would read as the fastest landlord in Brooklyn.
-    let repair_speed = model::RepairSpeed::classify(
-        store::closed_violation_durations(conn, bbl, model::REPAIR_SPEED_SINCE_YEAR)?,
-        open_violation_total,
-        model::REPAIR_SPEED_SINCE_YEAR,
-    );
-
-    Ok(Some(HealthCard {
-        repair_speed,
-        open_violations: ViolationCounts::open_from(&violations),
-        open_violation_details,
-        open_violation_total,
-        score: ScoreBreakdown {
-            total,
-            condition,
-            legal,
-            neighborhood,
-            accessibility,
-        },
-        access_likelihood,
-        // Honest three-state signal derived from the stored rent-stabilization data (JustFix
-        // nyc-doffer, from NYC DOF Statement-of-Account records, latest year 2024). Carries the
-        // unit count for the "likely" wording; the message never overstates a match.
-        stabilization: Stabilization::from_units(
-            building.rent_stabilized,
-            building.rent_stab_units,
-        ),
-        building,
-    }))
+    card::card_for(conn, snapshot_year, bbl, &today_iso())
 }
 
 async fn building_handler(

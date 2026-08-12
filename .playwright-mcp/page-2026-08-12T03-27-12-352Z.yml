@@ -1,0 +1,23 @@
+- generic [ref=f7e2]:
+  - generic [ref=f7e3]:
+    - heading [level=1] [ref=f7e12]: HouseCheck
+    - paragraph [ref=f7e13]: Public data. Honest signals.
+  - generic [ref=f7e15]:
+    - heading "HouseCheck" [level=1] [ref=f7e16]
+    - img "HouseCheck"
+    - paragraph [ref=f7e17]: Know the buildingbefore you sign.
+    - textbox "Look up a building by address" [ref=f7e23]:
+      - /placeholder: look up a building
+    - button "Browse all 250 covered buildings" [ref=f7e24] [cursor=pointer]
+  - navigation "Primary":
+    - generic [ref=f7e27]:
+      - link "Home" [ref=f7e28] [cursor=pointer]:
+        - /url: /
+      - link "Saved" [ref=f7e34] [cursor=pointer]:
+        - /url: /saved
+      - link "Compare" [ref=f7e39] [cursor=pointer]:
+        - /url: /compare
+      - link "About" [ref=f7e44] [cursor=pointer]:
+        - /url: /more
+    - button "Open HouseCheck agent" [ref=f7e49] [cursor=pointer]
+    - generic: "Current: /"

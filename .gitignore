@@ -14,3 +14,11 @@ docs/**/*.html
 # deliverable and cannot be regenerated (fill_deck.py's assets are gone), so it
 # is the artifact of record rather than scaffolding. See docs/deck/README.md.
 !docs/deck/HouseCheck-Presentation.html
+
+# Deliberately untracked: session scratch and the two review documents that are
+# Aisling's alone to publish. These were swept in once by a `git add -A`; the
+# ignore entries make that mistake unavailable rather than merely corrected.
+.playwright-mcp/
+.remember/
+HouseCheck_Claim_Verification_Dossier.md
+HouseCheck_Data_Integrity_Review.pptx

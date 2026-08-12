@@ -443,6 +443,16 @@ Not "someday" — each has a specific blocker.
       a genuinely single-building landlord must not render the same.
 - [ ] **MCP server**, so another agent can call HouseCheck as a tool. Pattern already implemented
       in Ziqpu.
+
+      **Scoped in `docs/mcp-ui.md`.** The item assumed the answer is text; **MCP Apps** lets a
+      tool return a UI resource the host renders. That matters here specifically: the card
+      conveys a score, four pillars, three-state repair speed and a source per number, and an
+      agent handed prose will paraphrase — the exact failure the export exists to prevent.
+      All-Rust and licence-clean: `rmcp` (Apache-2.0, 19.8M downloads) plus a `ui://` resource
+      whose shape we emit directly, since the published SDKs are TS/Ruby/Python and only
+      assemble JSON. Sequenced text-first so step 1 is useful before any UI exists.
+      **Open question, not a detail:** embedding makes the card page a framed surface, so
+      `frame-ancestors` joins `CORS_ALLOWED_ORIGIN` as something to decide rather than widen.
 - [ ] **The landlord ledger** (Sketch 3). Sell the right of reply, publish the silence. **Blocked
       on legal review — a hard gate, not a caveat.** Also needs identity verification and citywide
       coverage. Parked deliberately, not abandoned.

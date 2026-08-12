@@ -199,6 +199,17 @@ From `classwork/solution-design-sprint.md`. The single core feature:
       Cheapest possible way to be wrong. Also closes open question 1 in
       `classwork/problem-definition-notes.md`.
 
+      **Prepped and ready to make: `docs/legal-aid-call.md`** — script, capture sheet, and
+      the kill conditions below restated so they are decided before the call rather than
+      after. Two things that came out of preparing it:
+      *(a)* **do not use the intake line.** 212-577-3300 and Met Council's hotline are for
+      tenants in crisis; a product-research call takes a slot from someone with no heat.
+      Better routes, ranked, are in that doc — JustFix by email is first and warmest.
+      *(b)* **prior art exists for the deferred owner-linkage item.** JustFix's
+      `who-owns-what` already links NYC buildings to a common owner. It is GPL-3.0, so its
+      code cannot be borrowed here, but building that feature without reading it first
+      would be redoing solved work badly.
+
       **The assumption under test:** that the expensive part of a tenant lawyer's job here is
       producing a *trustworthy* record of what HPD says, and that a portable independently
       checkable file is a form they can use. Two separate claims, and either can fail alone —

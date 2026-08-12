@@ -243,7 +243,21 @@ From `classwork/solution-design-sprint.md`. The single core feature:
       ceiling from ~40,000 buildings to ~14,500. That is *derived*. Confirm before it drives a
       decision.
 - [x] **Card: render open violations** — class, raw notice text, days open.
-- [ ] **Derived: median days-to-close per landlord**, computed from HPD dates alone.
+- [x] **Derived: median days-to-close — per *building*, not per landlord.** *Shipped `76b2992`.*
+      **The sprint's framing was not computable.** There is no owner column in the artifact and
+      owner linkage lives in an HPD registration dataset that has never been ingested, so the
+      feature is named for what it measures. One landlord's twelve buildings stay twelve
+      unrelated records until that dataset lands — see the deferred owner/portfolio item.
+      Three states, because two were wrong: a median, `nothing_closed`, or absent. The middle
+      one exists because 603 Putnam (33 open, one closure ever, dated **2017-10-18**) rendered
+      blank under two states — the building that fixes nothing looked emptier than one that
+      fixes things slowly. **26 of 250 pilot buildings** have ≥5 open and zero closures in the
+      window. Window and floor are judgment calls with the measurements recorded beside them:
+      median-of-medians barely moves (121 d all-time / 118 since 2023) while the range collapses
+      from **0–4,951 d** to **25–1,676**.
+- [ ] **Median days-to-close per *landlord*** — needs the HPD registration dataset for owner
+      linkage. The per-building version above is the same arithmetic; only the grouping key is
+      missing. Blocked on the owner/portfolio item below, not on effort.
       The single best value-per-effort item found in the sprint: it gives an operator-level
       credibility signal with no landlord participation, no identity verification and no legal
       exposure.

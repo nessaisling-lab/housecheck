@@ -113,6 +113,31 @@ fn canonical(class: &str, description: Option<&str>, issued: Option<&str>, days:
     out
 }
 
+/// The public half of a signing key, for publishing.
+///
+/// # Why this has to exist
+///
+/// A signature inside a document proves nothing on its own. An attacker who wants a building
+/// to look clean does not forge our signature — they rewrite a row, **recompute the whole
+/// chain**, sign the new head with a keypair they generated, and embed their own public key.
+/// Every check inside the document then passes, because it is internally consistent. Verified
+/// against the document alone on 2026-08-11: a row rewritten to "NO VIOLATIONS OF ANY KIND AT
+/// THIS ADDRESS" verified as **signed and intact**.
+///
+/// The only thing that stops it is a reader comparing the embedded `public_key` against one
+/// published somewhere they already trust. `ExportDocument::public_key`'s own doc comment says
+/// "the published one" — this is the function that makes that phrase true.
+///
+/// Takes the secret and returns only the public half, so the caller never has to touch key
+/// material to publish it. An unusable key yields `None` rather than a placeholder: publishing
+/// a key that verifies nothing is worse than publishing none.
+pub fn public_key_for(secret_key_hex: &str) -> Option<String> {
+    let bytes = hex::decode(secret_key_hex.trim()).ok()?;
+    let key_bytes: [u8; 32] = bytes.try_into().ok()?;
+    let signing = ed25519_dalek::SigningKey::from_bytes(&key_bytes);
+    Some(hex::encode(signing.verifying_key().as_bytes()))
+}
+
 impl ExportDocument {
     /// Build the document and its chain. Rows are exported in the order given, and that
     /// order is part of what is signed — reordering them changes every hash after the swap.
@@ -320,10 +345,20 @@ VERIFICATION
         out.push_str(&format!("  Record hash: {}
 ", self.chain_head));
         match self.public_key.as_deref() {
-            Some(pk) => out.push_str(&format!("  Signed by:   {pk}
-")),
-            None => out.push_str("  Unsigned (hash-chained, but not attributed to an issuer).
-"),
+            Some(pk) => {
+                out.push_str(&format!("  Signed by:   {pk}\n"));
+                // Without this instruction the signature is decorative. A forger rewrites a
+                // row, recomputes the chain and signs it with their own keypair; the document
+                // then verifies perfectly against the key it carries. Comparing that key with
+                // one published independently is the only step that catches it, so the
+                // document has to ask for it in the same breath as it makes the claim.
+                out.push_str(
+                    "  Check that key against the one published at the issuer's /meta\n\
+                     \x20 endpoint before relying on this signature. A document signed by an\n\
+                     \x20 unknown key proves only that it is consistent with itself.\n",
+                );
+            }
+            None => out.push_str("  Unsigned (hash-chained, but not attributed to an issuer).\n"),
         }
         out.push_str("  This text is a transcript. The verifiable document is the JSON
 ");
@@ -403,6 +438,40 @@ mod tests {
             }],
             1_786_400_000,
         )
+    }
+
+    /// A key derived from a secret must match what signing actually produces.
+    ///
+    /// Two code paths reach `ed25519_dalek` — `sign_with` embeds the public half in the
+    /// document, `public_key_for` hands it to `/meta` for publishing — and if they ever
+    /// disagree, every reader who follows the transcript's instruction to compare them sees a
+    /// mismatch and concludes the record is forged. A false alarm on a tamper check is not a
+    /// smaller failure than a missed one; it destroys the same trust.
+    #[test]
+    fn the_published_key_is_the_one_the_signature_carries() {
+        // A fixed key, so this asserts agreement rather than merely self-consistency.
+        let secret = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+        let mut d = doc();
+        assert!(d.sign_with(secret), "fixture key must be usable");
+        assert_eq!(
+            d.public_key.as_deref(),
+            public_key_for(secret).as_deref(),
+            "the key published at /meta and the key inside the document have diverged"
+        );
+        // RFC 8032 test vector 1: this exact secret has this exact public key. Pins the pair
+        // against a value from outside this codebase, so an ed25519 upgrade that changed the
+        // derivation could not pass by agreeing with itself.
+        assert_eq!(
+            public_key_for(secret).as_deref(),
+            Some("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+        );
+    }
+
+    #[test]
+    fn an_unusable_secret_publishes_no_key_rather_than_a_placeholder() {
+        assert_eq!(public_key_for(""), None);
+        assert_eq!(public_key_for("not hex"), None);
+        assert_eq!(public_key_for("aabb"), None, "wrong length must not be padded");
     }
 
     /// The transcript is the version most likely to be read by someone who never sees the

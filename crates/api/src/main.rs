@@ -213,6 +213,18 @@ pub struct Provenance {
     rows: std::collections::BTreeMap<String, String>,
     /// `"Aug 2026"`, derived from `ingested_at_unix`.
     data_month: Option<String>,
+    /// The public half of this deployment's export signing key, hex.
+    ///
+    /// **This is what makes a signed export mean anything.** A forger does not break our
+    /// signature; they rewrite a row, recompute the chain, and sign it with a keypair of their
+    /// own — a document that is internally consistent and verifies clean. The only defence is
+    /// a reader comparing the `public_key` inside the document against one published somewhere
+    /// they already trust, and until this field existed there was nowhere to compare it to.
+    ///
+    /// `None` when no signing key is configured, which is the honest report: exports from this
+    /// deployment are chained but unattributed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    export_public_key: Option<String>,
 }
 
 const MONTHS: [&str; 12] = [
@@ -273,7 +285,20 @@ impl Provenance {
                 format!("{} {}", MONTHS[(m as usize - 1).min(11)], y)
             },
         );
-        Ok(Self { rows, data_month })
+        // Derived from the secret at startup, never stored and never logged. Only the public
+        // half leaves this function, so publishing the key costs no extra handling of the
+        // secret itself.
+        let export_public_key = std::env::var(EXPORT_SIGNING_KEY_ENV)
+            .ok()
+            .and_then(|k| model::export::public_key_for(&k));
+        match &export_public_key {
+            Some(pk) => tracing::info!(public_key = %pk, "exports: signed"),
+            None => tracing::warn!(
+                "exports: unsigned — chained and tamper-evident, but not attributable to an \
+                 issuer, and a reader has no key to compare a document against"
+            ),
+        }
+        Ok(Self { rows, data_month, export_public_key })
     }
 }
 

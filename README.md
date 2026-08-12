@@ -7,6 +7,12 @@
 
 ---
 
+![Searching an address through to a verifiable building record](docs/screenshots/00-workflow.gif)
+
+*Every image in this README is the deployed application running, captured from the live
+build — not a mockup and not a wireframe. The wireframes in `frontend/wireframes/` are the
+design phase and are labelled as such.*
+
 ## Why
 
 Renting in NYC means committing ~$40,000 a year to a building you know almost nothing about. The facts exist in government databases but are scattered across three unusable portals. HouseCheck combines them into one honest 0–100 score — objective public data only, every number sourced.
@@ -22,6 +28,18 @@ Renting in NYC means committing ~$40,000 a year to a building you know almost no
 | Rent fairness (your rent vs tract median + HUD FMR) | Census B25064 · HUD |
 | Accessibility (elevator-on-record + build-era) | NYC DOB · MTA |
 | Neighborhood (311 density, restaurant grades) | NYC 311 · DOHMH |
+
+| The Building Health Card | Search, with the borough stated |
+|---|---|
+| ![Building Health Card for 603 Putnam Avenue](docs/screenshots/01-health-card.png) | ![Address search returning a covered building](docs/screenshots/02-search.png) |
+
+**Repair speed — the only measure on the card describing behaviour rather than state.**
+Three states, not two: a median, "nothing closed since 2023", or genuinely no data. The
+middle one exists because 603 Putnam has 33 open violations, has closed one in its entire
+record, and that closure was in October 2017 — under two states it rendered blank, so the
+landlord who fixes nothing looked *emptier* than one who fixes things slowly.
+
+![Repair speed on a building that closes nothing](docs/screenshots/04-repair-speed.png)
 
 ## The export — a record that survives leaving us
 
@@ -76,6 +94,25 @@ Real data (needs a free [Census key](https://api.census.gov/data/key_signup.html
 ```bash
 cargo run -p ingest -- --real --cd 303 --limit 250 --out data/housecheck.db
 ```
+
+### As an MCP tool
+
+Another agent can call HouseCheck directly and get the same card the website serves —
+`crates/mcp`, built on `rmcp`.
+
+```bash
+HOUSECHECK_DB=data/housecheck.db cargo run -p mcp    # speaks MCP over stdio
+```
+
+Three tools: `search_building`, `get_building_card`, and **`verify_export`** — which
+recomputes a document's chain *and* compares the key inside it against HouseCheck's
+published one. Four outcomes, because "internally consistent" and "produced by HouseCheck"
+are different questions: **tampered**, **intact but unsigned**, **verified**, and
+**rejected — signed by an unknown key**. With no published key configured it reports
+*inconclusive* rather than implying verification it cannot perform.
+
+There is also a `ui://housecheck/card/{bbl}` resource, so an MCP Apps host can render the
+card instead of paraphrasing it. Design notes in **[docs/mcp-ui.md](docs/mcp-ui.md)**.
 
 ## API
 

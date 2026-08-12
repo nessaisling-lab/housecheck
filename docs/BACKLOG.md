@@ -441,8 +441,17 @@ Not "someday" — each has a specific blocker.
       **Naming discipline, if built:** the data supports *registered contact*, never *owner*.
       Three states — `Linked` / `RegisteredAlone` / absent — because a lapsed registration and
       a genuinely single-building landlord must not render the same.
-- [ ] **MCP server**, so another agent can call HouseCheck as a tool. Pattern already implemented
-      in Ziqpu.
+- [x] **MCP server**, so another agent can call HouseCheck as a tool. *Shipped `b8bd93b`
+      (tools) and `f90de12` (the `ui://` resource).* `crates/mcp` on `rmcp`, all Rust.
+      Card assembly moved to `crates/card` first so the agent and the website cannot drift
+      apart; the API calls it through a wrapper, all ten call sites untouched. Verified over
+      stdio against the real artifact rather than by unit test alone: 603 Putnam returns the
+      same 27/100 and the same 33 open violations the site shows, an out-of-district BBL
+      returns a coverage limit rather than a verdict, and `resources/read` returns a
+      sandboxed iframe onto the deployed card. **Still open:** rmcp does not expose `_meta`,
+      which is how MCP Apps links a tool to its UI, so the resource URI is named in the tool
+      response instead. And `verify_export` — step 3, and the one worth demonstrating, since
+      an agent that can *check* a document beats one that describes it.
 
       **Scoped in `docs/mcp-ui.md`.** The item assumed the answer is text; **MCP Apps** lets a
       tool return a UI resource the host renders. That matters here specifically: the card

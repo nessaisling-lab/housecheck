@@ -464,7 +464,17 @@ fn card_for(
     let (open_violation_details, open_violation_total) =
         model::ViolationDetail::from_open(&violations, &today_iso());
 
+    // Behaviour, not state. Absent rather than zero when the record cannot support the claim —
+    // 84 of the 250 pilot buildings have no closed violations at all, and a bold "0 days" on
+    // those would read as the fastest landlord in Brooklyn.
+    let repair_speed = model::RepairSpeed::classify(
+        store::closed_violation_durations(conn, bbl, model::REPAIR_SPEED_SINCE_YEAR)?,
+        open_violation_total,
+        model::REPAIR_SPEED_SINCE_YEAR,
+    );
+
     Ok(Some(HealthCard {
+        repair_speed,
         open_violations: ViolationCounts::open_from(&violations),
         open_violation_details,
         open_violation_total,

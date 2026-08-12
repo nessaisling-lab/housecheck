@@ -218,6 +218,35 @@ pub fn get_building(conn: &Connection, bbl: &str) -> Result<Option<Building>> {
     }
 }
 
+/// Days from issue to close for this building's recently-closed violations.
+///
+/// Returns the raw durations rather than a median, so the statistic stays in `model` where it
+/// is a pure function and can be tested without a database. This function's only job is to ask
+/// the right rows for them.
+///
+/// `julianday` is SQLite's own date arithmetic over the `YYYY-MM-DD` strings the ingest stores,
+/// so no date parsing happens here. Rows missing either date are excluded by the `<> ''` tests:
+/// measured on the pilot, 21,173 of 21,175 closed violations carry both, so this discards two
+/// rows rather than skewing anything.
+pub fn closed_violation_durations(
+    conn: &Connection,
+    bbl: &str,
+    since_year: i32,
+) -> Result<Vec<i64>> {
+    let cutoff = format!("{since_year:04}-01-01");
+    let mut stmt = conn.prepare(
+        "SELECT CAST(julianday(closed_on) - julianday(issued_on) AS INTEGER)
+           FROM violations
+          WHERE bbl = ?1
+            AND open = 0
+            AND issued_on IS NOT NULL AND issued_on <> ''
+            AND closed_on IS NOT NULL AND closed_on <> ''
+            AND closed_on >= ?2",
+    )?;
+    let rows = stmt.query_map(rusqlite::params![bbl, cutoff], |r| r.get::<_, i64>(0))?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
 pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation>> {
     let mut stmt =
         conn.prepare(

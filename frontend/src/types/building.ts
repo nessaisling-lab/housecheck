@@ -103,6 +103,17 @@ export interface BuildingCard {
   open_violation_details: ViolationDetail[];
   /** Every open violation, so a capped list can say what it is a slice of. */
   open_violation_total: number | null;
+  /**
+   * How long this building's violations actually take to get fixed.
+   *
+   * Three states, and the third is the point: `nothing_closed` means the building has open
+   * violations and has closed none in the window, which is a finding rather than missing data.
+   * Absent entirely means there is genuinely nothing to claim. A client that treats
+   * `nothing_closed` as "no data" would make the worst landlords look emptiest.
+   */
+  repair_speed?:
+    | { kind: "median"; median_days: number; sample: number; since_year: number }
+    | { kind: "nothing_closed"; open: number; since_year: number };
   access_likelihood?: AccessLikelihood | null;
   stabilization?: Stabilization | null;
   stabilization_message?: string | null;

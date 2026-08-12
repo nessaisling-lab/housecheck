@@ -229,6 +229,136 @@ pub struct HealthCard {
     pub open_violation_total: u32,
     pub access_likelihood: String, // "Higher" | "Mixed" | "Lower"
     pub stabilization: Stabilization,
+    /// How long this building's violations actually take to get fixed. `None` when the
+    /// record cannot support the claim — see [`RepairSpeed`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repair_speed: Option<RepairSpeed>,
+}
+
+/// Median days from a violation being issued to it being closed, for one building.
+///
+/// # Why this is the best value-per-effort signal in the project
+///
+/// Every other measure here describes a building's *state*: how many violations are open, how
+/// bad they are, how long they have festered. This is the only one that describes **behaviour**
+/// — whether whoever is responsible for this building fixes things or waits. Two buildings can
+/// show identical open counts while one closes its violations in three weeks and the other in
+/// three years, and a renter deciding whether to sign has no way to tell them apart from a
+/// snapshot.
+///
+/// It costs no landlord participation, no identity verification and no legal exposure: it is
+/// arithmetic over dates HPD already publishes.
+///
+/// # Why it is per building and not per landlord
+///
+/// The sprint specified "per landlord" and **the artifact cannot support that**. There is no
+/// owner column in `buildings` or anywhere else; owner linkage lives in a separate HPD
+/// registration dataset that has never been ingested. Rather than silently compute something
+/// narrower and label it with the word the sprint used, this is named for what it measures.
+/// One landlord's twelve buildings remain twelve unrelated records until that dataset lands.
+///
+/// # Why it carries its own basis
+///
+/// A median with no sample size is a number a reader cannot argue with, and a number nobody
+/// can argue with does not belong on a page that also says "a signal, not a legal ruling".
+/// `sample` and `since_year` travel with it so the figure can never be quoted without them.
+/// # Three states, and the third one is the point
+///
+/// The first version of this returned a median or nothing, and that was wrong in a way the
+/// measurements caught immediately. **603 Putnam Avenue has 33 open violations, has closed one
+/// in its entire record, and that closure was in October 2017.** With two states it rendered as
+/// blank — so the building that fixes nothing showed *no data* while a building that fixes
+/// things in 100 days showed a number, and the worse landlord looked emptier rather than worse.
+///
+/// That is the same defect as "no hazardous violations" printing beside a floor-level score:
+/// an absence that reads as reassurance. It is not rare either — **26 of the 250 pilot
+/// buildings** have five or more open violations and *zero* closures in the window.
+///
+/// So `NothingClosed` is its own answer, exactly as `IntactUnsigned` is its own answer in the
+/// export. Collapsing it into "no data" would be the same mistake in a different file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RepairSpeed {
+    /// Enough closures to state a typical repair time.
+    Median {
+        /// Median days from issue to close. Median rather than mean because the distribution
+        /// is violently skewed — measured on the pilot, one building's closures range from 6
+        /// days to 1,075, and a mean would be dragged around by the tail.
+        median_days: i64,
+        /// How many closed violations the median is computed over. Never below
+        /// [`REPAIR_SPEED_MIN_SAMPLE`].
+        sample: u32,
+        /// Only violations closed on or after 1 January of this year were counted.
+        since_year: i32,
+    },
+    /// Open violations on the record and **nothing closed** in the window. The absence is the
+    /// finding, so it is reported rather than omitted.
+    NothingClosed {
+        /// How many are sitting open, so the statement has a size.
+        open: u32,
+        since_year: i32,
+    },
+}
+
+/// Fewest closed violations a median may be computed from.
+///
+/// A median over one or two closures is noise wearing a number's clothes, and this figure is
+/// meant to be read as a claim about a building's behaviour. Measured on the pilot: at five,
+/// **106 of 250** buildings qualify.
+pub const REPAIR_SPEED_MIN_SAMPLE: u32 = 5;
+
+/// Only count violations closed on or after this year.
+///
+/// **A judgment call, and the measurements are why.** Across the pilot the central tendency is
+/// almost unmoved by the window — median-of-medians is 121 days all-time, 118 since 2023, 119
+/// since 2024 — but the *range* collapses from **0–4,951 days** to **25–1,676**. All-time
+/// includes a building whose median closure is 13.5 years, which is a fact about a dormant
+/// record rather than about anyone managing the place today.
+///
+/// Three years keeps the most buildings (106, against 95 at two years) while discarding the
+/// absurd tail. A tenant lawyer building a pattern-of-neglect argument might legitimately want
+/// all-time; a renter deciding this week wants recent behaviour. This picks the renter.
+pub const REPAIR_SPEED_SINCE_YEAR: i32 = 2023;
+
+impl RepairSpeed {
+    /// Classify a building's repair record.
+    ///
+    /// Takes the durations rather than a connection so the statistic is a pure function that
+    /// can be tested without a database — the same reason `days_open` takes `today` instead of
+    /// reading a clock.
+    ///
+    /// `None` is reserved for buildings that genuinely have nothing to say: too few closures to
+    /// median *and* too few open violations for the silence to mean anything. A building with
+    /// no violations at all is not a slow one.
+    pub fn classify(mut durations: Vec<i64>, open: u32, since_year: i32) -> Option<Self> {
+        // A close date before the issue date is a contradiction in the source, not a fast
+        // repair. Measured on the pilot: zero such rows, so this is a guard rather than a
+        // filter -- but a citywide ingest will meet one eventually, and a negative duration
+        // would pull a median *down*, making a bad building look good.
+        durations.retain(|&d| d >= 0);
+
+        if (durations.len() as u32) >= REPAIR_SPEED_MIN_SAMPLE {
+            durations.sort_unstable();
+            let n = durations.len();
+            // Even-length medians average the middle pair, so "half the repairs took longer
+            // than this" stays true rather than approximately true.
+            let median_days = if n % 2 == 1 {
+                durations[n / 2]
+            } else {
+                (durations[n / 2 - 1] + durations[n / 2]) / 2
+            };
+            return Some(Self::Median { median_days, sample: n as u32, since_year });
+        }
+
+        // Nothing closed, and enough sitting open that the silence is a finding rather than a
+        // small sample. The same threshold as the median's, so one number governs when this
+        // card is willing to make a claim at all.
+        if durations.is_empty() && open >= REPAIR_SPEED_MIN_SAMPLE {
+            return Some(Self::NothingClosed { open, since_year });
+        }
+
+        None
+    }
 }
 
 /// The most detail any one card returns. A building in the pilot has 754 open violations,
@@ -534,5 +664,92 @@ mod tests {
         ];
         let counts = ViolationCounts::open_from(&vs);
         assert_eq!(counts, ViolationCounts { a: 1, b: 0, c: 1 });
+    }
+
+    /// Helper: unwrap a `Median` or fail loudly, so tests read as assertions not matches.
+    fn median_of(durations: Vec<i64>) -> (i64, u32) {
+        match RepairSpeed::classify(durations, 0, 2023) {
+            Some(RepairSpeed::Median { median_days, sample, .. }) => (median_days, sample),
+            other => panic!("expected a median, got {other:?}"),
+        }
+    }
+
+    /// The median must not be dragged by the tail — that is the whole reason it is a median.
+    ///
+    /// Real shape, from pilot building 3016910012: closures of 6, 580 and 1,075 days. A mean
+    /// over this row set is 340 days and describes none of them; the median is 30.
+    #[test]
+    fn one_ancient_closure_does_not_move_the_median() {
+        assert_eq!(median_of(vec![6, 12, 30, 580, 1075]), (30, 5), "a mean would report 340");
+    }
+
+    /// An even-length sample averages the middle pair, so "half took longer" stays exactly true.
+    #[test]
+    fn an_even_sample_averages_the_middle_pair() {
+        assert_eq!(median_of(vec![10, 20, 30, 40, 50, 60]).0, 35);
+    }
+
+    /// A close date before the issue date is a contradiction in the source, not a fast repair.
+    ///
+    /// It matters which way this fails: a negative duration pulls the median **down**, so a
+    /// building that never fixes anything could be made to look responsive by one malformed
+    /// row. Dropping them can only ever make a building look worse, which is the safe
+    /// direction on a page a renter uses to decide.
+    #[test]
+    fn a_closure_dated_before_its_issue_is_discarded_not_counted() {
+        assert_eq!(median_of(vec![-900, 10, 20, 30, 40, 50]), (30, 5));
+    }
+
+    /// **The case that forced the third state.**
+    ///
+    /// 603 Putnam Avenue: 33 open violations, one closure in the entire record, dated October
+    /// 2017. With two states this rendered blank, so the building that fixes nothing looked
+    /// emptier than one that fixes things slowly. The absence is the finding.
+    #[test]
+    fn a_building_that_closes_nothing_says_so_rather_than_going_blank() {
+        match RepairSpeed::classify(vec![], 33, 2023) {
+            Some(RepairSpeed::NothingClosed { open, since_year }) => {
+                assert_eq!(open, 33);
+                assert_eq!(since_year, 2023);
+            }
+            other => panic!("33 open and nothing closed must be reported, got {other:?}"),
+        }
+    }
+
+    /// But silence only means something when there is something to be silent about.
+    #[test]
+    fn a_building_with_almost_no_violations_makes_no_claim() {
+        assert!(RepairSpeed::classify(vec![], 0, 2023).is_none(), "no violations is not slow");
+        assert!(RepairSpeed::classify(vec![], 4, 2023).is_none(), "4 open is too few to judge");
+        assert!(
+            RepairSpeed::classify(vec![10, 20], 100, 2023).is_none(),
+            "some closures but too few to median, and not silent either -- no claim"
+        );
+    }
+
+    /// Below the sample floor there is no median, not a small one.
+    #[test]
+    fn too_few_closures_produce_no_median() {
+        assert!(RepairSpeed::classify(vec![1, 2, 3, 4], 0, 2023).is_none());
+        assert!(matches!(
+            RepairSpeed::classify(vec![1, 2, 3, 4, 5], 0, 2023),
+            Some(RepairSpeed::Median { .. })
+        ));
+    }
+
+    /// The wire shape must distinguish the three states without a client guessing.
+    #[test]
+    fn each_state_is_distinguishable_on_the_wire() {
+        let m = serde_json::to_string(&RepairSpeed::classify(vec![7; 9], 0, 2023)).unwrap();
+        assert!(m.contains(r#""kind":"median""#), "got {m}");
+        assert!(m.contains(r#""sample":9"#));
+
+        let n = serde_json::to_string(&RepairSpeed::classify(vec![], 33, 2023)).unwrap();
+        assert!(n.contains(r#""kind":"nothing_closed""#), "got {n}");
+        assert!(!n.contains("median_days"), "must not imply a duration it does not have");
+
+        // And absent is absent -- HealthCard's skip_serializing_if keeps it off the wire, so a
+        // client can never read a missing history as a fast one.
+        assert_eq!(serde_json::to_string(&RepairSpeed::classify(vec![], 0, 2023)).unwrap(), "null");
     }
 }

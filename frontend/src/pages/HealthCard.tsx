@@ -330,6 +330,7 @@ export default function HealthCard() {
     );
 
   const v = building.open_violations;
+  const repair = building.repair_speed;
   const stabLabel =
     building.stabilization === "likely" ? "Yes" : building.stabilization === "unverified" ? "Unverified" : "No";
   const stabColor =
@@ -719,13 +720,35 @@ export default function HealthCard() {
               { label: "Class C — hazardous", value: v.c ?? "—" },
               { label: "Class B", value: v.b ?? "—" },
               { label: "Open since", value: v.open_since ?? "—" },
+              // Behaviour, beside state. Every other row says what is wrong right now; this
+              // one says whether anyone fixes it. Omitted entirely when the record cannot
+              // support either claim, rather than shown as a dash that reads like a zero.
+              ...(repair
+                ? [
+                    {
+                      label: "Typical repair time",
+                      value:
+                        repair.kind === "median"
+                          ? `${repair.median_days} days`
+                          : "None closed",
+                    },
+                  ]
+                : []),
             ]}
             sentence={
-              v.c === null
-                ? "No violation records came back for this building — treat the condition score as unverified."
-                : v.c > 0
-                  ? "Class C means immediately hazardous — ask what the repair timeline is."
-                  : "No heat complaints on record."
+              // Ordered by what a renter most needs to hear. "Nothing has been fixed in three
+              // years" outranks the class breakdown: a building with no Class C violations and
+              // no repairs is not a safe building, and the old copy would have called it
+              // "No heat complaints on record" and left it there.
+              repair?.kind === "nothing_closed"
+                ? `${repair.open} violations are open and not one has been closed since ${repair.since_year}. The count is not the story — nothing here is being fixed.`
+                : v.c === null
+                  ? "No violation records came back for this building — treat the condition score as unverified."
+                  : repair?.kind === "median"
+                    ? `Violations here are typically closed in ${repair.median_days} days, across ${repair.sample} closed since ${repair.since_year}.${v.c > 0 ? " Class C means immediately hazardous — ask what the repair timeline is." : ""}`
+                    : v.c > 0
+                      ? "Class C means immediately hazardous — ask what the repair timeline is."
+                      : "No heat complaints on record."
             }
             source={{ agency: "NYC HPD", date: dataMonth, href: "https://hpdonline.nyc.gov/hpdonline" }}
             onOpenDetail={() => setDetail("condition")}

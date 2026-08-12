@@ -173,6 +173,9 @@ function normalizeBuilding(raw: any): BuildingCard {
         }))
       : [],
     open_violation_total: numOrNull(raw.open_violation_total),
+    // Passed through rather than reshaped. The server decides which of the three states this
+    // building is in, and re-deriving that here would put the same judgment in two places.
+    repair_speed: raw.repair_speed,
     access_likelihood: raw.access_likelihood ?? null,
     stabilization:
       // Narrowed rather than cast: the union is closed now, so an unrecognised value from a

@@ -6,7 +6,7 @@ not maintained; this is what is actually open.
 **Rule for this file:** every item says *why*, and anything derived rather than measured says so.
 An item with no reason is a wish, not a task.
 
-**Last updated:** 2026-08-11.
+**Last updated:** 2026-08-12.
 
 ---
 
@@ -173,7 +173,7 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       a 70 s client abort, so the server can keep working — and billing — for 80 s after the
       reader has gone.
 - [x] **Five of 250 buildings have an address with no house number, and one is the empty string.**
-      *Fixed for the Rust surfaces `e1f5b8a`; the React frontend still needs the same change.*
+      *Fixed for the Rust surfaces `7d0e414`; the React frontend still needs the same change.*
       Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
       `FULTON STREET`), `3017790022` (`DEKALB AVE`), `3018110070` (`GATES AVENUE`). The empty one
       can never be reached by search — an empty haystack never contains a non-empty needle — and
@@ -190,7 +190,7 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       address does not. Three tests. **The frontend renders the raw address and still shows
       an empty heading for this building.**
 - [x] **HPD ships `0x1A` inside violation text, and it renders as nothing.** *Fixed for the
-      Rust surfaces `e1f5b8a`; the React frontend still needs the same change.*
+      Rust surfaces `7d0e414`; the React frontend still needs the same change.*
       **Re-measured across the whole artifact 2026-08-12 and it is far wider than first
       recorded: 890 occurrences in 169 of 202 description blocks — 84% of covered buildings,
       not one.** Every instance is a possessive: `HPD'S` (640), `AGENCY'S` (158), `TENANTS'`

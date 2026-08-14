@@ -117,9 +117,12 @@ impl HouseCheck {
             Ok(b) => b,
             Err(e) => return format!("Could not read the artifact: {e}"),
         };
+        // Also match on BBL. Five of the 250 have no house number and one has no address
+        // at all, so address matching alone leaves them permanently unreachable -- an
+        // empty haystack never contains a non-empty needle. The identifier always exists.
         let hits: Vec<_> = buildings
             .iter()
-            .filter(|b| b.address.to_lowercase().contains(&needle))
+            .filter(|b| b.address.to_lowercase().contains(&needle) || b.bbl.contains(&needle))
             .take(10)
             .collect();
 
@@ -136,7 +139,13 @@ impl HouseCheck {
 
         let mut out = format!("{} covered building(s) matching \"{query}\":\n", hits.len());
         for b in hits {
-            out.push_str(&format!("- {} · BBL {}\n", b.address, b.bbl));
+            // The BBL is always shown: it is what get_building_card takes, and for the five
+            // buildings with no usable address it is the only handle that exists.
+            out.push_str(&format!(
+                "- {} · BBL {}\n",
+                model::export::display_address(&b.address),
+                b.bbl
+            ));
         }
         out.push_str(&self.provenance());
         out
@@ -172,7 +181,7 @@ impl HouseCheck {
              (condition {}, legal {}, neighborhood {}, accessibility {})\n\
              Open violations: {} class A, {} class B, {} class C ({} total)\n\
              Accessibility likelihood: {}\n",
-            card.building.address,
+            model::export::display_address(&card.building.address),
             card.building.bbl,
             card.building.year_built,
             s.total,

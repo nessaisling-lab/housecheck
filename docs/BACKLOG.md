@@ -172,18 +172,40 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       `MAX_TOOL_ITERATIONS = 5` at a 30 s per-call timeout is a **150 s** server ceiling against
       a 70 s client abort, so the server can keep working — and billing — for 80 s after the
       reader has gone.
-- [ ] **Five of 250 buildings have an address with no house number, and one is the empty string.**
+- [x] **Five of 250 buildings have an address with no house number, and one is the empty string.**
+      *Fixed for the Rust surfaces `e1f5b8a`; the React frontend still needs the same change.*
       Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
       `FULTON STREET`), `3017790022` (`DEKALB AVE`), `3018110070` (`GATES AVENUE`). The empty one
       can never be reached by search — an empty haystack never contains a non-empty needle — and
       renders an empty heading.
-- [ ] **HPD ships `0x1A` inside violation text, and it renders as nothing.** Measured: 6 of 33
-      rows for BBL 3016440063 contain `U+001A` where an apostrophe belongs, so
-      `HPD'S WEBSITE` displays as `HPDS WEBSITE`. **Confirmed identical in HPD's own API** (6 rows
-      in `wvxf-dwi5` for the same block/lot) — our ingest is faithful, this is the city's data.
-      The fix is display-layer only: normalising it at ingest would make the signed bytes stop
-      matching the source, which is the one option that is off the table. A control character in
-      a PDF text stream is not the harmless no-op it is in HTML, so this blocks the PDF work.
+
+      **What fixing it found.** `3015097501` — the unreachable one — has **96 open violations,
+      12 of them Class C (immediately hazardous)**. The worst-documented building in the pilot
+      set was the one nobody could look up. That reframes this from a cosmetic defect to a
+      coverage failure: the search silently excluded the building that most needed finding.
+
+      `model::export::display_address` states the gap rather than rendering blank
+      ("Address not recorded" / "FULTON STREET (no house number on record)"), and the MCP
+      search now also matches on BBL, since the identifier always exists even when the
+      address does not. Three tests. **The frontend renders the raw address and still shows
+      an empty heading for this building.**
+- [x] **HPD ships `0x1A` inside violation text, and it renders as nothing.** *Fixed for the
+      Rust surfaces `e1f5b8a`; the React frontend still needs the same change.*
+      **Re-measured across the whole artifact 2026-08-12 and it is far wider than first
+      recorded: 890 occurrences in 169 of 202 description blocks — 84% of covered buildings,
+      not one.** Every instance is a possessive: `HPD'S` (640), `AGENCY'S` (158), `TENANTS'`
+      (72), `BUILDING'S` (19). Confirmed identical in HPD's own `wvxf-dwi5`, so the ingest is
+      faithful and this is the city's data.
+
+      `model::export::for_display` substitutes the apostrophe and drops other C0 controls
+      (a stray control byte is an invisible no-op in HTML and is not one in a PDF text
+      stream). Applied at the render boundary only — the chain still hashes HPD's bytes
+      exactly as retrieved, because normalising at ingest would convert a faithful record
+      into a tidied one. A test asserts precisely that: the transcript reads `HPD'S` while
+      the stored description keeps `U+001A`. The transcript now says the substitution
+      happened, so a reader comparing it against the JSON is told why one byte per
+      apostrophe differs rather than discovering it and wondering what else was adjusted.
+      **This unblocks the PDF work.**
 
 ---
 

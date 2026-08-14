@@ -273,6 +273,64 @@ fn iso(unix: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// Render HPD's stored text for a human, without touching the bytes a signature covers.
+///
+/// HPD publishes `U+001A` (SUBSTITUTE) where an apostrophe belongs. Measured across the
+/// whole artifact on 2026-08-12: **890 occurrences in 169 of 202 description blocks** — 84%
+/// of covered buildings, not the single building first recorded. Every observed instance is
+/// a possessive: `HPD'S` (640), `AGENCY'S` (158), `TENANTS'` (72), `BUILDING'S` (19).
+/// Confirmed identical in HPD's own `wvxf-dwi5` API, so the ingest is faithful and this is
+/// the city's data.
+///
+/// **Why this is not fixed at ingest.** The chain hashes the description exactly as it was
+/// retrieved. Normalising on the way in would make the signed bytes stop matching the
+/// source, which converts a faithful record into a tidied one — and the entire value of the
+/// export is that it is not tidied. So the substitution happens here, at the boundary where
+/// text is shown to a person, and the transcript says that it happened.
+///
+/// Other C0 control characters are dropped rather than substituted. In HTML a stray control
+/// byte is an invisible no-op; in a PDF text stream it is not, which is why this blocks the
+/// PDF work until it exists.
+/// An address a person can act on, or a statement that there isn't one.
+///
+/// Measured on the live artifact 2026-08-12: **5 of 250 buildings** have an address with no
+/// house number, and `3015097501` has the empty string. PLUTO records the lot; it does not
+/// always record a street number for it.
+///
+/// The empty one rendered as an empty heading — a card with a blank where the building's
+/// name goes, which reads as a rendering bug rather than as missing data. It is also
+/// unreachable by address search, because an empty haystack never contains a non-empty
+/// needle. Both are the same underlying fact and it should be stated, not papered over.
+/// Callers append the BBL themselves — every surface that shows an address already shows
+/// the identifier next to it, and folding it in here produced "· BBL x · BBL x".
+pub fn display_address(address: &str) -> std::borrow::Cow<'_, str> {
+    let a = address.trim();
+    if a.is_empty() {
+        std::borrow::Cow::Borrowed("Address not recorded")
+    } else if !a.starts_with(|c: char| c.is_ascii_digit()) {
+        // A street with no number: real, locatable to a block, not to a door.
+        std::borrow::Cow::Owned(format!("{a} (no house number on record)"))
+    } else {
+        std::borrow::Cow::Borrowed(a)
+    }
+}
+
+pub fn for_display(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s.bytes().any(|b| b < 0x20 && b != b'\t' && b != b'\n') {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\u{1A}' => out.push('\''),
+            '\t' | '\n' => out.push(ch),
+            c if (c as u32) < 0x20 => {}
+            c => out.push(c),
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 impl ExportDocument {
     /// A transcript for pasting into a filing.
     ///
@@ -313,7 +371,10 @@ impl ExportDocument {
                 r.class,
                 r.issued_on.as_deref().unwrap_or("date not recorded"),
                 age,
-                r.description.as_deref().unwrap_or("(HPD recorded no description)")
+                r.description
+                    .as_deref()
+                    .map(for_display)
+                    .unwrap_or(std::borrow::Cow::Borrowed("(HPD recorded no description)"))
             ));
         }
         if (self.rows.len() as u32) < self.open_violation_total {
@@ -324,6 +385,25 @@ impl ExportDocument {
                 self.rows.len(),
                 self.open_violation_total
             ));
+        }
+
+        // Say it when it happened, and only then. A reader comparing this transcript with
+        // the JSON will find one byte per apostrophe that does not match, and the honest
+        // move is to tell them why rather than let them discover it and wonder what else
+        // was quietly adjusted.
+        if self
+            .rows
+            .iter()
+            .filter_map(|r| r.description.as_deref())
+            .any(|d| d.contains('\u{1A}'))
+        {
+            out.push_str(
+                "
+  Note: HPD publishes a control character where an apostrophe belongs. It is shown
+  above as an apostrophe. The signed document keeps HPD's bytes exactly as retrieved,
+  so this transcript and the JSON differ by that one character per occurrence.
+",
+            );
         }
 
         out.push_str("
@@ -589,6 +669,81 @@ mod tests {
     fn the_chain_is_deterministic() {
         assert_eq!(doc().chain_head, doc().chain_head);
         assert_eq!(doc().rows[0].entry_hash, doc().rows[0].entry_hash);
+    }
+
+    /// HPD's substitute character stands in for an apostrophe. Measured 2026-08-12: 890
+    /// occurrences across 169 of 202 description blocks.
+    #[test]
+    fn hpds_control_character_renders_as_the_apostrophe_it_stands_for() {
+        assert_eq!(for_display("DESCRIBED ON HPD\u{1A}S WEBSITE"), "DESCRIBED ON HPD'S WEBSITE");
+        assert_eq!(for_display("THE AGENCY\u{1A}S HOUSING INFO"), "THE AGENCY'S HOUSING INFO");
+    }
+
+    /// Measured on the artifact 2026-08-12: 5 of 250 have no house number, and
+    /// `3015097501` has the empty string, which rendered as an empty heading.
+    #[test]
+    fn a_building_with_no_address_says_so_rather_than_rendering_blank() {
+        assert_eq!(
+            display_address(""), "Address not recorded"
+        );
+    }
+
+    /// A street with no number is real and locatable to a block, not to a door. Saying
+    /// "FULTON STREET" alone would imply a precision the record does not have.
+    #[test]
+    fn a_street_without_a_number_is_labelled_rather_than_shown_bare() {
+        assert_eq!(
+            display_address("FULTON STREET"), "FULTON STREET (no house number on record)"
+        );
+    }
+
+    #[test]
+    fn a_normal_address_passes_through_untouched() {
+        assert_eq!(display_address("603 PUTNAM AVENUE"), "603 PUTNAM AVENUE");
+    }
+
+    /// A stray control byte is an invisible no-op in HTML and is not one in a PDF text
+    /// stream, which is why it is removed rather than passed through.
+    #[test]
+    fn other_control_characters_are_dropped_but_tabs_and_newlines_survive() {
+        assert_eq!(for_display("A\u{0}B\u{7}C"), "ABC");
+        assert_eq!(for_display("A\tB\nC"), "A\tB\nC");
+    }
+
+    /// The common case must not allocate — 33 of 202 blocks are already clean.
+    #[test]
+    fn clean_text_is_borrowed_rather_than_copied() {
+        assert!(matches!(
+            for_display("MEND THE BROKEN PLASTERED SURFACES"),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
+
+    /// **The constraint this whole fix exists under.** Display cleaning must never reach
+    /// the bytes a signature covers, or a faithful record silently becomes a tidied one.
+    #[test]
+    fn cleaning_for_display_does_not_change_what_was_signed() {
+        let mut d = doc();
+        d.rows[0].description = Some("DESCRIBED ON HPD\u{1A}S WEBSITE".into());
+        let rebuilt = ExportDocument::build(
+            &building(),
+            &[ViolationDetail {
+                class: d.rows[0].class.clone(),
+                description: Some("DESCRIBED ON HPD\u{1A}S WEBSITE".into()),
+                issued_on: d.rows[0].issued_on.clone(),
+                days_open: d.rows[0].days_open,
+            }],
+            1,
+            vec![],
+            0,
+        );
+        let transcript = rebuilt.to_plain_text();
+        assert!(transcript.contains("HPD'S WEBSITE"), "transcript should read cleanly");
+        assert!(
+            rebuilt.rows[0].description.as_deref().unwrap().contains('\u{1A}'),
+            "the stored description must keep HPD's byte"
+        );
+        assert!(transcript.contains("keeps HPD's bytes exactly as retrieved"));
     }
 
     /// An empty record still has a well-defined head, so a building with nothing open

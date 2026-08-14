@@ -11,6 +11,7 @@ import { useAgent } from "@/lib/agent-context";
 import { bandMeta, fmtDistance, fmtMoney, fmtPct, pctToPosition, scoreWash } from "@/lib/score";
 import { store, useIsSaved, useOnboarding, useTray, type Priority } from "@/lib/store";
 import type { BuildingCard as Building, DataSource, RentFairnessResult } from "@/types/building";
+import { displayAddress, forDisplay } from "@/lib/display";
 
 /**
  * Shown only until `GET /meta` answers, and only if it never does.
@@ -408,7 +409,9 @@ export default function HealthCard() {
                       className="mt-1 text-[0.875rem] leading-relaxed"
                       style={{ color: "var(--hc-ink-2)" }}
                     >
-                      {d.description ?? "HPD recorded no description for this violation."}
+                      {d.description
+                        ? forDisplay(d.description)
+                        : "HPD recorded no description for this violation."}
                     </p>
                   </li>
                 ))}
@@ -541,7 +544,7 @@ export default function HealthCard() {
         <header className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight" style={{ color: "var(--hc-canvas-ink)" }}>
-              {building.address}
+              {displayAddress(building.address)}
             </h1>
             <p className="mt-0.5 text-[0.8125rem]" style={{ color: "var(--hc-canvas-ink-3)" }}>
               {building.neighborhood ?? "Bedford-Stuyvesant"} · BBL {building.bbl}

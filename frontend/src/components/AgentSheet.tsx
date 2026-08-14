@@ -5,6 +5,7 @@ import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
 import { getSummary, sendChat, type ChatTurn } from "@/lib/api";
 import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
+import { displayAddress } from "@/lib/display";
 
 // ── Markdown rendering for agent replies (spec: SPEC-agent-readability) ──
 // Emits real headings/lists/strong so replies are scannable AND screen-reader
@@ -187,7 +188,7 @@ function answerChip(
   if (chip === CHIPS[0]) {
     return {
       role: "agent",
-      text: `${b.address} scores ${b.score ?? "—"} — ${band.label}. The total is a plain average of four equal pillars: condition ${b.sub_scores.condition ?? "—"}, legal ${b.sub_scores.legal ?? "—"}, neighborhood ${b.sub_scores.neighborhood ?? "—"}, accessibility ${b.sub_scores.accessibility ?? "—"}. The weakest pillar is where to dig first.`,
+      text: `${displayAddress(b.address)} scores ${b.score ?? "—"} — ${band.label}. The total is a plain average of four equal pillars: condition ${b.sub_scores.condition ?? "—"}, legal ${b.sub_scores.legal ?? "—"}, neighborhood ${b.sub_scores.neighborhood ?? "—"}, accessibility ${b.sub_scores.accessibility ?? "—"}. The weakest pillar is where to dig first.`,
       source: "Source: HouseCheck methodology · equal pillar weights",
     };
   }
@@ -302,7 +303,7 @@ export function AgentSheet() {
     const when = new Date();
     const head = [
       "HouseCheck — saved conversation",
-      building ? `Building: ${building.address} (BBL ${building.bbl})` : "No building selected",
+      building ? `Building: ${displayAddress(building.address)} (BBL ${building.bbl})` : "No building selected",
       `Saved: ${when.toISOString().slice(0, 16).replace("T", " ")}`,
       "",
       "This is a transcript of an assistant conversation. It is not legal advice, and the",
@@ -519,7 +520,7 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
               <circle cx="11" cy="11" r="7" />
               <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
             </svg>
-            Asking about {building.address}
+            Asking about {displayAddress(building.address)}
           </span>
         </div>
       )}

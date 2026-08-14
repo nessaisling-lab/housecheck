@@ -5,6 +5,7 @@ import { compareBuildings, rankByPriorities, type RankedBuilding } from "@/lib/a
 import { fmtDistance } from "@/lib/score";
 import { store, useOnboarding, useTray } from "@/lib/store";
 import type { BuildingCard } from "@/types/building";
+import { displayAddress } from "@/lib/display";
 
 interface RowDef {
   label: string;
@@ -259,7 +260,7 @@ export default function Compare() {
                       onClick={() => {
                         store.removeFromTray(c.bbl);
                       }}
-                      aria-label={`Remove ${c.address} from compare`}
+                      aria-label={`Remove ${displayAddress(c.address)} from compare`}
                       className="absolute -top-1 right-0 p-1"
                       style={{ color: "var(--hc-canvas-ink-3)" }}
                     >
@@ -270,7 +271,7 @@ export default function Compare() {
                     <button onClick={() => navigate(`/building/${c.bbl}`)} className="flex flex-col items-center gap-1.5">
                       <MiniRing score={c.score} size={52} stroke={6} />
                       <span className="max-w-[84px] text-center text-[0.75rem] font-medium leading-tight" style={{ color: "var(--hc-canvas-ink)" }}>
-                        {c.address}
+                        {displayAddress(c.address)}
                       </span>
                     </button>
                   </th>

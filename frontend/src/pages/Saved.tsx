@@ -2,6 +2,7 @@ import { useNavigate } from "react-router";
 import { MiniRing } from "@/components/ScoreRing";
 import { bandMeta } from "@/lib/score";
 import { store, useRecents, useSaved, useTray } from "@/lib/store";
+import { displayAddress } from "@/lib/display";
 
 function Row({
   bbl,
@@ -71,7 +72,7 @@ export default function Saved() {
           <Row
             key={r.bbl}
             bbl={r.bbl}
-            address={r.address}
+            address={displayAddress(r.address)}
             score={r.score}
             saved={store.isSaved(r.bbl)}
             onToggleSave={() => store.toggleSave(r)}
@@ -92,7 +93,7 @@ export default function Saved() {
           <Row
             key={r.bbl}
             bbl={r.bbl}
-            address={r.address}
+            address={displayAddress(r.address)}
             score={r.score}
             saved
             onToggleSave={() => {

@@ -17,6 +17,7 @@ import {
   type TextSize,
 } from "@/lib/store";
 import type { BuildingSummary, DataSource } from "@/types/building";
+import { displayAddress } from "@/lib/display";
 
 const SIZES = Object.keys(TEXT_SCALE) as TextSize[];
 
@@ -304,7 +305,7 @@ export default function More() {
               >
                 <MiniRing score={b.score} size={36} stroke={4.5} />
                 <span className="flex-1 text-[0.9375rem] font-medium" style={{ color: "var(--hc-ink)" }}>
-                  {b.address}
+                  {displayAddress(b.address)}
                 </span>
                 <span className="text-[0.9375rem] font-semibold tabular-nums" style={{ color: scoreCircleColor(b.score) }}>
                   {b.score ?? "—"}

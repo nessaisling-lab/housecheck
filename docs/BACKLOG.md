@@ -189,8 +189,9 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       search now also matches on BBL, since the identifier always exists even when the
       address does not. Three tests. Frontend fixed in `ff153d6`: verified in a browser that the heading now reads
       "Address not recorded" instead of nothing.
-- [x] **HPD ships `0x1A` inside violation text, and it renders as nothing.** *Fixed for the
-      Rust surfaces `7d0e414`; the React frontend still needs the same change.*
+- [x] **HPD ships `0x1A` inside violation text, and it renders as nothing.** *Fixed `7d0e414`
+      (Rust) and `ff153d6` (frontend).* Verified in a browser on BBL 3019380001: the card
+      renders `DESCRIBED ON HPD'S WEBSITE` with zero substitute characters on the page.
       **Re-measured across the whole artifact 2026-08-12 and it is far wider than first
       recorded: 890 occurrences in 169 of 202 description blocks — 84% of covered buildings,
       not one.** Every instance is a possessive: `HPD'S` (640), `AGENCY'S` (158), `TENANTS'`

@@ -844,39 +844,84 @@ fn normalize_address(s: &str) -> String {
         .join(" ")
 }
 
-/// Buildings we hold whose address matches `query`, best match first.
+/// The query read as a BBL, if it is one.
+///
+/// A BBL is ten digits — borough, block, lot. Six is borough + block, the shortest prefix that
+/// still names a specific block rather than a numeric coincidence. Below that, `603` would match
+/// every BBL containing those digits and bury the answer to `603 Putnam Avenue` under them, so a
+/// short number stays an address query. A house number is not an identifier.
+fn bbl_needle(query: &str) -> Option<&str> {
+    let q = query.trim();
+    (q.len() >= 6 && q.len() <= 10 && q.bytes().all(|b| b.is_ascii_digit())).then_some(q)
+}
+
+/// Buildings we hold whose address or BBL matches `query`, best match first.
 ///
 /// Ranked exact > prefix > substring, so typing a full address lands on that
 /// building rather than on whichever of its neighbours sorts first.
+///
+/// **Matching the BBL is coverage, not convenience.** Five of the 250 buildings have no house
+/// number and `3015097501` has no address at all, so address matching alone leaves them
+/// permanently unreachable — an empty haystack never contains a non-empty needle. That building
+/// has **96 open violations, 12 of them Class C**, which made the worst-documented building in
+/// the pilot set the only one nobody could look up. `crates/mcp` gained BBL matching in
+/// `7d0e414`; this path — the one the website uses — did not, so an agent could find it and a
+/// tenant could not. Measured against production 2026-08-15: `/search?address=3015097501`
+/// returned **404**. The identifier always exists, so it is the one way in.
+///
+/// Labels come from `display_address` for the same reason the card uses it. Live, this endpoint
+/// returned `3016840001` and `3017030009` as two rows both reading `FULTON STREET` in the same
+/// borough — nothing for a reader to choose between, and a different answer than the card gave
+/// for the same building.
 fn search_curated(
     conn: &rusqlite::Connection,
     query: &str,
     limit: usize,
 ) -> anyhow::Result<Vec<SearchResult>> {
     let needle = normalize_address(query);
-    if needle.is_empty() {
+    let bbl_q = bbl_needle(query);
+    if needle.is_empty() && bbl_q.is_none() {
         return Ok(Vec::new());
     }
     let mut scored: Vec<(u8, String, SearchResult)> = get_all_buildings(conn)?
         .into_iter()
         .filter_map(|b| {
             let hay = normalize_address(&b.address);
-            let rank = if hay == needle {
-                0
+            // The emptiness guard is load-bearing: `"anything".contains("")` is true, so an
+            // empty needle would match every row rather than none.
+            let by_address = if needle.is_empty() {
+                None
+            } else if hay == needle {
+                Some(0)
             } else if hay.starts_with(&needle) {
-                1
+                Some(1)
             } else if hay.contains(&needle) {
-                2
+                Some(2)
             } else {
-                return None;
+                None
+            };
+            let by_bbl = bbl_q.and_then(|q| {
+                if b.bbl == q {
+                    Some(0)
+                } else if b.bbl.starts_with(q) {
+                    Some(1)
+                } else {
+                    None
+                }
+            });
+            let rank = match (by_address, by_bbl) {
+                (Some(a), Some(b)) => a.min(b),
+                (Some(a), None) => a,
+                (None, Some(b)) => b,
+                (None, None) => return None,
             };
             Some((
                 rank,
                 hay,
                 SearchResult {
                     borough: borough_of_bbl(&b.bbl),
+                    label: model::export::display_address(&b.address).into_owned(),
                     bbl: b.bbl,
-                    label: b.address,
                     in_curated_set: true,
                 },
             ))
@@ -3340,6 +3385,96 @@ mod tests {
             hits.first().map(|h| h.bbl.as_str()),
             Some("3000020002"),
             "the building whose address matches exactly comes first"
+        );
+    }
+
+    /// Insert one building shaped like the defect, without touching the shared fixture — the
+    /// existing search tests assert exact hit counts and a new row in `insert_fixture` would
+    /// silently move them.
+    fn insert_building(conn: &rusqlite::Connection, bbl: &str, address: &str) {
+        conn.execute(
+            "INSERT INTO buildings
+               (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,
+                good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,
+                restaurant_grade,rent_stab_units)
+             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,0,NULL,0,NULL,NULL,NULL,NULL)",
+            rusqlite::params![bbl, address],
+        )
+        .unwrap();
+    }
+
+    /// The coverage failure, in one test.
+    ///
+    /// `3015097501` on the live artifact has no address and **96 open violations, 12 of them
+    /// Class C**. No address query can reach it, so the worst-documented building in the pilot
+    /// set was the only one nobody could look up. `crates/mcp` was fixed in `7d0e414` and this
+    /// path was not, so an agent could find that building and a tenant could not.
+    #[test]
+    fn a_building_with_no_address_is_reachable_by_its_bbl() {
+        let state = AppState::in_memory_fixture().unwrap();
+        let conn = state.conn.lock().unwrap();
+        insert_building(&conn, "3000030003", "");
+
+        // Not a bug in the query. There is genuinely nothing to match against.
+        assert!(
+            search_curated(&conn, "3 Fixture Ave", 8).unwrap().is_empty(),
+            "an empty haystack never contains a non-empty needle"
+        );
+
+        let hits = search_curated(&conn, "3000030003", 8).unwrap();
+        assert_eq!(
+            hits.iter().map(|h| h.bbl.as_str()).collect::<Vec<_>>(),
+            ["3000030003"],
+            "the identifier always exists, so it is the one way in"
+        );
+        assert_eq!(
+            hits[0].label, "Address not recorded",
+            "the row states the gap rather than rendering blank"
+        );
+    }
+
+    /// Live, `/search?address=FULTON%20STREET` returned `3016840001` and `3017030009` as two
+    /// rows both reading `FULTON STREET`, same borough — nothing to choose between, and a
+    /// different answer than the card gave for the same building.
+    #[test]
+    fn a_street_without_a_house_number_says_so_in_the_result() {
+        let state = AppState::in_memory_fixture().unwrap();
+        let conn = state.conn.lock().unwrap();
+        insert_building(&conn, "3000040004", "GATES AVENUE");
+
+        let hits = search_curated(&conn, "Gates Avenue", 8).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(
+            hits[0].label, "GATES AVENUE (no house number on record)",
+            "the search box and the card must not disagree about the same building"
+        );
+    }
+
+    /// A house number is not an identifier, and `603` is the prefix of a real address query.
+    #[test]
+    fn only_a_bbl_shaped_number_is_read_as_a_bbl() {
+        assert_eq!(bbl_needle("3015097501"), Some("3015097501"));
+        assert_eq!(bbl_needle("  3015097501  "), Some("3015097501"));
+        assert_eq!(
+            bbl_needle("301509"),
+            Some("301509"),
+            "borough + block still names a specific block"
+        );
+        assert_eq!(bbl_needle("603"), None, "a house number is not an identifier");
+        assert_eq!(bbl_needle("603 Putnam Avenue"), None);
+        assert_eq!(bbl_needle("30150975012"), None, "eleven digits is not a BBL");
+    }
+
+    /// Adding a second way to match must not let a BBL query outrank the address a reader typed.
+    #[test]
+    fn an_address_query_is_unaffected_by_bbl_matching() {
+        let state = AppState::in_memory_fixture().unwrap();
+        let conn = state.conn.lock().unwrap();
+        let hits = search_curated(&conn, "Fixture Ave", 8).unwrap();
+        assert_eq!(hits.len(), 2, "both fixtures still sit on Fixture Ave");
+        assert_eq!(
+            hits[0].label, "1 Fixture Ave, Brooklyn",
+            "an address that has a house number is passed through unchanged"
         );
     }
 

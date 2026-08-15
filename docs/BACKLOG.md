@@ -149,6 +149,11 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       a regression. It is also the strongest argument for streaming: a response that emits its
       first token in ~3 s never trips a no-response timeout, so streaming converts this entire
       hard-failure class into a slow-but-successful answer.
+      **Written, not live.** Streaming shipped in `f13845c` + `9f09757` on `main`. Measured
+      against production 2026-08-15: `GET /agent/chat/stream` returns **404** while
+      `/agent/chat` returns 405, so the deployed image predates the work. Blocked on
+      `flyctl deploy --app housecheck-nessa`, which only the Fly owner account can run — the
+      same lag this section's first entry recorded.
 - [ ] **The agent takes 25-67 seconds on the questions people actually ask, and shows nothing
       while it works.** Measured on production 2026-08-11. The cause is not a slow model — it is
       the sequential tool loop, and the citation count is a clean proxy for how many rounds ran
@@ -172,6 +177,12 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       `MAX_TOOL_ITERATIONS = 5` at a 30 s per-call timeout is a **150 s** server ceiling against
       a 70 s client abort, so the server can keep working — and billing — for 80 s after the
       reader has gone.
+      **Both halves are written.** The deadlines are aligned: `AGENT_TOTAL_BUDGET_SECS` is the
+      binding cap with `MAX_TOOL_ITERATIONS` demoted to a backstop, and a test parses
+      `LLM_TIMEOUT_MS` out of `frontend/src/lib/api.ts` so the coupling cannot drift silently.
+      Streaming landed in `f13845c` + `9f09757`, measured end-to-end at **0.9 s to first token,
+      7.8 s total**. Neither is live — see the deploy note above. **Re-measure the five
+      questions in the table after deploying and close this on the numbers, not on the diff.**
 - [x] **Five of 250 buildings have an address with no house number, and one is the empty string.**
       *Fixed `7d0e414` (Rust) and `ff153d6` (frontend).*
       Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
@@ -353,12 +364,18 @@ rely on it", and several are accessibility issues rather than features.
 
 ## Known defects and stated limitations
 
-- [ ] **A count without its meaning can be read backwards.**
+- [x] **A count without its meaning can be read backwards.** *Confirmed closed 2026-08-15 —
+      this box was stale, its own text already said so.*
       `603 Putnam Avenue` scores `condition 0` with 11 Class A, 22 Class B and **zero** Class C,
       so the card reads "no hazardous violations" next to a floor-level score. Both numbers are
       correct; the sentence reconciling them — *33 open violations, none of them Class C* — cannot
       be rendered because descriptions are not ingested. **Closed by the MVP above.** The deck now
       explains it in the interim.
+
+      Verified on production `GET /building/3016440063`: the card carries
+      `open_violation_total: 33` next to `open_violations {a: 11, b: 22, c: 0}`, and
+      `open_violation_details` renders each notice in HPD's own words. The reconciling number
+      is on the card, so the count can no longer be read alone.
 - [ ] **Class I violations excluded.** 753 records skipped on the curated set. Stated on the card
       and in `/meta`, but not scored.
 - [ ] **Multi-source ingest and weekly self-refresh.** See `design/database-layer.md` addendum 2.
@@ -392,9 +409,27 @@ rely on it", and several are accessibility issues rather than features.
 - [ ] **Put borough in the index key.** 30,035 of 858,602 PLUTO lots (**3.5%**) share an address
       string with another lot. Substring matching compounds it — `FULTON STREET` matches every
       building on Fulton Street in every borough.
-- [ ] **Treat an address with no house number as unresolvable.** Already biting at 250 buildings:
-      our curated set has 250 buildings and **249** distinct addresses, because `FULTON STREET`
-      appears twice against two different BBLs. PLUTO's address field is sometimes just a street.
+- [x] **Treat an address with no house number as unresolvable.** *Resolved 2026-08-15 — and the
+      prescription in this box was wrong.* Already biting at 250 buildings: our curated set has
+      250 buildings and **249** distinct addresses, because `FULTON STREET` appears twice against
+      two different BBLs. PLUTO's address field is sometimes just a street.
+
+      **Making them unresolvable would have deleted coverage.** Measured live,
+      `/search?address=FULTON%20STREET` returned `3016840001` and `3017030009` as two rows both
+      reading `FULTON STREET`, same borough. The defect is that a reader cannot tell them apart
+      — not that the rows should be withheld. Both are real buildings with real violations, and
+      hiding them repeats the failure the empty-address bug already taught. What shipped instead:
+      search labels come from `model::export::display_address`, so a row reads
+      `FULTON STREET (no house number on record)` — the same string the card shows.
+
+      **Fixing it found the unfinished half of `7d0e414`.** That commit added BBL matching to
+      `crates/mcp` only. `search_curated` — the path the website uses — never got it, so measured
+      against production 2026-08-15 `/search?address=3015097501` returned **404**. The building
+      with **96 open violations, 12 of them Class C** was findable by an agent and not by a
+      tenant, which is the same coverage failure as before wearing a different surface.
+      `search_curated` now also matches a BBL-shaped query: six to ten digits, so a house number
+      like `603` stays an address search rather than colliding with every BBL containing it.
+      Four tests, each confirmed to fail when the fix is mutated out.
 - [ ] **Verify the Property Address Directory (`bc8t-ecyu`).** PLUTO holds one address per lot, so
       corner buildings and alternate entrances will never match what a user types. PAD is the
       authoritative all-addresses-per-BBL source, but it did not respond on the Socrata tabular

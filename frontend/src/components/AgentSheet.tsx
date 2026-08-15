@@ -3,7 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
-import { getSummary, sendChat, type ChatTurn } from "@/lib/api";
+import { getSummary, streamChat, type ChatTurn } from "@/lib/api";
 import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
 import { displayAddress } from "@/lib/display";
 
@@ -255,6 +255,10 @@ export function AgentSheet() {
   const [copiedAt, setCopiedAt] = useState<number | null>(null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Progress line while a streamed answer is still arriving; null once text starts. */
+  const [status, setStatus] = useState<string | null>(null);
+  /** Lets a closing sheet abort an in-flight stream instead of writing into a dead view. */
+  const abort = useRef<AbortController | null>(null);
 
   /**
    * Copy one answer.
@@ -434,6 +438,11 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
       return;
     }
 
+    // One controller per send, so closing the sheet mid-answer stops the stream rather
+    // than leaving it writing into a view nobody is looking at — and still billing.
+    abort.current?.abort();
+    abort.current = new AbortController();
+
     // Send the conversation so far so the agent can follow up. The server keeps only the
     // most recent turns; sending the whole thread lets it decide what to keep.
     const history: ChatTurn[] = [...msgs, userMsg]
@@ -441,18 +450,51 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
       .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
 
     try {
-      const { answer, citations } = await sendChat(building.bbl, history);
-      setMsgs((m) => [
-        ...m,
+      // Stream it. The measured problem was never that the model is slow — one round
+      // trip is 3-6 s — but that the questions people actually ask trigger tool rounds,
+      // and those showed nothing for 25-67 s. An empty bubble is indistinguishable from
+      // a broken app, so the bubble is created first and filled as text arrives.
+      let placed = false;
+      const { answer, citations } = await streamChat(
+        building.bbl,
+        history,
         {
-          role: "agent",
-          text: answer,
-          // Render the sources the server says actually fed the answer, rather than a
-          // hardcoded line — the same honesty rule the rest of the app follows.
-          source: citations.length ? `Source: ${citations.join(" · ")}` : undefined,
+          onStatus: (s) => setStatus(s),
+          onToken: (t) =>
+            setMsgs((m) => {
+              if (!placed) {
+                placed = true;
+                setStatus(null); // the answer itself is now the progress indicator
+                return [...m, { role: "agent", text: t }];
+              }
+              const next = [...m];
+              const last = next[next.length - 1];
+              next[next.length - 1] = { ...last, text: last.text + t };
+              return next;
+            }),
         },
-      ]);
+        abort.current?.signal
+      );
+      setStatus(null);
+      setMsgs((m) => {
+        const next = [...m];
+        const src = citations.length ? `Source: ${citations.join(" · ")}` : undefined;
+        // Replace the streamed bubble with the settled answer. The text should already
+        // match; assigning it means a dropped frame cannot leave a truncated answer on
+        // screen looking complete.
+        if (placed) next[next.length - 1] = { role: "agent", text: answer, source: src };
+        else next.push({ role: "agent", text: answer, source: src });
+        return next;
+      });
     } catch {
+      setStatus(null);
+      // Drop a partial bubble rather than leave half an answer standing. A sentence that
+      // stops mid-clause reads as an answer, and this is a page about someone's housing.
+      setMsgs((m) =>
+        m.length && m[m.length - 1].role === "agent" && !m[m.length - 1].source
+          ? m.slice(0, -1)
+          : m
+      );
       // Say the question went unanswered *before* offering what we can still say.
       //
       // This used to push `offlineAnswer(t)` alone, which for a typed question falls through
@@ -475,8 +517,19 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
       ]);
     } finally {
       setBusy(false);
+      setStatus(null);
     }
   };
+
+  // A closing sheet must not leave a stream running: the answer would arrive for nobody
+  // and still be paid for. Aborting settles `send`, whose `finally` clears the status —
+  // so no setState happens in here, which is the rule and also the simpler design.
+  useEffect(() => {
+    if (!open) {
+      abort.current?.abort();
+      abort.current = null;
+    }
+  }, [open]);
 
   return (
     <Sheet open={open} onClose={closeAgent} labelledBy="agent-title">
@@ -587,13 +640,23 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
         )}
         {busy && (
           <div
-            className="inline-block rounded-2xl px-3.5 py-1.5"
+            className="inline-flex items-center gap-2 rounded-2xl px-3.5 py-1.5"
             style={{ background: "#48484A", boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}
             // aria-busy on the log already reports the wait; announcing the
-            // dots as well would say it twice.
-            aria-hidden
+            // dots as well would say it twice. The status text is the exception —
+            // "Looking up the housing law…" is information, not decoration, so it
+            // is the one part a screen reader should hear.
+            aria-hidden={status ? undefined : true}
           >
             <Typing />
+            {status && (
+              // Naming the step is the whole point: twelve seconds of "Finding free
+              // legal help…" is a wait someone will sit through; twelve seconds of
+              // three dots is a product that looks broken.
+              <span className="text-[0.8125rem]" style={{ color: "var(--hc-ink-3)" }}>
+                {status}
+              </span>
+            )}
           </div>
         )}
       </div>

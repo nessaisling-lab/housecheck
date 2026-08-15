@@ -369,6 +369,114 @@ export async function sendChat(bbl: string, messages: ChatTurn[]): Promise<ChatR
   return { answer, citations: raw.citations ?? [] };
 }
 
+/** What the caller is told while the answer is being produced. */
+export interface ChatStreamHandlers {
+  /** Progress in words — "Looking up the housing law…". Replaces the previous line. */
+  onStatus?: (text: string) => void;
+  /** Answer text, in order. Append; never replace. */
+  onToken?: (text: string) => void;
+}
+
+/**
+ * The same grounded answer as {@link sendChat}, streamed (POST /agent/chat/stream).
+ *
+ * # Why
+ *
+ * Measured on production 2026-08-11, the questions a tenant actually asks are the ones
+ * that trigger tool rounds, and those took **25–67 s showing nothing at all**. A single
+ * round trip is 3–6 s, so the model was never the problem — the blank was. Locally, first
+ * token now arrives at **0.9 s** against 7.2 s for the non-streaming path.
+ *
+ * Uses `fetch` + a reader rather than `EventSource`, because the request is a POST with a
+ * JSON body and `EventSource` can only issue GETs.
+ *
+ * **Failure is stated, never silent.** A `status` code before the stream opens throws like
+ * any other call; an `error` event mid-stream rejects with what it said. The caller's
+ * existing fallback to canned answers then applies unchanged — a fabricated agent answer is
+ * the one thing this product must not produce.
+ */
+export async function streamChat(
+  bbl: string,
+  messages: ChatTurn[],
+  handlers: ChatStreamHandlers = {},
+  signal?: AbortSignal
+): Promise<ChatReply> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), LLM_TIMEOUT_MS);
+  // Honour a caller's own abort (the sheet closing) as well as the timeout.
+  signal?.addEventListener("abort", () => ctl.abort(), { once: true });
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/agent/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bbl, messages }),
+      signal: ctl.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    throw new ApiError(e instanceof Error ? e.message : "agent stream failed");
+  }
+  if (!res.ok || !res.body) {
+    clearTimeout(timer);
+    throw new ApiError(`agent stream failed (${res.status})`, res.status);
+  }
+
+  const reader = res.body.getReader();
+  const decode = new TextDecoder();
+  let buf = "";
+  let answer = "";
+  let citations: string[] = [];
+  let failure: string | null = null;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decode.decode(value, { stream: true });
+
+      // Frames are separated by a blank line and may straddle chunk boundaries, so only
+      // whole frames are consumed and the remainder stays buffered.
+      let cut: number;
+      while ((cut = buf.indexOf("\n\n")) !== -1) {
+        const frame = buf.slice(0, cut);
+        buf = buf.slice(cut + 2);
+
+        let event = "message";
+        // A single event may carry several `data:` lines; the spec joins them with "\n",
+        // and the answer relies on that — blank lines inside markdown arrive this way.
+        const data: string[] = [];
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
+        }
+        const payload = data.join("\n");
+
+        if (event === "status") handlers.onStatus?.(payload);
+        else if (event === "token") {
+          answer += payload;
+          handlers.onToken?.(payload);
+        } else if (event === "done") {
+          try {
+            citations = JSON.parse(payload).citations ?? [];
+          } catch {
+            citations = [];
+          }
+        } else if (event === "error") failure = payload;
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    reader.releaseLock();
+  }
+
+  if (failure) throw new ApiError(failure);
+  answer = answer.trim();
+  if (!answer) throw new ApiError("Empty agent answer");
+  return { answer, citations };
+}
+
 export interface RankedBuilding {
   bbl: string;
   address: string;

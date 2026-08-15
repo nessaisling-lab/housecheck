@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'src/components/ui']),
+  // `src/components/ui` used to be excluded here: 53 unlinted shadcn files nothing imported.
+  // They are gone, so every file under src/ is now linted — which is the point of removing them.
+  globalIgnores(['dist']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

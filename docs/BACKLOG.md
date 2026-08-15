@@ -140,7 +140,8 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       hard-fail. At a 7.9 s worst case, neither holds. Re-open only if measurements move.
       **Bonus:** the model is now paid, so OpenRouter no longer logs prompts — the privacy
       caveat in `main.rs:79-84` is closed too.
-- [ ] **The 30 s per-call timeout is now the binding constraint, and the upstream exceeds it.**
+- [x] **The 30 s per-call timeout is now the binding constraint, and the upstream exceeds it.**
+      *Resolved 2026-08-15 — deployed, then measured on production.*
       Measured 2026-08-11 after the budget fix: the same question returned **200 at 27.4 s**,
       then **502 at 59.2 s** and **502 at 60.5 s** — which decomposes exactly as
       `30 s + 0.7 s pause + 30 s`, i.e. one generation exceeding the per-attempt timeout twice.
@@ -149,13 +150,13 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       a regression. It is also the strongest argument for streaming: a response that emits its
       first token in ~3 s never trips a no-response timeout, so streaming converts this entire
       hard-failure class into a slow-but-successful answer.
-      **Written, not live.** Streaming shipped in `f13845c` + `9f09757` on `main`. Measured
-      against production 2026-08-15: `GET /agent/chat/stream` returns **404** while
-      `/agent/chat` returns 405, so the deployed image predates the work. Blocked on
-      `flyctl deploy --app housecheck-nessa`, which only the Fly owner account can run — the
-      same lag this section's first entry recorded.
-- [ ] **The agent takes 25-67 seconds on the questions people actually ask, and shows nothing
-      while it works.** Measured on production 2026-08-11. The cause is not a slow model — it is
+      **Deployed and re-measured 2026-08-15.** Streaming shipped in `f13845c` + `9f09757`.
+      Across all five questions in the table below, run against production: **no 502s, no
+      timeouts, worst total 7.0 s.** The `30 s + 0.7 s + 30 s` double-timeout signature is
+      gone, exactly as predicted — a stream that emits its first token under a second never
+      trips a no-response timeout, so the hard-failure class no longer has a way to occur.
+- [x] **The agent takes 25-67 seconds on the questions people actually ask, and shows nothing
+      while it works.** *Resolved 2026-08-15.* Measured on production 2026-08-11. The cause is not a slow model — it is
       the sequential tool loop, and the citation count is a clean proxy for how many rounds ran
       (`citations_for` seeds 4; each tool that runs adds one):
 
@@ -177,12 +178,34 @@ Found by measuring the deployed product rather than reading the repo. **The repo
       `MAX_TOOL_ITERATIONS = 5` at a 30 s per-call timeout is a **150 s** server ceiling against
       a 70 s client abort, so the server can keep working — and billing — for 80 s after the
       reader has gone.
-      **Both halves are written.** The deadlines are aligned: `AGENT_TOTAL_BUDGET_SECS` is the
-      binding cap with `MAX_TOOL_ITERATIONS` demoted to a backstop, and a test parses
-      `LLM_TIMEOUT_MS` out of `frontend/src/lib/api.ts` so the coupling cannot drift silently.
-      Streaming landed in `f13845c` + `9f09757`, measured end-to-end at **0.9 s to first token,
-      7.8 s total**. Neither is live — see the deploy note above. **Re-measure the five
-      questions in the table after deploying and close this on the numbers, not on the diff.**
+      **Both halves shipped, then re-measured on production 2026-08-15** — the same five
+      questions, same building (`3016440063`), against the deployed stream:
+
+      | question | was | first token | total |
+      |---|---|---|---|
+      | "what is the condition score" | 2.8 s | **1.0 s** | 2.3 s |
+      | "how many open violations" | 5.8 s | **0.6 s** | 2.0 s |
+      | "what does NYC law say about heat season" | 18.5 s | **0.8 s** | 5.1 s |
+      | "is this building safe" | 25.8 s | **0.8 s** | 4.5 s |
+      | "there is no heat in my apartment, what should I do" | 34.8 s | **0.8 s** | 7.0 s |
+
+      The defect in the title was *blank screen*, and that is the number that closed:
+      **34.8 s of nothing became 0.8 s.** First token never exceeded 1.0 s on any question,
+      and the status line arrives at 0.0-0.1 s before that. Worst observed total is 7.0 s
+      against a previous worst of 66.7 s, so the 70 s client abort is no longer anywhere near
+      binding.
+
+      **Do not attribute the total-time drop to streaming.** Streaming shows generation
+      sooner; it does not make generation faster. Totals fell 34.8 s → 7.0 s, which is more
+      than streaming can explain, so some of it is the deadline work and some is upstream
+      conditions differing from 2026-08-11. **First-token latency is the structural win and
+      is the only figure here that is safe to claim as ours.** Tool rounds also came in lower
+      than the 2026-08-11 run ("is this building safe" showed one status line, not two), which
+      is model behaviour and may not reproduce.
+
+      Deadlines aligned in the same work: `AGENT_TOTAL_BUDGET_SECS` is the binding cap with
+      `MAX_TOOL_ITERATIONS` demoted to a backstop, and a test parses `LLM_TIMEOUT_MS` out of
+      `frontend/src/lib/api.ts` so the coupling cannot drift silently.
 - [x] **Five of 250 buildings have an address with no house number, and one is the empty string.**
       *Fixed `7d0e414` (Rust) and `ff153d6` (frontend).*
       Measured on live `/buildings`: `3015097501` (`""`), `3016840001` and `3017030009` (both
@@ -448,7 +471,25 @@ rely on it", and several are accessibility issues rather than features.
 - [ ] **`enum ViolationClass`** to replace stringly-typed classes, plus a schema↔dispatch test
       (ledger item 10).
 - [ ] **Extract `crates/agent`** out of the API crate (ledger item 10).
-- [ ] **Delete unused `components/ui`** (ledger item 10).
+- [x] **Delete unused `components/ui`** (ledger item 10). *Done 2026-08-15.* 53 shadcn files,
+      **6,083 lines**, and nothing outside the directory imported any of them. `eslint.config.js`
+      had them in `globalIgnores`, so they were not even linted — dead code that was also
+      exempt from the standards applied to everything else. Removing them let that ignore go,
+      so every file under `src/` is now linted.
+
+      **The dependencies mattered more than the files.** Enumerating every bare specifier
+      imported under `src/` returns exactly five: `react`, `react-dom`, `react-markdown`,
+      `react-router`, `remark-gfm`. The other **41 of 46** dependencies — 27 `@radix-ui/*`
+      packages plus `cmdk`, `vaul`, `recharts`, `zod`, `react-hook-form` and the rest — arrived
+      with the template and were reachable from nothing. Also removed `src/lib/utils.ts`, the
+      `cn` helper, orphaned once `ui/` went.
+
+      **Evidence it was safe: the built bundle is byte-identical.** `index-D0UGomiJ.js`,
+      506.08 kB, same content hash before and after — those 41 packages shipped nothing, they
+      were install-time and supply-chain surface only. `tsc`, `eslint` and `vite build` all
+      clean. The `--radix-accordion-content-height` string in `tailwind.config.js` is a CSS
+      variable name, not an import, so it needed no package. `npm audit` also went from **2
+      high-severity advisories to 0**, since both sat in transitive tooling the trim reached.
 
 ---
 

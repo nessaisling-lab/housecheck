@@ -60,7 +60,10 @@ pub fn card_for(
         // (JustFix nyc-doffer, from NYC DOF Statement-of-Account records, latest year
         // 2024). Carries the unit count for the "likely" wording; the message never
         // overstates a match.
-        stabilization: Stabilization::from_units(building.rent_stabilized, building.rent_stab_units),
+        stabilization: Stabilization::from_units(
+            building.rent_stabilized,
+            building.rent_stab_units,
+        ),
         building,
     }))
 }
@@ -105,7 +108,9 @@ mod tests {
     #[test]
     fn the_same_inputs_and_the_same_day_give_the_same_card() {
         let conn = fixture();
-        let bbl = store::get_all_buildings(&conn).expect("buildings")[0].bbl.clone();
+        let bbl = store::get_all_buildings(&conn).expect("buildings")[0]
+            .bbl
+            .clone();
         let a = card_for(&conn, 2026, &bbl, "2026-08-12").unwrap().unwrap();
         let b = card_for(&conn, 2026, &bbl, "2026-08-12").unwrap().unwrap();
         assert_eq!(a.score.total, b.score.total);

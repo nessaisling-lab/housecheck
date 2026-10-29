@@ -57,6 +57,9 @@ pub struct LlmConfig {
     model: String,
     /// Small, fast model used only for the web-search step. See DEFAULT_SEARCH_MODEL.
     search_model: String,
+    /// Chat-completions endpoint. Always `OPENROUTER_URL` in production; the agent evals point
+    /// it at a local replay server so CI exercises the real loop without a billed call.
+    base_url: String,
 }
 
 impl LlmConfig {
@@ -75,7 +78,11 @@ impl LlmConfig {
             clean(raw_search_model).unwrap_or_else(|| DEFAULT_SEARCH_MODEL.to_string());
 
         if api_key.is_some() {
-            tracing::info!(model = %model, "LLM: enabled");
+            tracing::info!(
+                model = %model,
+                agent_version = %agent_version(&model),
+                "LLM: enabled"
+            );
             if model.ends_with(":free") {
                 tracing::warn!(
                     model = %model,
@@ -92,6 +99,7 @@ impl LlmConfig {
             api_key,
             model,
             search_model,
+            base_url: OPENROUTER_URL.to_string(),
         }
     }
 
@@ -113,7 +121,7 @@ impl LlmConfig {
 /// exactly the actionable part. 1200 still cut a succession-rights answer off mid-phone-number
 /// — the worst place to stop an answer someone may be reading in a crisis. Now 3000, which fits
 /// the longest observed answer (law + evidence checklist + process + drafted question +
-/// referrals) with headroom. Still bounded: we do not stream, every token is billed, and when
+/// referrals) with headroom. Still bounded: every token is billed, streamed or not, and when
 /// the cap IS hit the answer says so rather than looking complete.
 const AGENT_MAX_TOKENS: u32 = 3000;
 /// Most recent turns forwarded upstream. History is resent in full on every request, so an
@@ -279,12 +287,13 @@ impl Provenance {
     fn load(conn: &rusqlite::Connection) -> anyhow::Result<Self> {
         let rows: std::collections::BTreeMap<String, String> =
             store::all_meta(conn)?.into_iter().collect();
-        let data_month = rows.get("ingested_at_unix").and_then(|s| s.parse::<i64>().ok()).map(
-            |secs| {
+        let data_month = rows
+            .get("ingested_at_unix")
+            .and_then(|s| s.parse::<i64>().ok())
+            .map(|secs| {
                 let (y, m) = civil_from_days(secs.div_euclid(86_400));
                 format!("{} {}", MONTHS[(m as usize - 1).min(11)], y)
-            },
-        );
+            });
         // Derived from the secret at startup, never stored and never logged. Only the public
         // half leaves this function, so publishing the key costs no extra handling of the
         // secret itself.
@@ -298,7 +307,11 @@ impl Provenance {
                  issuer, and a reader has no key to compare a document against"
             ),
         }
-        Ok(Self { rows, data_month, export_public_key })
+        Ok(Self {
+            rows,
+            data_month,
+            export_public_key,
+        })
     }
 }
 
@@ -331,10 +344,15 @@ impl AppState {
         let snapshot_year = get_snapshot_year(&conn)?.unwrap_or(DEFAULT_SNAPSHOT_YEAR);
         let provenance = Provenance::load(&conn)?;
         tracing::info!(
-            path, buildings, snapshot_year,
+            path,
+            buildings,
+            snapshot_year,
             data_month = provenance.data_month.as_deref().unwrap_or("unstamped"),
-            excludes = provenance.rows.get("violation_classes_excluded")
-                .map(String::as_str).unwrap_or("unknown"),
+            excludes = provenance
+                .rows
+                .get("violation_classes_excluded")
+                .map(String::as_str)
+                .unwrap_or("unknown"),
             "artifact loaded"
         );
         Ok(Self {
@@ -526,12 +544,14 @@ async fn export_handler(
     let sources = match store::all_source_provenance(&conn) {
         Ok(rows) => rows
             .into_iter()
-            .map(|(dataset, retrieved_at_unix, row_count, note)| model::export::SourceStamp {
-                dataset,
-                retrieved_at_unix,
-                row_count,
-                note,
-            })
+            .map(
+                |(dataset, retrieved_at_unix, row_count, note)| model::export::SourceStamp {
+                    dataset,
+                    retrieved_at_unix,
+                    row_count,
+                    note,
+                },
+            )
             .collect(),
         Err(e) => return internal_error("database query failed", e),
     };
@@ -541,9 +561,8 @@ async fn export_handler(
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
-    let mut doc = model::export::ExportDocument::build(
-        &building, &details, total, sources, exported_at,
-    );
+    let mut doc =
+        model::export::ExportDocument::build(&building, &details, total, sources, exported_at);
     // An absent key leaves the document unsigned. It is still chained, so tampering is still
     // detectable -- what is missing is proof of who produced it, and saying so is honest.
     if let Ok(key) = std::env::var(EXPORT_SIGNING_KEY_ENV) {
@@ -553,7 +572,10 @@ async fn export_handler(
     match params.format.as_deref() {
         Some("text") => (
             StatusCode::OK,
-            [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            [(
+                axum::http::header::CONTENT_TYPE,
+                "text/plain; charset=utf-8",
+            )],
             doc.to_plain_text(),
         )
             .into_response(),
@@ -568,9 +590,7 @@ async fn export_handler(
 /// Offered as a convenience, not as the authority. The same check runs entirely offline from
 /// the document alone, which is the property that matters: a verifier who has to ask us
 /// whether our own document is genuine has not verified anything.
-async fn verify_handler(
-    Json(doc): Json<model::export::ExportDocument>,
-) -> impl IntoResponse {
+async fn verify_handler(Json(doc): Json<model::export::ExportDocument>) -> impl IntoResponse {
     (StatusCode::OK, Json(doc.verify())).into_response()
 }
 
@@ -1022,9 +1042,18 @@ async fn search_handler(
     // it, which is what `.first()` plus a hard 404 used to do.
     let mut seen: Vec<String> = Vec::new();
     let mut candidates: Vec<(String, String)> = Vec::new();
-    for feature in json.get("features").and_then(|f| f.as_array()).into_iter().flatten() {
-        let Some(props) = feature.get("properties") else { continue };
-        let Some(bbl) = geosearch_bbl(props) else { continue };
+    for feature in json
+        .get("features")
+        .and_then(|f| f.as_array())
+        .into_iter()
+        .flatten()
+    {
+        let Some(props) = feature.get("properties") else {
+            continue;
+        };
+        let Some(bbl) = geosearch_bbl(props) else {
+            continue;
+        };
         if seen.contains(&bbl) {
             continue;
         }
@@ -1150,7 +1179,7 @@ async fn openrouter_stream_round(
 
     let resp = match state
         .http
-        .post(OPENROUTER_URL)
+        .post(&state.llm.base_url)
         .bearer_auth(api_key)
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .json(&payload)
@@ -1198,7 +1227,9 @@ async fn openrouter_stream_round(
             let frame = buf[..cut].to_string();
             buf.drain(..cut + 2);
             for line in frame.lines() {
-                let Some(data) = line.strip_prefix("data:") else { continue };
+                let Some(data) = line.strip_prefix("data:") else {
+                    continue;
+                };
                 let data = data.trim();
                 if data.is_empty() || data == "[DONE]" {
                     continue;
@@ -1216,7 +1247,11 @@ async fn openrouter_stream_round(
                         on_token(t);
                     }
                 }
-                for tc in choice["delta"]["tool_calls"].as_array().into_iter().flatten() {
+                for tc in choice["delta"]["tool_calls"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                {
                     merge_tool_call_delta(&mut out.tool_calls, tc);
                 }
             }
@@ -1252,7 +1287,10 @@ fn merge_tool_call_delta(calls: &mut Vec<serde_json::Value>, delta: &serde_json:
         }
     }
     if let Some(args) = delta["function"]["arguments"].as_str() {
-        let existing = slot["function"]["arguments"].as_str().unwrap_or("").to_string();
+        let existing = slot["function"]["arguments"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         slot["function"]["arguments"] = serde_json::Value::String(existing + args);
     }
 }
@@ -1272,7 +1310,7 @@ async fn openrouter_attempt(
 ) -> Result<serde_json::Value, AttemptErr> {
     let resp = match state
         .http
-        .post(OPENROUTER_URL)
+        .post(&state.llm.base_url)
         .bearer_auth(api_key)
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .json(payload)
@@ -1869,8 +1907,8 @@ fn legal_help_directory() -> serde_json::Value {
 /// Hard stop on the tool-calling loop.
 ///
 /// Without a cap, a model that misreads a tool result can call the same tool forever: the
-/// request never returns and every iteration is billed. Five is generous for the three
-/// read-only tools here — a legitimate answer needs one or two.
+/// request never returns and every iteration is billed. Five is generous for the read-only
+/// tools here — a legitimate answer needs one to three (`address-lookup` in the evals is three).
 const MAX_TOOL_ITERATIONS: usize = 5;
 
 /// The browser's own abort, mirrored from `frontend/src/lib/api.ts` (`LLM_TIMEOUT_MS`).
@@ -1985,7 +2023,7 @@ fn round_timeout_secs(remaining_secs: u64) -> Option<u64> {
 /// The `description` text is load-bearing: it is the only thing the model uses to decide which
 /// tool fits a question, so it reads as instructions to a caller, not as documentation.
 ///
-/// All three are read-only and wrap logic that already exists and is already tested. Nothing
+/// Every tool is read-only and wraps logic that already exists and is already tested. Nothing
 /// here can mutate state — a bug in the loop can waste money but cannot corrupt data.
 fn tool_schemas() -> serde_json::Value {
     serde_json::json!([
@@ -2144,6 +2182,25 @@ fn tool_schemas() -> serde_json::Value {
     ])
 }
 
+/// Which agent produced a conversation: a fingerprint of everything that shapes a model turn —
+/// the system prompt, the tool schemas, and the model id.
+///
+/// A recorded conversation only proves something about the agent that recorded it. Each
+/// recording in `crates/api/evals/` carries this value, and replay refuses a recording whose
+/// version no longer matches, so a prompt edit cannot keep passing on answers written for the
+/// old prompt. Logged at startup, so a production answer can be traced to the same version.
+///
+/// ponytail: 64-bit FNV-1a, not SHA-256. This is a label, not a security boundary; it only has
+/// to be stable across toolchains (`DefaultHasher` is not promised to be) and change when the
+/// inputs do. Switch to `sha2` if the version ever has to resist a deliberate collision.
+fn agent_version(model: &str) -> String {
+    let s = format!("{AGENT_SYSTEM_PROMPT}\n{}\n{model}", tool_schemas());
+    let h = s.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    format!("{h:016x}")
+}
+
 /// Execute one tool call. Returns `(json_result, citation)`.
 ///
 /// Errors are returned to the model as JSON rather than aborting the request — a tool failing
@@ -2187,14 +2244,22 @@ async fn dispatch_tool(
         }
         "get_open_violations" => {
             let bbl = bbl_arg();
+            // A BBL we do not hold has no violation rows, which used to come back as
+            // `count: 0` with an HPD citation: a sourced, confident "no open violations" for a
+            // building nobody looked at. Ask whether we hold it before counting anything.
             let out = {
                 let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
-                get_open_violations(&conn, &bbl)
+                get_building(&conn, &bbl)
+                    .and_then(|b| b.map(|_| get_open_violations(&conn, &bbl)).transpose())
             };
             match out {
-                Ok(v) => (
+                Ok(Some(v)) => (
                     serde_json::json!({ "bbl": bbl, "count": v.len(), "violations": v }),
                     Some("NYC HPD open violations (wvxf-dwi5)".to_string()),
+                ),
+                Ok(None) => (
+                    serde_json::json!({ "error": "building not in HouseCheck's curated set", "bbl": bbl }),
+                    None,
                 ),
                 Err(e) => {
                     tracing::error!(error = %e, "tool get_open_violations failed");
@@ -2431,23 +2496,31 @@ struct ChatResp {
     citations: Vec<String>,
 }
 
-/// `POST /agent/chat` — multi-turn, grounded Q&A about one building.
-///
-/// Slice 2 of the agent build: conversation only, no tool calling yet. The model sees a system
-/// prompt, the grounding block for the requested BBL, and the recent conversation.
-///
-/// A human label for a tool, for the progress line a reader sees while it runs.
+/// Progress lines a reader sees while a tool runs, keyed by tool name.
 ///
 /// Named for what it is doing rather than for the function called: "Reading HPD's own
-/// notice text" tells someone why they are waiting; `get_violation_details` does not.
+/// notice text" tells someone why they are waiting; `get_open_violations` does not.
+///
+/// A table rather than a `match` so a test can check every key against `tool_schemas()`.
+/// The `match` this replaced keyed two labels on tools that never existed
+/// (`get_violation_details`, `search_housing_law`), so the slowest lookup, law search, showed
+/// the generic line and nothing noticed.
+const TOOL_PROGRESS: [(&str, &str); 5] = [
+    ("get_open_violations", "Reading HPD's own violation text…"),
+    (
+        "check_rent_fairness",
+        "Comparing the rent against the tract median…",
+    ),
+    ("legal_context", "Reading the published law…"),
+    ("search_law", "Looking up the housing law…"),
+    ("find_legal_help", "Finding free legal help…"),
+];
+
 fn tool_progress_label(name: &str) -> &'static str {
-    match name {
-        "get_violation_details" => "Reading HPD's own violation text…",
-        "check_rent_fairness" => "Comparing the rent against the tract median…",
-        "search_housing_law" => "Looking up the housing law…",
-        "find_legal_help" => "Finding free legal help…",
-        _ => "Checking the building's record…",
-    }
+    TOOL_PROGRESS
+        .iter()
+        .find(|(tool, _)| *tool == name)
+        .map_or("Checking the building's record…", |(_, label)| label)
 }
 
 /// `POST /agent/chat/stream` — the same answer, as it is written.
@@ -2488,7 +2561,9 @@ async fn agent_chat_stream_handler(
         _ => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({ "error": "messages must end with a non-empty user turn" })),
+                Json(
+                    serde_json::json!({ "error": "messages must end with a non-empty user turn" }),
+                ),
             )
                 .into_response();
         }
@@ -2507,7 +2582,9 @@ async fn agent_chat_stream_handler(
         let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
         match card_for(&conn, snapshot_year, &req.bbl) {
             Ok(Some(card)) => {
-                let median = get_tract_median(&conn, &card.building.tract_geoid).ok().flatten();
+                let median = get_tract_median(&conn, &card.building.tract_geoid)
+                    .ok()
+                    .flatten();
                 (card, median)
             }
             Ok(None) => return (StatusCode::NOT_FOUND, "building not found").into_response(),
@@ -2579,7 +2656,11 @@ async fn run_agent_stream(
         serde_json::json!({ "role": "system", "content": facts }),
     ];
     for m in &req.messages[start..] {
-        let role = if m.role == "assistant" { "assistant" } else { "user" };
+        let role = if m.role == "assistant" {
+            "assistant"
+        } else {
+            "user"
+        };
         msgs.push(serde_json::json!({ "role": role, "content": m.content }));
     }
 
@@ -2588,7 +2669,12 @@ async fn run_agent_stream(
     let deadline =
         std::time::Instant::now() + std::time::Duration::from_secs(AGENT_TOTAL_BUDGET_SECS);
 
-    send(Event::default().event("status").data("Reading this building's record…")).await;
+    send(
+        Event::default()
+            .event("status")
+            .data("Reading this building's record…"),
+    )
+    .await;
 
     for iteration in 0..MAX_TOOL_ITERATIONS {
         let remaining = deadline
@@ -2617,7 +2703,11 @@ async fn run_agent_stream(
             let tx = tx.clone();
             tokio::spawn(async move {
                 while let Some(t) = tok_rx.recv().await {
-                    if tx.send(Event::default().event("token").data(t)).await.is_err() {
+                    if tx
+                        .send(Event::default().event("token").data(t))
+                        .await
+                        .is_err()
+                    {
                         break; // reader hung up
                     }
                 }
@@ -2634,9 +2724,11 @@ async fn run_agent_stream(
             Ok(r) => r,
             Err(()) => {
                 tracing::error!(iteration, "agent stream upstream failed");
-                send(Event::default().event("error").data(
-                    "I couldn't reach the assistant to answer that one.",
-                ))
+                send(
+                    Event::default()
+                        .event("error")
+                        .data("I couldn't reach the assistant to answer that one."),
+                )
                 .await;
                 return;
             }
@@ -2645,9 +2737,11 @@ async fn run_agent_stream(
         if round.tool_calls.is_empty() {
             let mut answer = round.content.trim().to_string();
             if answer.is_empty() {
-                send(Event::default().event("error").data(
-                    "I couldn't reach the assistant to answer that one.",
-                ))
+                send(
+                    Event::default()
+                        .event("error")
+                        .data("I couldn't reach the assistant to answer that one."),
+                )
                 .await;
                 return;
             }
@@ -2655,19 +2749,19 @@ async fn run_agent_stream(
             // answer the tail is where the referral lives. The extra sentence is emitted as a
             // token so it lands in the same place a reader is already looking.
             if round.finish_reason.as_deref() == Some("length") {
-                tracing::warn!(max_tokens = AGENT_MAX_TOKENS, "streamed answer hit the token cap");
+                tracing::warn!(
+                    max_tokens = AGENT_MAX_TOKENS,
+                    "streamed answer hit the token cap"
+                );
                 let note = "\n\n_(This answer was cut short by a length limit. Ask a narrower \
                             follow-up question for the rest.)_";
                 answer.push_str(note);
                 send(Event::default().event("token").data(note)).await;
             }
             citations.dedup();
-            send(
-                Event::default().event("done").data(
-                    serde_json::json!({ "bbl": card.building.bbl, "citations": citations })
-                        .to_string(),
-                ),
-            )
+            send(Event::default().event("done").data(
+                serde_json::json!({ "bbl": card.building.bbl, "citations": citations }).to_string(),
+            ))
             .await;
             return;
         }
@@ -2688,7 +2782,12 @@ async fn run_agent_stream(
             // The progress line is the feature. Twelve to fifteen seconds of "Looking up the
             // housing law…" is a wait someone will sit through; the same seconds of nothing
             // is a product that looks broken.
-            send(Event::default().event("status").data(tool_progress_label(name))).await;
+            send(
+                Event::default()
+                    .event("status")
+                    .data(tool_progress_label(name)),
+            )
+            .await;
 
             tracing::info!(tool = %name, iteration, "agent stream tool call");
             let (result, citation) = dispatch_tool(&state, &api_key, name, &args).await;
@@ -2706,13 +2805,23 @@ async fn run_agent_stream(
         send(Event::default().event("status").data("Writing the answer…")).await;
     }
 
-    tracing::warn!(max = MAX_TOOL_ITERATIONS, "agent stream hit the iteration cap");
-    send(Event::default().event("error").data(
-        "I couldn't settle on an answer for that one. Try asking something more specific.",
-    ))
+    tracing::warn!(
+        max = MAX_TOOL_ITERATIONS,
+        "agent stream hit the iteration cap"
+    );
+    send(
+        Event::default().event("error").data(
+            "I couldn't settle on an answer for that one. Try asking something more specific.",
+        ),
+    )
     .await;
 }
 
+/// `POST /agent/chat` — multi-turn, grounded Q&A about one building, answered in one JSON body.
+///
+/// The model sees a system prompt, the grounding block for the requested BBL and the recent
+/// conversation, and may call the read-only tools in `tool_schemas` before it answers.
+///
 /// - `400` if `messages` is empty or the last turn isn't from the user.
 /// - `404` if the BBL isn't in the curated set (checked before the key, so probing costs nothing).
 /// - `429` if the client exceeded its window.
@@ -3099,6 +3208,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Replayed-conversation evals for the agent loop. See `crates/api/evals/README.md`.
+#[cfg(test)]
+mod agent_evals;
+
 #[cfg(test)]
 mod tests {
     use model::StabilizationStatus;
@@ -3267,7 +3380,10 @@ mod tests {
         assert_eq!(today.len(), 10, "expected YYYY-MM-DD, got {today}");
         let month: u32 = today[5..7].parse().expect("month parses");
         let day: u32 = today[8..10].parse().expect("day parses");
-        assert!((1..=12).contains(&month), "month {month} out of range in {today}");
+        assert!(
+            (1..=12).contains(&month),
+            "month {month} out of range in {today}"
+        );
         assert!((1..=31).contains(&day), "day {day} out of range in {today}");
 
         // The real check: the model must be able to measure an age against it.
@@ -3306,7 +3422,10 @@ mod tests {
     #[test]
     fn abbreviations_that_are_also_street_names_survive() {
         // Leading ST is Saint, not Street. 167 PLUTO lots start with "ST ".
-        assert_eq!(normalize_address("ST NICHOLAS AVENUE"), "ST NICHOLAS AVENUE");
+        assert_eq!(
+            normalize_address("ST NICHOLAS AVENUE"),
+            "ST NICHOLAS AVENUE"
+        );
         assert_eq!(normalize_address("st marks place"), "ST MARKS PLACE");
         // "Unless first" was not enough: here ST sits after the house number.
         assert_eq!(normalize_address("100 St Johns Pl"), "100 ST JOHNS PLACE");
@@ -3334,7 +3453,10 @@ mod tests {
 
         // The distinction has to hold: a lettered avenue and a compass street
         // are different places and must not normalise to the same string.
-        assert_ne!(normalize_address("AVENUE W"), normalize_address("AVENUE WEST"));
+        assert_ne!(
+            normalize_address("AVENUE W"),
+            normalize_address("AVENUE WEST")
+        );
     }
 
     #[tokio::test]
@@ -3417,7 +3539,9 @@ mod tests {
 
         // Not a bug in the query. There is genuinely nothing to match against.
         assert!(
-            search_curated(&conn, "3 Fixture Ave", 8).unwrap().is_empty(),
+            search_curated(&conn, "3 Fixture Ave", 8)
+                .unwrap()
+                .is_empty(),
             "an empty haystack never contains a non-empty needle"
         );
 
@@ -3460,9 +3584,17 @@ mod tests {
             Some("301509"),
             "borough + block still names a specific block"
         );
-        assert_eq!(bbl_needle("603"), None, "a house number is not an identifier");
+        assert_eq!(
+            bbl_needle("603"),
+            None,
+            "a house number is not an identifier"
+        );
         assert_eq!(bbl_needle("603 Putnam Avenue"), None);
-        assert_eq!(bbl_needle("30150975012"), None, "eleven digits is not a BBL");
+        assert_eq!(
+            bbl_needle("30150975012"),
+            None,
+            "eleven digits is not a BBL"
+        );
     }
 
     /// Adding a second way to match must not let a BBL query outrank the address a reader typed.
@@ -3563,11 +3695,30 @@ mod tests {
     /// would tell the reader nothing about why they are waiting.
     #[test]
     fn every_tool_has_a_progress_line_written_for_a_person() {
+        let schemas = tool_schemas();
+        let names: Vec<&str> = schemas
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        for (tool, _) in TOOL_PROGRESS {
+            assert!(
+                names.contains(&tool),
+                "progress line for {tool}, which is not a tool: it can never be shown"
+            );
+        }
         for t in tool_schemas().as_array().unwrap() {
             let name = t["function"]["name"].as_str().unwrap();
             let label = tool_progress_label(name);
-            assert!(label.ends_with('…'), "{name}: progress lines read as in-progress");
-            assert!(!label.contains('_'), "{name}: '{label}' leaks the function name");
+            assert!(
+                label.ends_with('…'),
+                "{name}: progress lines read as in-progress"
+            );
+            assert!(
+                !label.contains('_'),
+                "{name}: '{label}' leaks the function name"
+            );
         }
     }
 
@@ -4139,7 +4290,10 @@ mod tests {
         let unverified = card_for(&conn, DEFAULT_SNAPSHOT_YEAR, "3000020002")
             .expect("query")
             .expect("card");
-        assert_eq!(unverified.stabilization.status, StabilizationStatus::Unverified);
+        assert_eq!(
+            unverified.stabilization.status,
+            StabilizationStatus::Unverified
+        );
         assert!(
             !dhcr(&citations_for(&unverified, Some(2400))),
             "must not cite a DOF stabilization record that was never found"
@@ -4290,7 +4444,9 @@ mod tests {
         let mut got: Vec<(String, &'static str)> = Vec::new();
         for f in geosearch_said["features"].as_array().unwrap() {
             let props = f.get("properties").unwrap();
-            let Some(bbl) = geosearch_bbl(props) else { continue };
+            let Some(bbl) = geosearch_bbl(props) else {
+                continue;
+            };
             if seen.contains(&bbl) {
                 continue;
             }
@@ -4298,9 +4454,16 @@ mod tests {
             got.push((bbl.clone(), borough_of_bbl(&bbl)));
         }
 
-        assert_eq!(got.len(), 3, "the BBL-less feature must be skipped, not fatal");
+        assert_eq!(
+            got.len(),
+            3,
+            "the BBL-less feature must be skipped, not fatal"
+        );
         assert_eq!(got[0].1, "Brooklyn");
-        assert_eq!(got[1].1, "Manhattan", "the borough the reader meant must survive");
+        assert_eq!(
+            got[1].1, "Manhattan",
+            "the borough the reader meant must survive"
+        );
         assert_eq!(got[2].1, "the Bronx");
         assert!(
             got.iter().any(|(_, b)| *b == "Manhattan"),
@@ -4344,7 +4507,10 @@ mod tests {
                     "refused to start a round at {remaining}s, which was long enough"
                 ),
                 Some(t) => {
-                    assert!(t >= 1, "a zero-second timeout would fail instantly at {remaining}s");
+                    assert!(
+                        t >= 1,
+                        "a zero-second timeout would fail instantly at {remaining}s"
+                    );
                     assert!(
                         t <= LLM_CALL_TIMEOUT_SECS,
                         "{t}s exceeds the per-call ceiling at {remaining}s"
@@ -4402,7 +4568,10 @@ mod tests {
         while let Some(t) = round_timeout_secs(AGENT_TOTAL_BUDGET_SECS.saturating_sub(spent)) {
             spent += t; // the ordinary case: one attempt, no retry
             rounds += 1;
-            assert!(rounds <= 100, "round_timeout_secs never returns None -- loop cannot end");
+            assert!(
+                rounds <= 100,
+                "round_timeout_secs never returns None -- loop cannot end"
+            );
         }
         assert!(
             rounds > OBSERVED_DEEPEST,

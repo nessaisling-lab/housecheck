@@ -1,0 +1,4 @@
+# RFC 8032 Ed25519 test vector 1 secret key, used as a fixed fixture in
+# model::export::tests::the_published_key_is_the_one_the_signature_carries.
+# Published in the RFC, signs nothing real. Not a credential.
+d24a02877632c131478ba9b150da884a81460c1c:crates/model/src/export.rs:generic-api-key:453

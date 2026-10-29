@@ -2,7 +2,7 @@
 
 **What this is:** a map of verification that already exists, written down so it is legible
 to someone skimming the repo. It is documentation, not a new test format. Every test named
-here runs today under `cargo test --workspace` — **162 tests, clippy clean, 8 crates.**
+here runs today under `cargo test --workspace` — **178 tests, clippy clean, 7 crates.**
 
 **What this is not:** a synthetic prompt suite. The strongest evidence in this project was
 not produced by an eval harness, and saying otherwise would be the kind of claim the
@@ -107,13 +107,22 @@ The `/summary` assistant is where a wrong answer would be most persuasive, so wh
 Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 `the_server_gives_up_before_the_client_does`, and a rate limiter with three tests.
 
+**The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
+replays 30 conversations through `/agent/chat` and `/agent/chat/stream` with the model
+replaced by a local server playing back its turns: 59 replays, 1,811 checks, no network. It
+checks role coercion, the round cap, tool-call pairing, the law-search allowlist, citations
+equal to the tools that succeeded, advice phrasing, and that every number in an answer was
+in something the model was shown. `each_check_fails_on_the_defect_it_names` plants a defect
+for each of those and asserts the matching check fires. Details: `crates/api/evals/README.md`.
+
 ---
 
 ## What this does not cover
 
-- **No LLM output evals.** There is no scored suite over generated prose. The agent is
-  constrained by architecture and by the tests above; the *quality* of its wording is
-  unmeasured.
+- **No recorded model output yet.** Every replayed conversation is synthetic: its model
+  turns were written by hand, so the suite proves what the *server* does with a turn, not
+  what the model says. `live_eval` records real conversations and scores them, but it is
+  billed and has not been run. The *quality* of the agent's wording is unmeasured until it is.
 - **The Python verifier is not in CI.** It is a one-off script, and it remains the
   strongest evidence here precisely because it was written independently. The Rust test
   reproduces its finding in-process; it does not replace the outside check.
@@ -128,7 +137,7 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 ## Running it
 
 ```bash
-cargo test --workspace                              # 162 tests
+cargo test --workspace                              # 178 tests
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 

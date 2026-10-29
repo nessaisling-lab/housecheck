@@ -318,7 +318,9 @@ const RECORD_SEP: char = '\u{1e}'; // ASCII record separator
 fn read_descriptions(conn: &Connection, bbl: &str) -> Result<Vec<String>> {
     use rusqlite::OptionalExtension;
     let z: Option<Vec<u8>> = conn
-        .query_row("SELECT z FROM violation_desc WHERE bbl = ?1", [bbl], |r| r.get(0))
+        .query_row("SELECT z FROM violation_desc WHERE bbl = ?1", [bbl], |r| {
+            r.get(0)
+        })
         .optional()?;
     let Some(z) = z else {
         return Ok(Vec::new());
@@ -349,7 +351,15 @@ pub fn insert_violations(conn: &Connection, bbl: &str, vs: &[Violation]) -> Resu
         conn.execute(
             "INSERT INTO violations (bbl,class,open,year,desc_ord,issued_on,closed_on) \
              VALUES (?1,?2,?3,?4,?5,?6,?7)",
-            rusqlite::params![bbl, v.class, v.open as i64, v.year, ord, v.issued_on, v.closed_on],
+            rusqlite::params![
+                bbl,
+                v.class,
+                v.open as i64,
+                v.year,
+                ord,
+                v.issued_on,
+                v.closed_on
+            ],
         )?;
     }
     if !texts.is_empty() {
@@ -521,13 +531,19 @@ mod tests {
             ..Default::default()
         };
         let vs = vec![
-            v("C", Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT KITCHEN")),
+            v(
+                "C",
+                Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT KITCHEN"),
+            ),
             // A gap in the middle: desc_ord must skip, not shift everything after it.
             v("A", None),
             // A notice containing a newline is exactly why records are joined with
             // \x1e rather than \n.
             v("B", Some("LINE ONE\nLINE TWO")),
-            v("C", Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT BATHROOM")),
+            v(
+                "C",
+                Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT BATHROOM"),
+            ),
         ];
         insert_violations(&conn, "3000010001", &vs)?;
 

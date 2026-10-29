@@ -197,7 +197,7 @@ mod tests {
         assert_eq!(neighborhood_score(10), 100);
         assert_eq!(neighborhood_score(244), 100);
         assert_eq!(neighborhood_score(250), 99); // first penalised count
-        // Spec reference points that the discriminating curve must hit.
+                                                 // Spec reference points that the discriminating curve must hit.
         assert_eq!(neighborhood_score(1966), 58);
         assert_eq!(neighborhood_score(4914), 40); // penalty clamped at 60
     }

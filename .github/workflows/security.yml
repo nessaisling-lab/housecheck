@@ -1,5 +1,6 @@
 # HouseCheck security — dependency audits, secret scanning, static analysis.
-# JS-only jobs (npm audit, CodeQL js/ts) stay dormant until a `frontend/` exists.
+# JS-only jobs (npm audit, CodeQL js/ts) run only when `frontend/package.json` exists.
+# Known non-secrets that trip gitleaks are listed, with the reason, in `.gitleaksignore`.
 name: security
 
 on:

@@ -303,8 +303,9 @@ Implementation notes:
 
 ## `POST /agent/chat`
 
-Multi-turn, grounded Q&A about one building. Conversation only — no tool calling yet
-(slice 2 of `docs/agent/PRD-AGENT.md`).
+Multi-turn, grounded Q&A about one building, with read-only tool calling. `POST
+/agent/chat/stream` runs the same loop and streams the answer as server-sent events (`status`,
+`token`, `done`, `error`).
 
 ```jsonc
 // request
@@ -329,8 +330,10 @@ instructions, and forbids legal advice, invented numbers, and speculation about 
 Client-supplied roles other than `assistant` are coerced to `user`, so a caller cannot inject a
 second system turn.
 
-**Tools.** The model may request data instead of answering directly. Six read-only tools are
-offered — `get_building(bbl)`, `get_open_violations(bbl)`, `search_address(address)`, `legal_context(issue)`, `find_legal_help()`, `search_law(query)`.
+**Tools.** The model may request data instead of answering directly. Eight read-only tools are
+offered — `get_building(bbl)`, `get_open_violations(bbl)`, `search_address(address)`,
+`rank_by_priorities(bbls, priorities)`, `check_rent_fairness(bbl, monthly_rent)`,
+`legal_context(issue)`, `find_legal_help()`, `search_law(query)`.
 
 `legal_context` returns published NY law for a housing problem with verifiable links, plus an
 evidence checklist and the official complaint route. `find_legal_help` returns free tenant
@@ -352,7 +355,11 @@ separation is what makes grounding enforceable rather than aspirational. The loo
 hallucinated tool name is answered as data (`{"error": "unknown tool: …"}`) so the model can
 recover instead of the request failing. `citations[]` grows only as tools actually succeed.
 
-**Limits.** `max_tokens` 400 · last 12 turns · 2,000 characters per message · 30s upstream
+**Evals.** 29 conversations replay through the real loop on every `cargo test`, against both
+endpoints, with the model replaced by a local server playing back its turns — no network, no
+cost. See [`crates/api/evals/README.md`](../crates/api/evals/README.md).
+
+**Limits.** `max_tokens` 3,000 · last 12 turns · 2,000 characters per message · 30s upstream
 timeout · 5 tool iterations · **10 requests per client per 60s**. The rate limit is a spend control, not just a load
 control: this is the only endpoint that costs money per request. Client identity comes from
 `Fly-Client-IP`, else the first hop of `X-Forwarded-For`.

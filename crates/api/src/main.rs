@@ -57,6 +57,9 @@ pub struct LlmConfig {
     model: String,
     /// Small, fast model used only for the web-search step. See DEFAULT_SEARCH_MODEL.
     search_model: String,
+    /// Chat-completions endpoint. Always `OPENROUTER_URL` in production; the agent evals point
+    /// it at a local replay server so CI exercises the real loop without a billed call.
+    base_url: String,
 }
 
 impl LlmConfig {
@@ -75,7 +78,11 @@ impl LlmConfig {
             clean(raw_search_model).unwrap_or_else(|| DEFAULT_SEARCH_MODEL.to_string());
 
         if api_key.is_some() {
-            tracing::info!(model = %model, "LLM: enabled");
+            tracing::info!(
+                model = %model,
+                agent_version = %agent_version(&model),
+                "LLM: enabled"
+            );
             if model.ends_with(":free") {
                 tracing::warn!(
                     model = %model,
@@ -92,6 +99,7 @@ impl LlmConfig {
             api_key,
             model,
             search_model,
+            base_url: OPENROUTER_URL.to_string(),
         }
     }
 
@@ -1171,7 +1179,7 @@ async fn openrouter_stream_round(
 
     let resp = match state
         .http
-        .post(OPENROUTER_URL)
+        .post(&state.llm.base_url)
         .bearer_auth(api_key)
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .json(&payload)
@@ -1302,7 +1310,7 @@ async fn openrouter_attempt(
 ) -> Result<serde_json::Value, AttemptErr> {
     let resp = match state
         .http
-        .post(OPENROUTER_URL)
+        .post(&state.llm.base_url)
         .bearer_auth(api_key)
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .json(payload)
@@ -2172,6 +2180,25 @@ fn tool_schemas() -> serde_json::Value {
             }
         }
     ])
+}
+
+/// Which agent produced a conversation: a fingerprint of everything that shapes a model turn —
+/// the system prompt, the tool schemas, and the model id.
+///
+/// A recorded conversation only proves something about the agent that recorded it. Each
+/// recording in `crates/api/evals/` carries this value, and replay refuses a recording whose
+/// version no longer matches, so a prompt edit cannot keep passing on answers written for the
+/// old prompt. Logged at startup, so a production answer can be traced to the same version.
+///
+/// ponytail: 64-bit FNV-1a, not SHA-256. This is a label, not a security boundary; it only has
+/// to be stable across toolchains (`DefaultHasher` is not promised to be) and change when the
+/// inputs do. Switch to `sha2` if the version ever has to resist a deliberate collision.
+fn agent_version(model: &str) -> String {
+    let s = format!("{AGENT_SYSTEM_PROMPT}\n{}\n{model}", tool_schemas());
+    let h = s.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    format!("{h:016x}")
 }
 
 /// Execute one tool call. Returns `(json_result, citation)`.
@@ -3159,6 +3186,10 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app_with_state(state)).await?;
     Ok(())
 }
+
+/// Replayed-conversation evals for the agent loop. See `crates/api/evals/README.md`.
+#[cfg(test)]
+mod agent_evals;
 
 #[cfg(test)]
 mod tests {

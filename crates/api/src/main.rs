@@ -2668,6 +2668,11 @@ async fn run_agent_stream(
     let tools = tool_schemas();
     let deadline =
         std::time::Instant::now() + std::time::Duration::from_secs(AGENT_TOTAL_BUDGET_SECS);
+    // Whether an earlier round already put text on the reader's screen. A model often writes
+    // alongside a tool call — "I'll pull up the full record", or the substance of the answer
+    // before it calls find_legal_help — and every word of it streams. The next round's text
+    // then has to start a new paragraph, or the two run together mid-line.
+    let mut shown_text = false;
 
     send(
         Event::default()
@@ -2713,7 +2718,11 @@ async fn run_agent_stream(
                 }
             })
         };
+        let mut needs_break = shown_text;
         let round = openrouter_stream_round(&state, &api_key, &payload, call_timeout, |t| {
+            if std::mem::take(&mut needs_break) {
+                let _ = tok_tx.send("\n\n".to_string());
+            }
             let _ = tok_tx.send(t.to_string());
         })
         .await;
@@ -2733,6 +2742,7 @@ async fn run_agent_stream(
                 return;
             }
         };
+        shown_text |= !round.content.trim().is_empty();
 
         if round.tool_calls.is_empty() {
             let mut answer = round.content.trim().to_string();
@@ -2937,6 +2947,11 @@ async fn agent_chat_handler(
     // browser actually enforces.
     let deadline =
         std::time::Instant::now() + std::time::Duration::from_secs(AGENT_TOTAL_BUDGET_SECS);
+    // Text the model wrote alongside a tool call. The stream shows it as it arrives, so this
+    // endpoint has to return it too, or the two stop being the same answer. Keeping only the
+    // last round lost real content: recorded live, the model wrote the whole safety summary in
+    // the round that called find_legal_help, and this endpoint returned only the referral.
+    let mut earlier = String::new();
 
     for iteration in 0..MAX_TOOL_ITERATIONS {
         let remaining = deadline
@@ -3005,6 +3020,7 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
                 tracing::error!(iteration, "openrouter returned an empty completion");
                 return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
             }
+            answer.insert_str(0, &earlier);
             citations.dedup();
             return Json(ChatResp {
                 bbl: card.building.bbl.clone(),
@@ -3012,6 +3028,12 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
                 citations,
             })
             .into_response();
+        }
+
+        let said = message["content"].as_str().unwrap_or("").trim();
+        if !said.is_empty() {
+            earlier.push_str(said);
+            earlier.push_str("\n\n");
         }
 
         // Echo the assistant's tool-call turn back verbatim — the protocol requires each

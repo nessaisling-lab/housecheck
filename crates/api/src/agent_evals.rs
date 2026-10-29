@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 
 const CASES: &str = include_str!("../evals/cases.json");
 const RECORDED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/evals/recorded.json");
+const FAILURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/evals/live-failures.json");
 const ENDPOINTS: [&str; 2] = ["/agent/chat", "/agent/chat/stream"];
 
 /// Phrases that turn legal information into legal advice or a prediction.
@@ -40,6 +41,34 @@ const ADVICE_PHRASES: [&str; 13] = [
     "my advice is",
     "i advise you",
 ];
+
+/// Cues that, shortly before an advice phrase, make it a refusal. "I cannot predict whether you
+/// would win" is exactly what the system prompt asks for; the first live run flagged it as a
+/// prediction.
+///
+/// ponytail: looks back 40 characters. "Don't worry, you will win" slips through, and "you would
+/// win, though I can't promise" is still flagged. A judge model reading the sentence is the
+/// upgrade if this misfires on a recording.
+const REFUSAL_CUES: [&str; 6] = ["whether", "cannot", "n't", "not ", "no one", "never"];
+
+/// The first occurrence of `phrase` in `answer` (lowercased) that is not a refusal, as a short
+/// excerpt for the failure message.
+fn advice_at(answer: &str, phrase: &str) -> Option<String> {
+    let floor = |mut i: usize| {
+        while !answer.is_char_boundary(i) {
+            i -= 1;
+        }
+        i
+    };
+    answer.match_indices(phrase).find_map(|(i, _)| {
+        let before = &answer[floor(i.saturating_sub(40))..i];
+        if REFUSAL_CUES.iter().any(|c| before.contains(c)) {
+            return None;
+        }
+        let end = floor((i + phrase.len() + 40).min(answer.len()));
+        Some(answer[floor(i.saturating_sub(40))..end].replace('\n', " "))
+    })
+}
 
 #[derive(Deserialize, Serialize, Clone)]
 struct Case {
@@ -151,7 +180,9 @@ fn expand(turn: &Value, n: usize) -> (u16, Value) {
                         "function": { "name": t[0], "arguments": args } })
             })
             .collect();
-        let msg = json!({ "role": "assistant", "content": "", "tool_calls": calls });
+        // `say`: text the model writes in the same turn as the call. The stream shows it.
+        let say = turn["say"].as_str().unwrap_or("");
+        let msg = json!({ "role": "assistant", "content": say, "tool_calls": calls });
         return (
             status,
             json!({ "choices": [{ "message": msg, "finish_reason": "tool_calls" }] }),
@@ -666,8 +697,9 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     let answer = out.answer.to_lowercase();
     r.check(ctx, !answer.trim().is_empty(), || "empty answer".into());
     for p in ADVICE_PHRASES {
-        r.check(ctx, !answer.contains(p), || {
-            format!("advice phrasing {p:?}")
+        let hit = advice_at(&answer, p);
+        r.check(ctx, hit.is_none(), || {
+            format!("advice phrasing {p:?} in …{}…", hit.unwrap_or_default())
         });
     }
     for p in &e.answer_excludes {
@@ -740,13 +772,24 @@ async fn replayed_conversations_hold_on_both_endpoints() {
             || format!("unknown kind {:?}", case.kind),
         );
         version_check(case, &mut r);
+        let mut answers: Vec<String> = Vec::new();
         for ep in ENDPOINTS
             .into_iter()
             .filter(|ep| case.only.as_deref().is_none_or(|o| o == *ep))
         {
             let out = run(case, ep, None).await;
             check(case, ep, &out, Mode::Replay, &mut r);
+            if out.status == 200 && out.stream_error.is_none() {
+                answers.push(out.answer.split_whitespace().collect::<Vec<_>>().join(" "));
+            }
             runs += 1;
+        }
+        // The stream is documented as "the same answer, as it is written". Whitespace aside,
+        // it has to be: a reader on either endpoint must get every word the other one gets.
+        if let [json, stream] = answers.as_slice() {
+            r.check(&case.id, json == stream, || {
+                format!("the endpoints disagree:\n  /agent/chat:        {json:?}\n  /agent/chat/stream: {stream:?}")
+            });
         }
     }
     let recorded = cases.iter().filter(|c| c.kind == "recorded").count();
@@ -848,10 +891,15 @@ async fn each_check_fails_on_the_defect_it_names() {
 /// HOUSECHECK_EVAL_LIVE=1 OPENROUTER_API_KEY=... cargo test -p api live_eval -- --ignored --nocapture
 /// ```
 ///
-/// Runs every `live` case through `/agent/chat` with the stand-in model forwarding to
-/// OpenRouter, applies the same checks minus the ones that assume a script, prints what each
-/// conversation cost, and writes the passing ones to `evals/recorded.json` for replay. Stops
+/// Runs every `live` case (or only those named in `HOUSECHECK_EVAL_ONLY`, comma-separated)
+/// through `/agent/chat` with the stand-in model forwarding to OpenRouter, applies the same
+/// checks minus the ones that assume a script, and prints what each conversation cost. Stops
 /// starting new conversations once `HOUSECHECK_EVAL_MAX_USD` (default 1.00) is spent.
+///
+/// Passing conversations are merged into `evals/recorded.json` by id; recordings from another
+/// agent version are dropped, because replay would refuse them. Failing ones go to
+/// `evals/live-failures.json` (untracked) with the answer and every failed check, so a failure
+/// is triaged from what the model said rather than from a re-run.
 #[tokio::test]
 #[ignore = "billed: calls OpenRouter. Run by hand with HOUSECHECK_EVAL_LIVE=1"]
 async fn live_eval() {
@@ -867,11 +915,18 @@ async fn live_eval() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(1.0);
+    let only: Vec<String> = std::env::var("HOUSECHECK_EVAL_ONLY")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
 
     let version = agent_version(&model);
     let cases: Vec<Case> = load_cases()
         .into_iter()
         .filter(|c| c.kind == "synthetic" && c.live)
+        .filter(|c| only.is_empty() || only.contains(&c.id))
         .collect();
     eprintln!(
         "live eval: {} conversations, model {model}, agent {version}, cap ${cap:.2}",
@@ -881,6 +936,7 @@ async fn live_eval() {
     let mut r = Report::default();
     let mut spent = 0.0;
     let mut recorded: Vec<Case> = Vec::new();
+    let mut failed: Vec<Value> = Vec::new();
     for case in &cases {
         if spent >= cap {
             eprintln!("stopping: ${spent:.4} spent, cap ${cap:.2}");
@@ -900,32 +956,42 @@ async fn live_eval() {
             out.tape.cost_usd,
             t0.elapsed().as_secs_f64()
         );
-        if passed {
-            let msgs = out
-                .tape
-                .calls
-                .iter()
-                .rev()
-                .find(|c| c.get("tools").is_some())
-                .and_then(|a| a["messages"].as_array().cloned())
-                .unwrap_or_default();
-            let mut c = case.clone();
-            c.kind = "recorded".into();
-            c.agent_version = Some(version.clone());
-            c.model = Some(model.clone());
-            c.upstream = out.tape.recorded.clone();
-            c.expect.tools = Some(
-                tool_exchanges(&msgs)
-                    .0
-                    .into_iter()
-                    .map(|(n, _)| n)
-                    .collect(),
-            );
-            c.expect.upstream_calls = Some(out.tape.calls.len());
-            // The wording is the model's now; what it must not say still holds.
-            c.expect.answer_contains.clear();
-            recorded.push(c);
+        let msgs = out
+            .tape
+            .calls
+            .iter()
+            .rev()
+            .find(|c| c.get("tools").is_some())
+            .and_then(|a| a["messages"].as_array().cloned())
+            .unwrap_or_default();
+        let tools: Vec<String> = tool_exchanges(&msgs)
+            .0
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
+        if !passed {
+            failed.push(json!({
+                "id": case.id,
+                "agent_version": version,
+                "model": model,
+                "status": out.status,
+                "tools": tools,
+                "answer": out.answer,
+                "failures": r.failures[before..],
+                "upstream": out.tape.recorded,
+            }));
+            continue;
         }
+        let mut c = case.clone();
+        c.kind = "recorded".into();
+        c.agent_version = Some(version.clone());
+        c.model = Some(model.clone());
+        c.upstream = out.tape.recorded.clone();
+        c.expect.tools = Some(tools);
+        c.expect.upstream_calls = Some(out.tape.calls.len());
+        // The wording is the model's now; what it must not say still holds.
+        c.expect.answer_contains.clear();
+        recorded.push(c);
     }
     eprintln!(
         "live eval: ${spent:.4} total, {} checks, {} failed, {} recorded",
@@ -933,13 +999,51 @@ async fn live_eval() {
         r.failures.len(),
         recorded.len()
     );
-    if !recorded.is_empty() {
+
+    let earlier: Vec<Case> = std::fs::read_to_string(RECORDED)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let (kept, stale): (Vec<Case>, Vec<Case>) = earlier
+        .into_iter()
+        .filter(|c| !recorded.iter().any(|n| n.id == c.id))
+        .partition(|c| c.agent_version.as_deref() == Some(version.as_str()));
+    for c in &stale {
+        eprintln!(
+            "dropping {}: recorded against agent {:?}",
+            c.id, c.agent_version
+        );
+    }
+    let mut merged = kept;
+    merged.extend(recorded);
+    merged.sort_by(|a, b| a.id.cmp(&b.id));
+    if !merged.is_empty() {
         std::fs::write(
             RECORDED,
-            serde_json::to_string_pretty(&recorded).unwrap() + "\n",
+            serde_json::to_string_pretty(&merged).unwrap()
+                + "
+",
         )
         .unwrap();
-        eprintln!("wrote {RECORDED}");
+        eprintln!("wrote {RECORDED}: {} recordings", merged.len());
     }
-    assert!(r.failures.is_empty(), "\n{}", r.failures.join("\n"));
+    if !failed.is_empty() {
+        std::fs::write(
+            FAILURES,
+            serde_json::to_string_pretty(&failed).unwrap()
+                + "
+",
+        )
+        .unwrap();
+        eprintln!("wrote {FAILURES}: {} failing conversations", failed.len());
+    }
+    assert!(
+        r.failures.is_empty(),
+        "
+{}",
+        r.failures.join(
+            "
+"
+        )
+    );
 }

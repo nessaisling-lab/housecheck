@@ -108,21 +108,24 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 `the_server_gives_up_before_the_client_does`, and a rate limiter with three tests.
 
 **The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
-replays 30 conversations through `/agent/chat` and `/agent/chat/stream` with the model
-replaced by a local server playing back its turns: 59 replays, 1,811 checks, no network. It
-checks role coercion, the round cap, tool-call pairing, the law-search allowlist, citations
-equal to the tools that succeeded, advice phrasing, and that every number in an answer was
-in something the model was shown. `each_check_fails_on_the_defect_it_names` plants a defect
+replays 41 conversations (10 of them recorded from the real model) through `/agent/chat` and
+`/agent/chat/stream` with the model replaced by a local server playing back its turns: 81
+replays, 2,842 checks, no network. It checks role coercion, the round cap, tool-call pairing,
+the law-search allowlist, citations equal to the tools that succeeded, advice phrasing, that
+both endpoints give the same answer, and that every number in an answer was in something the
+model was shown. `each_check_fails_on_the_defect_it_names` plants a defect
 for each of those and asserts the matching check fires. Details: `crates/api/evals/README.md`.
 
 ---
 
 ## What this does not cover
 
-- **No recorded model output yet.** Every replayed conversation is synthetic: its model
-  turns were written by hand, so the suite proves what the *server* does with a turn, not
-  what the model says. `live_eval` records real conversations and scores them, but it is
-  billed and has not been run. The *quality* of the agent's wording is unmeasured until it is.
+- **Live scoring is one run old, and 7 of 17 failed.** The first `live_eval` run
+  (2026-10-29, $0.1129) passed 10 conversations, which are now replayed in CI. It also found a
+  server bug, now fixed: `/agent/chat` dropped text written in earlier tool rounds. The 7
+  failures are open; the main ones are answering heat law from memory instead of
+  `legal_context`, and skipping `find_legal_help`. The checks are substring and number checks,
+  so the *quality* of a refusal is still judged by reading it.
 - **The Python verifier is not in CI.** It is a one-off script, and it remains the
   strongest evidence here precisely because it was written independently. The Rust test
   reproduces its finding in-process; it does not replace the outside check.

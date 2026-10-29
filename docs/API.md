@@ -355,7 +355,7 @@ separation is what makes grounding enforceable rather than aspirational. The loo
 hallucinated tool name is answered as data (`{"error": "unknown tool: …"}`) so the model can
 recover instead of the request failing. `citations[]` grows only as tools actually succeed.
 
-**Evals.** 30 conversations replay through the real loop on every `cargo test`, against both
+**Evals.** 41 conversations (31 synthetic, 10 recorded live) replay through the real loop on every `cargo test`, against both
 endpoints, with the model replaced by a local server playing back its turns — no network, no
 cost. See [`crates/api/evals/README.md`](../crates/api/evals/README.md).
 

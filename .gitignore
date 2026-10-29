@@ -22,3 +22,6 @@ docs/**/*.html
 .remember/
 HouseCheck_Claim_Verification_Dossier.md
 HouseCheck_Data_Integrity_Review.pptx
+
+# Local triage output of a billed live_eval run (see crates/api/evals/README.md).
+crates/api/evals/live-failures.json

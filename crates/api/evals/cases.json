@@ -90,6 +90,23 @@
     }
   },
   {
+    "id": "answer-written-before-referral",
+    "kind": "synthetic",
+    "why": "Text written in the same turn as a tool call reaches the reader on both endpoints. Recorded live, the whole safety summary sat in the turn that called find_legal_help, and /agent/chat returned only the referral.",
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "Are there safety problems I should know about here?" }
+    ] },
+    "upstream": [
+      { "say": "This building has 1 open class-C violation (immediately hazardous) and 1 open class-B violation.", "tools": [["find_legal_help", {}]] },
+      { "answer": "Housing Court Answers (212-962-4795) can explain what those mean for you." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["find_legal_help"],
+      "answer_contains": ["1 open class-c violation", "212-962-4795"]
+    }
+  },
+  {
     "id": "out-of-set-bbl",
     "kind": "synthetic",
     "why": "A BBL outside the curated set is a 404 before the key check: probing costs nothing and reaches no model.",

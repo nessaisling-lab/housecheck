@@ -99,7 +99,12 @@ fn hex_digest(bytes: &[u8]) -> String {
 /// only as stable as its input: JSON key order, whitespace and unicode escaping are all free
 /// to change under a serialiser upgrade, and every historical signature would break with no
 /// code change. `\x1f` (unit separator) cannot appear in any of these fields.
-fn canonical(class: &str, description: Option<&str>, issued: Option<&str>, days: Option<i64>) -> Vec<u8> {
+fn canonical(
+    class: &str,
+    description: Option<&str>,
+    issued: Option<&str>,
+    days: Option<i64>,
+) -> Vec<u8> {
     let mut out = Vec::new();
     for part in [
         class,
@@ -215,19 +220,28 @@ impl ExportDocument {
                 row.days_open,
             ));
             if payload_hash != row.payload_hash {
-                return VerifyOutcome::Tampered { row: Some(i), what: "row content" };
+                return VerifyOutcome::Tampered {
+                    row: Some(i),
+                    what: "row content",
+                };
             }
             let mut linked = Vec::new();
             linked.extend_from_slice(prev.as_bytes());
             linked.extend_from_slice(payload_hash.as_bytes());
             let entry_hash = hex_digest(&linked);
             if entry_hash != row.entry_hash {
-                return VerifyOutcome::Tampered { row: Some(i), what: "chain link" };
+                return VerifyOutcome::Tampered {
+                    row: Some(i),
+                    what: "chain link",
+                };
             }
             prev = entry_hash;
         }
         if prev != self.chain_head {
-            return VerifyOutcome::Tampered { row: None, what: "chain head" };
+            return VerifyOutcome::Tampered {
+                row: None,
+                what: "chain head",
+            };
         }
         match (self.signature.as_deref(), self.public_key.as_deref()) {
             (Some(sig), Some(pk)) => {
@@ -236,13 +250,19 @@ impl ExportDocument {
                     let pk_bytes: [u8; 32] = hex::decode(pk).ok()?.try_into().ok()?;
                     let vk = ed25519_dalek::VerifyingKey::from_bytes(&pk_bytes).ok()?;
                     let signature = ed25519_dalek::Signature::from_bytes(&sig);
-                    ed25519_dalek::Verifier::verify(&vk, self.chain_head.as_bytes(), &signature).ok()
+                    ed25519_dalek::Verifier::verify(&vk, self.chain_head.as_bytes(), &signature)
+                        .ok()
                 })()
                 .is_some();
                 if ok {
-                    VerifyOutcome::SignedAndIntact { public_key: pk.to_string() }
+                    VerifyOutcome::SignedAndIntact {
+                        public_key: pk.to_string(),
+                    }
                 } else {
-                    VerifyOutcome::Tampered { row: None, what: "signature" }
+                    VerifyOutcome::Tampered {
+                        row: None,
+                        what: "signature",
+                    }
                 }
             }
             // Intact but unsigned is its own answer. Reporting it as "valid" would let an
@@ -251,7 +271,6 @@ impl ExportDocument {
         }
     }
 }
-
 
 /// Civil date from days since the epoch (Howard Hinnant). Local to this module so the
 /// document can stamp itself without the API having to pre-format anything.
@@ -342,19 +361,34 @@ impl ExportDocument {
     /// feature exists to avoid.
     pub fn to_plain_text(&self) -> String {
         let mut out = String::new();
-        out.push_str(&format!("HOUSECHECK RECORD - {}
-", self.address));
-        out.push_str(&format!("BBL {} - exported {}
+        out.push_str(&format!(
+            "HOUSECHECK RECORD - {}
+",
+            self.address
+        ));
+        out.push_str(&format!(
+            "BBL {} - exported {}
 
-", self.bbl, iso(self.exported_at_unix)));
+",
+            self.bbl,
+            iso(self.exported_at_unix)
+        ));
 
-        let hazardous = self.rows.iter().filter(|r| r.class.eq_ignore_ascii_case("C")).count();
+        let hazardous = self
+            .rows
+            .iter()
+            .filter(|r| r.class.eq_ignore_ascii_case("C"))
+            .count();
         out.push_str(&format!(
             "{} open HPD violation{} on record. {} immediately hazardous (Class C).
 
 ",
             self.open_violation_total,
-            if self.open_violation_total == 1 { "" } else { "s" },
+            if self.open_violation_total == 1 {
+                ""
+            } else {
+                "s"
+            },
             hazardous
         ));
 
@@ -406,9 +440,11 @@ impl ExportDocument {
             );
         }
 
-        out.push_str("
+        out.push_str(
+            "
 SOURCES
-");
+",
+        );
         for s in &self.sources {
             out.push_str(&format!(
                 "  {:<12} {:>9} rows  retrieved {}
@@ -419,11 +455,16 @@ SOURCES
             ));
         }
 
-        out.push_str("
+        out.push_str(
+            "
 VERIFICATION
-");
-        out.push_str(&format!("  Record hash: {}
-", self.chain_head));
+",
+        );
+        out.push_str(&format!(
+            "  Record hash: {}
+",
+            self.chain_head
+        ));
         match self.public_key.as_deref() {
             Some(pk) => {
                 out.push_str(&format!("  Signed by:   {pk}\n"));
@@ -440,12 +481,18 @@ VERIFICATION
             }
             None => out.push_str("  Unsigned (hash-chained, but not attributed to an issuer).\n"),
         }
-        out.push_str("  This text is a transcript. The verifiable document is the JSON
-");
-        out.push_str("  export of the same record, which anyone can check offline without
-");
-        out.push_str("  contacting HouseCheck.
-");
+        out.push_str(
+            "  This text is a transcript. The verifiable document is the JSON
+",
+        );
+        out.push_str(
+            "  export of the same record, which anyone can check offline without
+",
+        );
+        out.push_str(
+            "  contacting HouseCheck.
+",
+        );
         out
     }
 }
@@ -461,7 +508,10 @@ pub enum VerifyOutcome {
     /// Chain recomputes; no signature was attached.
     IntactUnsigned,
     /// Something does not recompute. `row` locates it where a row is at fault.
-    Tampered { row: Option<usize>, what: &'static str },
+    Tampered {
+        row: Option<usize>,
+        what: &'static str,
+    },
 }
 
 #[cfg(test)]
@@ -551,7 +601,11 @@ mod tests {
     fn an_unusable_secret_publishes_no_key_rather_than_a_placeholder() {
         assert_eq!(public_key_for(""), None);
         assert_eq!(public_key_for("not hex"), None);
-        assert_eq!(public_key_for("aabb"), None, "wrong length must not be padded");
+        assert_eq!(
+            public_key_for("aabb"),
+            None,
+            "wrong length must not be padded"
+        );
     }
 
     /// The transcript is the version most likely to be read by someone who never sees the
@@ -566,8 +620,14 @@ mod tests {
         assert!(t.contains("3016440063"));
         // The hash is what ties this paper to the checkable document.
         assert!(t.contains(&doc().chain_head), "record hash must appear");
-        assert!(t.contains("transcript"), "must not pass itself off as the verifiable artifact");
-        assert!(t.contains("wvxf-dwi5"), "sources must travel with the record");
+        assert!(
+            t.contains("transcript"),
+            "must not pass itself off as the verifiable artifact"
+        );
+        assert!(
+            t.contains("wvxf-dwi5"),
+            "sources must travel with the record"
+        );
 
         // Row two has no issue date; it must read as unknown, never as zero days.
         assert!(t.contains("age unknown"), "missing age must say so");
@@ -603,7 +663,10 @@ mod tests {
     fn one_edited_character_is_detected() {
         let mut d = doc();
         d.rows[0].description = Some("§ 27-2033 ADM CODE PROVIDE ADEQUATE HEXT".into());
-        assert!(matches!(d.verify(), VerifyOutcome::Tampered { row: Some(0), .. }));
+        assert!(matches!(
+            d.verify(),
+            VerifyOutcome::Tampered { row: Some(0), .. }
+        ));
     }
 
     /// Recomputing the hashes to match the edit must not rescue it: the chain head still
@@ -612,7 +675,12 @@ mod tests {
     fn recomputing_a_rows_own_hash_does_not_rescue_it() {
         let mut d = doc();
         d.rows[0].description = Some("ALTERED".into());
-        d.rows[0].payload_hash = hex_digest(&canonical("C", Some("ALTERED"), Some("2026-03-14"), Some(148)));
+        d.rows[0].payload_hash = hex_digest(&canonical(
+            "C",
+            Some("ALTERED"),
+            Some("2026-03-14"),
+            Some(148),
+        ));
         // Row 0 now self-consistent, but its entry_hash — and everything after — is not.
         assert!(matches!(d.verify(), VerifyOutcome::Tampered { .. }));
     }
@@ -675,17 +743,21 @@ mod tests {
     /// occurrences across 169 of 202 description blocks.
     #[test]
     fn hpds_control_character_renders_as_the_apostrophe_it_stands_for() {
-        assert_eq!(for_display("DESCRIBED ON HPD\u{1A}S WEBSITE"), "DESCRIBED ON HPD'S WEBSITE");
-        assert_eq!(for_display("THE AGENCY\u{1A}S HOUSING INFO"), "THE AGENCY'S HOUSING INFO");
+        assert_eq!(
+            for_display("DESCRIBED ON HPD\u{1A}S WEBSITE"),
+            "DESCRIBED ON HPD'S WEBSITE"
+        );
+        assert_eq!(
+            for_display("THE AGENCY\u{1A}S HOUSING INFO"),
+            "THE AGENCY'S HOUSING INFO"
+        );
     }
 
     /// Measured on the artifact 2026-08-12: 5 of 250 have no house number, and
     /// `3015097501` has the empty string, which rendered as an empty heading.
     #[test]
     fn a_building_with_no_address_says_so_rather_than_rendering_blank() {
-        assert_eq!(
-            display_address(""), "Address not recorded"
-        );
+        assert_eq!(display_address(""), "Address not recorded");
     }
 
     /// A street with no number is real and locatable to a block, not to a door. Saying
@@ -693,7 +765,8 @@ mod tests {
     #[test]
     fn a_street_without_a_number_is_labelled_rather_than_shown_bare() {
         assert_eq!(
-            display_address("FULTON STREET"), "FULTON STREET (no house number on record)"
+            display_address("FULTON STREET"),
+            "FULTON STREET (no house number on record)"
         );
     }
 
@@ -738,9 +811,16 @@ mod tests {
             0,
         );
         let transcript = rebuilt.to_plain_text();
-        assert!(transcript.contains("HPD'S WEBSITE"), "transcript should read cleanly");
         assert!(
-            rebuilt.rows[0].description.as_deref().unwrap().contains('\u{1A}'),
+            transcript.contains("HPD'S WEBSITE"),
+            "transcript should read cleanly"
+        );
+        assert!(
+            rebuilt.rows[0]
+                .description
+                .as_deref()
+                .unwrap()
+                .contains('\u{1A}'),
             "the stored description must keep HPD's byte"
         );
         assert!(transcript.contains("keeps HPD's bytes exactly as retrieved"));

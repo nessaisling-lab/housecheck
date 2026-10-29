@@ -347,7 +347,11 @@ impl RepairSpeed {
             } else {
                 (durations[n / 2 - 1] + durations[n / 2]) / 2
             };
-            return Some(Self::Median { median_days, sample: n as u32, since_year });
+            return Some(Self::Median {
+                median_days,
+                sample: n as u32,
+                since_year,
+            });
         }
 
         // Nothing closed, and enough sitting open that the silence is a finding rather than a
@@ -467,7 +471,10 @@ mod tests {
     fn serializes_to_the_wire_contract() {
         let json = |s: StabilizationStatus| serde_json::to_string(&s).unwrap();
         assert_eq!(json(StabilizationStatus::Likely), "\"likely\"");
-        assert_eq!(json(StabilizationStatus::NoneOnRecord), "\"none_on_record\"");
+        assert_eq!(
+            json(StabilizationStatus::NoneOnRecord),
+            "\"none_on_record\""
+        );
         assert_eq!(json(StabilizationStatus::Unverified), "\"unverified\"");
 
         // And round-trips, so a stored/cached card still deserializes.
@@ -545,7 +552,12 @@ mod tests {
         };
         // 60 real dates: 2025-01-01 through 2025-02-29 would not exist, so walk months.
         let mut vs: Vec<Violation> = (0..60)
-            .map(|i| v(Some(&format!("2025-{:02}-{:02}", i / 28 + 1, i % 28 + 1)), true))
+            .map(|i| {
+                v(
+                    Some(&format!("2025-{:02}-{:02}", i / 28 + 1, i % 28 + 1)),
+                    true,
+                )
+            })
             .collect();
         let newest = vs
             .iter()
@@ -556,7 +568,10 @@ mod tests {
         vs.push(v(Some("2026-06-01"), false)); // closed: must not appear at all
 
         let (details, total) = ViolationDetail::from_open(&vs, "2026-08-09");
-        assert_eq!(total, 61, "total counts every OPEN violation, not the capped list");
+        assert_eq!(
+            total, 61,
+            "total counts every OPEN violation, not the capped list"
+        );
         assert_eq!(details.len(), OPEN_DETAIL_CAP);
 
         // Newest first, so the freshest violation is also the fewest days open.
@@ -569,7 +584,9 @@ mod tests {
         assert_eq!(all.last().unwrap().days_open, None);
 
         // Closed violations are absent, since the card lists what is still wrong.
-        assert!(details.iter().all(|d| d.issued_on.as_deref() != Some("2026-06-01")));
+        assert!(details
+            .iter()
+            .all(|d| d.issued_on.as_deref() != Some("2026-06-01")));
     }
 
     #[test]
@@ -669,7 +686,11 @@ mod tests {
     /// Helper: unwrap a `Median` or fail loudly, so tests read as assertions not matches.
     fn median_of(durations: Vec<i64>) -> (i64, u32) {
         match RepairSpeed::classify(durations, 0, 2023) {
-            Some(RepairSpeed::Median { median_days, sample, .. }) => (median_days, sample),
+            Some(RepairSpeed::Median {
+                median_days,
+                sample,
+                ..
+            }) => (median_days, sample),
             other => panic!("expected a median, got {other:?}"),
         }
     }
@@ -680,7 +701,11 @@ mod tests {
     /// over this row set is 340 days and describes none of them; the median is 30.
     #[test]
     fn one_ancient_closure_does_not_move_the_median() {
-        assert_eq!(median_of(vec![6, 12, 30, 580, 1075]), (30, 5), "a mean would report 340");
+        assert_eq!(
+            median_of(vec![6, 12, 30, 580, 1075]),
+            (30, 5),
+            "a mean would report 340"
+        );
     }
 
     /// An even-length sample averages the middle pair, so "half took longer" stays exactly true.
@@ -719,8 +744,14 @@ mod tests {
     /// But silence only means something when there is something to be silent about.
     #[test]
     fn a_building_with_almost_no_violations_makes_no_claim() {
-        assert!(RepairSpeed::classify(vec![], 0, 2023).is_none(), "no violations is not slow");
-        assert!(RepairSpeed::classify(vec![], 4, 2023).is_none(), "4 open is too few to judge");
+        assert!(
+            RepairSpeed::classify(vec![], 0, 2023).is_none(),
+            "no violations is not slow"
+        );
+        assert!(
+            RepairSpeed::classify(vec![], 4, 2023).is_none(),
+            "4 open is too few to judge"
+        );
         assert!(
             RepairSpeed::classify(vec![10, 20], 100, 2023).is_none(),
             "some closures but too few to median, and not silent either -- no claim"
@@ -746,10 +777,16 @@ mod tests {
 
         let n = serde_json::to_string(&RepairSpeed::classify(vec![], 33, 2023)).unwrap();
         assert!(n.contains(r#""kind":"nothing_closed""#), "got {n}");
-        assert!(!n.contains("median_days"), "must not imply a duration it does not have");
+        assert!(
+            !n.contains("median_days"),
+            "must not imply a duration it does not have"
+        );
 
         // And absent is absent -- HealthCard's skip_serializing_if keeps it off the wire, so a
         // client can never read a missing history as a fast one.
-        assert_eq!(serde_json::to_string(&RepairSpeed::classify(vec![], 0, 2023)).unwrap(), "null");
+        assert_eq!(
+            serde_json::to_string(&RepairSpeed::classify(vec![], 0, 2023)).unwrap(),
+            "null"
+        );
     }
 }

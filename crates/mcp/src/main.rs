@@ -104,7 +104,10 @@ impl HouseCheck {
                        identifiers to pass to get_building_card. Only searches the 250 \
                        buildings in the covered community district."
     )]
-    fn search_building(&self, Parameters(SearchParams { query }): Parameters<SearchParams>) -> String {
+    fn search_building(
+        &self,
+        Parameters(SearchParams { query }): Parameters<SearchParams>,
+    ) -> String {
         let needle = query.trim().to_lowercase();
         if needle.len() < 3 {
             return "Give at least three characters of a street address.".into();
@@ -281,10 +284,9 @@ fn verify_report(
                  build the same structure.\n\nIntact is not the same as authentic.{}",
                 provenance
             ),
-            model::export::VerifyOutcome::SignedAndIntact { public_key } => {
-                match published {
-                    None => format!(
-                        "INCONCLUSIVE — the chain recomputes and the signature checks out \
+            model::export::VerifyOutcome::SignedAndIntact { public_key } => match published {
+                None => format!(
+                    "INCONCLUSIVE — the chain recomputes and the signature checks out \
                          against the key carried inside the document \
                          ({}…).\n\nBut this server has no independently published key to \
                          compare against, so it cannot tell you whether that key is \
@@ -292,30 +294,29 @@ fn verify_report(
                          with the document proves the document is self-consistent, which a \
                          forger can also arrange.\n\nFetch the published key from \
                          /meta and compare it yourself.",
-                        &public_key[..public_key.len().min(16)]
-                    ),
-                    Some(known) if known.eq_ignore_ascii_case(&public_key) => format!(
-                        "VERIFIED — the hash chain recomputes and the signature checks out \
+                    &public_key[..public_key.len().min(16)]
+                ),
+                Some(known) if known.eq_ignore_ascii_case(&public_key) => format!(
+                    "VERIFIED — the hash chain recomputes and the signature checks out \
                          against HouseCheck's published key.\n\nThis document was produced \
                          by HouseCheck and has not been altered since. {} rows, {} open \
                          violations recorded at export.{}",
-                        doc.rows.len(),
-                        doc.open_violation_total,
-                        provenance
-                    ),
-                    Some(known) => format!(
-                        "REJECTED — SIGNED BY AN UNKNOWN KEY.\n\nThe chain recomputes and \
+                    doc.rows.len(),
+                    doc.open_violation_total,
+                    provenance
+                ),
+                Some(known) => format!(
+                    "REJECTED — SIGNED BY AN UNKNOWN KEY.\n\nThe chain recomputes and \
                          the signature is valid, so the document is internally consistent. \
                          It is signed with {}… but HouseCheck publishes {}…. Whoever made \
                          this signed it with their own key.\n\nThis is exactly the forgery \
                          a chain alone cannot catch: rewrite a row, recompute every hash, \
                          sign it yourself, and every check inside the document passes. Do \
                          not rely on it.",
-                        &public_key[..public_key.len().min(16)],
-                        &known[..known.len().min(16)]
-                    ),
-                }
-            }
+                    &public_key[..public_key.len().min(16)],
+                    &known[..known.len().min(16)]
+                ),
+            },
         }
     }
 }
@@ -332,7 +333,10 @@ fn verify_report(
 fn card_document(bbl: Option<&str>) -> String {
     let base = app_base();
     let (url, title) = match bbl {
-        Some(b) => (format!("{base}/building/{b}"), format!("Building Health Card — BBL {b}")),
+        Some(b) => (
+            format!("{base}/building/{b}"),
+            format!("Building Health Card — BBL {b}"),
+        ),
         None => (base.clone(), "HouseCheck".to_string()),
     };
     format!(
@@ -436,13 +440,15 @@ impl ServerHandler for HouseCheck {
                 ));
             }
         }
-        Ok(ReadResourceResult::new(vec![ResourceContents::TextResourceContents {
-            uri: uri.to_string(),
-            mime_type: Some(UI_MIME.into()),
-            text: card_document(bbl),
-            meta: None,
-        }])
-        .into())
+        Ok(
+            ReadResourceResult::new(vec![ResourceContents::TextResourceContents {
+                uri: uri.to_string(),
+                mime_type: Some(UI_MIME.into()),
+                text: card_document(bbl),
+                meta: None,
+            }])
+            .into(),
+        )
     }
 }
 
@@ -479,7 +485,9 @@ fn civil_ymd(z: i64) -> (i64, u32, u32) {
 async fn main() -> Result<()> {
     // stderr, never stdout: stdout is the MCP transport, and a stray log line there is a
     // protocol error rather than noise.
-    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     let db = std::env::var("HOUSECHECK_DB").unwrap_or_else(|_| "data/housecheck.db".to_string());
     let conn = store::open_db_readonly(&db)?;
@@ -550,11 +558,17 @@ mod tests {
     #[test]
     fn the_document_states_its_limits_even_if_the_iframe_never_renders() {
         let doc = card_document(Some("3016440063"));
-        assert!(doc.contains("A signal, not a legal ruling"), "missing the caveat");
+        assert!(
+            doc.contains("A signal, not a legal ruling"),
+            "missing the caveat"
+        );
         assert!(doc.contains("NYC open data"), "missing the source");
         // Not `hidden`: a hidden paragraph cannot serve as a fallback, which is the only
         // thing it is for.
-        assert!(!doc.contains("<p hidden>"), "the fallback must not be hidden");
+        assert!(
+            !doc.contains("<p hidden>"),
+            "the fallback must not be hidden"
+        );
     }
 
     /// The iframe is a boundary we own: a host renders this inside its own surface.
@@ -562,7 +576,10 @@ mod tests {
     fn the_iframe_is_sandboxed_and_leaks_no_referrer() {
         let doc = card_document(None);
         assert!(doc.contains("sandbox="));
-        assert!(!doc.contains("allow-top-navigation"), "must not be able to navigate the host");
+        assert!(
+            !doc.contains("allow-top-navigation"),
+            "must not be able to navigate the host"
+        );
         assert!(doc.contains("referrerpolicy=\"no-referrer\""));
     }
 
@@ -643,7 +660,10 @@ mod tests {
         let mut forged = doc_saying("NO VIOLATIONS OF ANY KIND AT THIS ADDRESS");
         assert!(forged.sign_with(THEIRS));
         assert!(
-            matches!(forged.verify(), model::export::VerifyOutcome::SignedAndIntact { .. }),
+            matches!(
+                forged.verify(),
+                model::export::VerifyOutcome::SignedAndIntact { .. }
+            ),
             "the forgery must pass the document's own checks, or this proves nothing"
         );
 
@@ -661,7 +681,10 @@ mod tests {
         assert!(d.sign_with(OURS));
         let out = verify_report(&d, None, "");
         assert!(out.starts_with("INCONCLUSIVE"), "got: {out}");
-        assert!(!out.contains("VERIFIED"), "must not imply verification: {out}");
+        assert!(
+            !out.contains("VERIFIED"),
+            "must not imply verification: {out}"
+        );
     }
 
     #[test]

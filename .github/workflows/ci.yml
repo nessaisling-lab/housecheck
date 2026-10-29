@@ -1,6 +1,6 @@
 # HouseCheck CI — build + test across Linux, macOS, Windows.
-# The `frontend` job stays dormant until a `frontend/` app exists (see docs/TASKS.md FE-1),
-# so the backend-only foundation lands green; the frontend teammate's first push turns it on.
+# The `frontend` job runs only when `frontend/package.json` exists (it does), so a backend-only
+# checkout still lands green. `cargo test` includes the agent evals (crates/api/evals/).
 name: ci
 
 on:

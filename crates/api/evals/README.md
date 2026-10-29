@@ -142,7 +142,7 @@ glued them mid-line. `answer-written-before-referral` pins it.
   "no tool that covers heating-season dates" (`legal_context` does) and that the dates "can
   vary slightly year to year" (they don't). The `legal_context` description says to use it
   when the user describes a housing *problem*, so a plain question about the law doesn't
-  trigger it. The planned local law database (see `handoffs/housecheck-product/HANDOFF.md` in the career hub) is the fix. Changing
+  trigger it. A sourced local law database, now proposed, is the fix. Changing
   the tool description changes `agent_version` and means re-recording everything, so it waits
   for that work.
 - **Two passing answers say things these checks can't see.** `rent-fairness` says a

@@ -14,9 +14,9 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 29 (29 synthetic, 0 recorded) |
-| Replays per run | 57: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 1,740 |
+| Conversations | 30 (30 synthetic, 0 recorded) |
+| Replays per run | 59: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 1,811 |
 | Time | 1.7 s for the eval tests, no network |
 | Live model calls | 0 |
 
@@ -79,7 +79,7 @@ $env:OPENROUTER_API_KEY = "<key>"
 cargo test -p api live_eval -- --ignored --nocapture
 ```
 
-This runs the 16 conversations marked `"live": true` through `/agent/chat` against the real
+This runs the 17 conversations marked `"live": true` through `/agent/chat` against the real
 model. The stand-in model server forwards each request to OpenRouter and records the answer.
 The run applies every check that doesn't assume a script (exact tool order, call counts and
 `answer_contains` are skipped) and prints each conversation's rounds, cost and time. Conversations
@@ -91,7 +91,7 @@ stops starting new conversations once `HOUSECHECK_EVAL_MAX_USD` (default `1.00`)
 using the `usage.cost` OpenRouter reports for each round. `OPENROUTER_MODEL` picks the model,
 and the default is the production one.
 
-**Expected cost (an estimate, not yet measured).** About 27 rounds of roughly 3k input tokens
+**Expected cost (an estimate, not yet measured).** About 29 rounds of roughly 3k input tokens
 each on `anthropic/claude-haiku-4.5`, so around $0.10–$0.20. The run prints the real figure.
 
 ## Adding a conversation

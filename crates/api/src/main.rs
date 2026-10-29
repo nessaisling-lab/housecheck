@@ -121,7 +121,7 @@ impl LlmConfig {
 /// exactly the actionable part. 1200 still cut a succession-rights answer off mid-phone-number
 /// — the worst place to stop an answer someone may be reading in a crisis. Now 3000, which fits
 /// the longest observed answer (law + evidence checklist + process + drafted question +
-/// referrals) with headroom. Still bounded: we do not stream, every token is billed, and when
+/// referrals) with headroom. Still bounded: every token is billed, streamed or not, and when
 /// the cap IS hit the answer says so rather than looking complete.
 const AGENT_MAX_TOKENS: u32 = 3000;
 /// Most recent turns forwarded upstream. History is resent in full on every request, so an
@@ -1907,8 +1907,8 @@ fn legal_help_directory() -> serde_json::Value {
 /// Hard stop on the tool-calling loop.
 ///
 /// Without a cap, a model that misreads a tool result can call the same tool forever: the
-/// request never returns and every iteration is billed. Five is generous for the three
-/// read-only tools here — a legitimate answer needs one or two.
+/// request never returns and every iteration is billed. Five is generous for the read-only
+/// tools here — a legitimate answer needs one to three (`address-lookup` in the evals is three).
 const MAX_TOOL_ITERATIONS: usize = 5;
 
 /// The browser's own abort, mirrored from `frontend/src/lib/api.ts` (`LLM_TIMEOUT_MS`).
@@ -2023,7 +2023,7 @@ fn round_timeout_secs(remaining_secs: u64) -> Option<u64> {
 /// The `description` text is load-bearing: it is the only thing the model uses to decide which
 /// tool fits a question, so it reads as instructions to a caller, not as documentation.
 ///
-/// All three are read-only and wrap logic that already exists and is already tested. Nothing
+/// Every tool is read-only and wraps logic that already exists and is already tested. Nothing
 /// here can mutate state — a bug in the loop can waste money but cannot corrupt data.
 fn tool_schemas() -> serde_json::Value {
     serde_json::json!([
@@ -2244,14 +2244,22 @@ async fn dispatch_tool(
         }
         "get_open_violations" => {
             let bbl = bbl_arg();
+            // A BBL we do not hold has no violation rows, which used to come back as
+            // `count: 0` with an HPD citation: a sourced, confident "no open violations" for a
+            // building nobody looked at. Ask whether we hold it before counting anything.
             let out = {
                 let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
-                get_open_violations(&conn, &bbl)
+                get_building(&conn, &bbl)
+                    .and_then(|b| b.map(|_| get_open_violations(&conn, &bbl)).transpose())
             };
             match out {
-                Ok(v) => (
+                Ok(Some(v)) => (
                     serde_json::json!({ "bbl": bbl, "count": v.len(), "violations": v }),
                     Some("NYC HPD open violations (wvxf-dwi5)".to_string()),
+                ),
+                Ok(None) => (
+                    serde_json::json!({ "error": "building not in HouseCheck's curated set", "bbl": bbl }),
+                    None,
                 ),
                 Err(e) => {
                     tracing::error!(error = %e, "tool get_open_violations failed");
@@ -2488,23 +2496,31 @@ struct ChatResp {
     citations: Vec<String>,
 }
 
-/// `POST /agent/chat` — multi-turn, grounded Q&A about one building.
-///
-/// Slice 2 of the agent build: conversation only, no tool calling yet. The model sees a system
-/// prompt, the grounding block for the requested BBL, and the recent conversation.
-///
-/// A human label for a tool, for the progress line a reader sees while it runs.
+/// Progress lines a reader sees while a tool runs, keyed by tool name.
 ///
 /// Named for what it is doing rather than for the function called: "Reading HPD's own
-/// notice text" tells someone why they are waiting; `get_violation_details` does not.
+/// notice text" tells someone why they are waiting; `get_open_violations` does not.
+///
+/// A table rather than a `match` so a test can check every key against `tool_schemas()`.
+/// The `match` this replaced keyed two labels on tools that never existed
+/// (`get_violation_details`, `search_housing_law`), so the slowest lookup, law search, showed
+/// the generic line and nothing noticed.
+const TOOL_PROGRESS: [(&str, &str); 5] = [
+    ("get_open_violations", "Reading HPD's own violation text…"),
+    (
+        "check_rent_fairness",
+        "Comparing the rent against the tract median…",
+    ),
+    ("legal_context", "Reading the published law…"),
+    ("search_law", "Looking up the housing law…"),
+    ("find_legal_help", "Finding free legal help…"),
+];
+
 fn tool_progress_label(name: &str) -> &'static str {
-    match name {
-        "get_violation_details" => "Reading HPD's own violation text…",
-        "check_rent_fairness" => "Comparing the rent against the tract median…",
-        "search_housing_law" => "Looking up the housing law…",
-        "find_legal_help" => "Finding free legal help…",
-        _ => "Checking the building's record…",
-    }
+    TOOL_PROGRESS
+        .iter()
+        .find(|(tool, _)| *tool == name)
+        .map_or("Checking the building's record…", |(_, label)| label)
 }
 
 /// `POST /agent/chat/stream` — the same answer, as it is written.
@@ -2801,6 +2817,11 @@ async fn run_agent_stream(
     .await;
 }
 
+/// `POST /agent/chat` — multi-turn, grounded Q&A about one building, answered in one JSON body.
+///
+/// The model sees a system prompt, the grounding block for the requested BBL and the recent
+/// conversation, and may call the read-only tools in `tool_schemas` before it answers.
+///
 /// - `400` if `messages` is empty or the last turn isn't from the user.
 /// - `404` if the BBL isn't in the curated set (checked before the key, so probing costs nothing).
 /// - `429` if the client exceeded its window.
@@ -3674,6 +3695,19 @@ mod tests {
     /// would tell the reader nothing about why they are waiting.
     #[test]
     fn every_tool_has_a_progress_line_written_for_a_person() {
+        let schemas = tool_schemas();
+        let names: Vec<&str> = schemas
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        for (tool, _) in TOOL_PROGRESS {
+            assert!(
+                names.contains(&tool),
+                "progress line for {tool}, which is not a tool: it can never be shown"
+            );
+        }
         for t in tool_schemas().as_array().unwrap() {
             let name = t["function"]["name"].as_str().unwrap();
             let label = tool_progress_label(name);

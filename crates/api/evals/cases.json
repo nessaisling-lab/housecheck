@@ -292,6 +292,27 @@
     }
   },
   {
+    "id": "violations-for-unheld-bbl",
+    "kind": "synthetic",
+    "why": "Violations for a building HouseCheck does not hold are an error, not a sourced count of zero.",
+    "live": true,
+    "request": { "bbl": "3000010001", "messages": [
+      { "role": "user", "content": "Does BBL 1013920038 have any open violations?" }
+    ] },
+    "upstream": [
+      { "tools": [["get_open_violations", { "bbl": "1013920038" }]] },
+      { "answer": "HouseCheck doesn't hold a record for BBL 1013920038, so I can't tell you whether it has open violations. That is not the same as having none." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["get_open_violations"],
+      "must_call": ["get_open_violations"],
+      "fed_back_contains": ["not in HouseCheck's curated set"],
+      "citations_exclude": ["NYC HPD open violations (wvxf-dwi5)"],
+      "answer_excludes": ["0 open violations", "no open violations"]
+    }
+  },
+  {
     "id": "malformed-tool-arguments",
     "kind": "synthetic",
     "why": "Arguments that do not parse are treated as empty, the lookup fails as data, and the request does not 500.",

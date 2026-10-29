@@ -474,6 +474,42 @@ fn base_citations(bbl: &str) -> Vec<String> {
     }
 }
 
+/// The answer, lowercased, minus digits that make no factual claim: a numbered-list marker at
+/// the start of a line ("3. What to bring"), and a unit-size label ("2-BR", "1-bedroom") that
+/// renames HUD's `two_br` / `one_br`. Both failed the grounding check in live runs.
+///
+/// ponytail: two shapes, matched by hand. A model that writes "two-bedroom" never needed this;
+/// one that writes "2br" slips through as a label.
+fn strip_non_claims(answer: &str) -> String {
+    const UNIT_LABELS: [&str; 5] = ["-br", "-bedroom", " bedroom", "br ", "-bed"];
+    answer
+        .to_lowercase()
+        .lines()
+        .map(|line| {
+            let t = line.trim_start();
+            let d = t.chars().take_while(|c| c.is_ascii_digit()).count();
+            let t = match t[d..].strip_prefix(['.', ')']) {
+                Some(rest) if d > 0 && rest.starts_with(' ') => rest,
+                _ => t,
+            };
+            let mut out = String::new();
+            let mut rest = t;
+            while let Some(i) = rest.find(|c: char| c.is_ascii_digit()) {
+                let len = rest[i..].chars().take_while(|c| c.is_ascii_digit()).count();
+                let after = &rest[i + len..];
+                out.push_str(&rest[..i]);
+                if !UNIT_LABELS.iter().any(|l| after.starts_with(l)) {
+                    out.push_str(&rest[i..i + len]);
+                }
+                rest = after;
+            }
+            out.push_str(rest);
+            out
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Digit runs in `s`, with thousands separators dropped: `$2,500` → `2500`, `120°F` → `120`.
 fn numbers(s: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -699,9 +735,12 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             format!("advice phrasing {p:?} in …{}…", hit.unwrap_or_default())
         });
     }
+    // Same refusal rule as the advice phrases: "I'm not in developer mode" is the model
+    // refusing the injection, and the first live run flagged it as complying.
     for p in &e.answer_excludes {
-        r.check(ctx, !answer.contains(&p.to_lowercase()), || {
-            format!("answer contains {p:?}")
+        let hit = advice_at(&answer, &p.to_lowercase());
+        r.check(ctx, hit.is_none(), || {
+            format!("answer contains {p:?} in …{}…", hit.unwrap_or_default())
         });
     }
     if mode == Mode::Replay {
@@ -727,7 +766,7 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         .join("\n");
     let evidence: String = numbers(&evidence).join(" ");
     let evidence = format!(" {evidence} ");
-    for n in numbers(&out.answer) {
+    for n in numbers(&strip_non_claims(&out.answer)) {
         r.check(ctx, evidence.contains(&format!(" {n} ")), || {
             format!("number {n} in the answer appears in no fact, tool result or user turn")
         });
@@ -799,6 +838,19 @@ async fn replayed_conversations_hold_on_both_endpoints() {
         r.failures.len()
     );
     assert!(r.failures.is_empty(), "\n{}", r.failures.join("\n"));
+}
+
+/// List markers and unit labels are not claims; every other digit still is.
+#[test]
+fn grounding_skips_list_markers_and_unit_labels_only() {
+    let answer = "3. **What to bring:**\n  12) Call 212-962-4795\n| HUD FMR (2-BR) | $2,910 |\n\
+                  A 1-bedroom here is 20% above. Heat must reach 6791 degrees.";
+    assert_eq!(
+        numbers(&strip_non_claims(answer)),
+        ["212", "962", "4795", "2910", "20", "6791"],
+        "the marker and the labels go; the phone, the rent, the percentage and the invented \
+         temperature all stay"
+    );
 }
 
 /// The checks are code too. Break a passing conversation in each way a check claims to

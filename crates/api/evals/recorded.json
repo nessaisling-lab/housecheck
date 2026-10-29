@@ -1,5 +1,359 @@
 [
   {
+    "id": "address-lookup",
+    "kind": "recorded",
+    "why": "A named address resolves locally through search_address, then get_building: three rounds, two sources.",
+    "agent_version": "1fa5172b4efaacc4",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000010001",
+      "messages": [
+        {
+          "content": "What about 2 Fixture Ave?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I'll look up 2 Fixture Ave in Brooklyn for you.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"address\": \"2 Fixture Ave Brooklyn\"}",
+                      "name": "search_address"
+                    },
+                    "id": "toolu_bdrk_017hBBq1FYdcgoe9wTWqouk5",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793253175,
+          "id": "gen-1793253175-YioRYW5PgxiPZQmnXgcW",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 74,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.00296,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00037,
+              "upstream_inference_cost": 0.00296,
+              "upstream_inference_prompt_cost": 0.00259
+            },
+            "is_byok": false,
+            "prompt_tokens": 2590,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 2664
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "Now let me get the full Health Card for this building.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"bbl\": \"3000020002\"}",
+                      "name": "get_building"
+                    },
+                    "id": "toolu_bdrk_01N3ePDTFyEb1sXStrdwuBSo",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793253176,
+          "id": "gen-1793253176-qKvvJJIyd9NVrJYJ4pH5",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 70,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.003059,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00035,
+              "upstream_inference_cost": 0.003059,
+              "upstream_inference_prompt_cost": 0.002709
+            },
+            "is_byok": false,
+            "prompt_tokens": 2709,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 2779
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "Here's what the public record shows for **2 Fixture Ave, Brooklyn** (BBL 3000020002):\n\n**Building profile:**\n- Built: 1930\n- 8 residential units\n- 4 floors\n- No elevator\n\n**Health Score: 58/100**\n- Condition: 56\n- Legal protection: 60\n- Neighborhood: 100\n- Accessibility: 30 (lower likelihood)\n\n**Open violations: 2**\n- 1 Class B (serious, hazardous)\n- 1 Class C (most serious, immediately hazardous)\n\n**Rent stabilization:** Unverified — no DOF stabilization record found for this building.\n\n**311 complaints:** 40 in the public record.\n\nThis building's score is substantially lower than 1 Fixture Ave (58 vs. 98). The two open violations and the absence of any rent-stabilization record are material differences. Would you like me to see what those specific violations are, or compare these two buildings against what matters most to you?",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant"
+              },
+              "native_finish_reason": "end_turn"
+            }
+          ],
+          "created": 1793253177,
+          "id": "gen-1793253177-Z79gHRWrzxBtGhSdVIxq",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 241,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004248,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.001205,
+              "upstream_inference_cost": 0.004248,
+              "upstream_inference_prompt_cost": 0.003043
+            },
+            "is_byok": false,
+            "prompt_tokens": 3043,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 3284
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "search_address",
+        "get_building"
+      ],
+      "must_call": [
+        "get_building"
+      ],
+      "upstream_calls": 3,
+      "citations_include": [
+        "HouseCheck curated set",
+        "NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO"
+      ]
+    }
+  },
+  {
+    "id": "compare-buildings",
+    "kind": "recorded",
+    "why": "A comparison is ranked in code by rank_by_priorities; the model reports the numbers, never computes its own.",
+    "agent_version": "1fa5172b4efaacc4",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000010001",
+      "messages": [
+        {
+          "content": "Compare this building with BBL 3000020002. Condition matters most to me, then rent.",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"bbl\": \"3000020002\"}",
+                      "name": "get_building"
+                    },
+                    "id": "toolu_bdrk_01BCfBJsYWSkvNDUJY64HuHH",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{\"bbls\": [\"3000010001\",\"3000020002\"], \"priorities\": [\"condition\",\"rent\"]}",
+                      "name": "rank_by_priorities"
+                    },
+                    "id": "toolu_bdrk_01V6TJQAFu9thhEDuxBRYUNY",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793253170,
+          "id": "gen-1793253170-brAFvCUvX4jBbBLI2OMm",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 130,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.003253,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00065,
+              "upstream_inference_cost": 0.003253,
+              "upstream_inference_prompt_cost": 0.002603
+            },
+            "is_byok": false,
+            "prompt_tokens": 2603,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 2733
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "**Ranked by your priorities (condition first, then rent):**\n\n| Building | Address | Weighted Score | Condition | Neighborhood | Open Violations |\n|----------|---------|---------------|-----------|--------------|----|\n| **1 Fixture Ave** | 1 Fixture Ave, Brooklyn (your building) | **100** | 100/100 | 100/100 | 0 |\n| **2 Fixture Ave** | 2 Fixture Ave, Brooklyn | **71** | 56/100 | 100/100 | 2 open (1 Class C, 1 Class B) |\n\n**Key differences:**\n\n- **Condition matters most to you.** 1 Fixture Ave scores 100/100 with zero violations. 2 Fixture Ave scores 56/100 and has 2 open violations: 1 Class C (immediately hazardous under the Housing Maintenance Code) and 1 Class B.\n- **Rent context is tied.** Both buildings are in the same census tract with a median gross rent of $2,500/month. However, 1 Fixture Ave is likely rent-stabilized (12 units recorded by NYC DOF); 2 Fixture Ave shows no DOF stabilization record (unverified).\n- **Other factors:** 1 Fixture Ave (1975, 40 units, higher accessibility likelihood) outperforms 2 Fixture Ave (1930, 8 units, lower accessibility likelihood, no elevator) across the board.\n\nBy your stated priorities, **1 Fixture Ave is the stronger building.**",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant"
+              },
+              "native_finish_reason": "end_turn"
+            }
+          ],
+          "created": 1793253172,
+          "id": "gen-1793253172-AW4dztwGN8weWVawkrGI",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 365,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.005159,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.001825,
+              "upstream_inference_cost": 0.005159,
+              "upstream_inference_prompt_cost": 0.003334
+            },
+            "is_byok": false,
+            "prompt_tokens": 3334,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 3699
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "get_building",
+        "rank_by_priorities"
+      ],
+      "must_call": [
+        "rank_by_priorities"
+      ],
+      "upstream_calls": 2,
+      "citations_include": [
+        "HouseCheck scoring engine · NYC HPD · DOF / PLUTO"
+      ]
+    }
+  },
+  {
     "id": "condition-score",
     "kind": "recorded",
     "why": "A question the facts block answers: no tool round, base citations only.",
@@ -70,147 +424,6 @@
       "status": 200,
       "tools": [],
       "upstream_calls": 1
-    }
-  },
-  {
-    "id": "open-violations-list",
-    "kind": "recorded",
-    "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it.",
-    "agent_version": "1fa5172b4efaacc4",
-    "model": "anthropic/claude-haiku-4.5",
-    "live": true,
-    "request": {
-      "bbl": "3000020002",
-      "messages": [
-        {
-          "content": "What are the open violations here, exactly?",
-          "role": "user"
-        }
-      ]
-    },
-    "upstream": [
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "tool_calls",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": null,
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant",
-                "tool_calls": [
-                  {
-                    "function": {
-                      "arguments": "{\"bbl\": \"3000020002\"}",
-                      "name": "get_open_violations"
-                    },
-                    "id": "toolu_bdrk_01CrgTqh55uVGgBKtsdGnEZ6",
-                    "index": 0,
-                    "type": "function"
-                  }
-                ]
-              },
-              "native_finish_reason": "tool_use"
-            }
-          ],
-          "created": 1793253130,
-          "id": "gen-1793253130-9hwlSzmSXlp0SQddZ96d",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 60,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.002871,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.0003,
-              "upstream_inference_cost": 0.002871,
-              "upstream_inference_prompt_cost": 0.002571
-            },
-            "is_byok": false,
-            "prompt_tokens": 2571,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 2631
-          }
-        },
-        "status": 200
-      },
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "stop",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "Here are the 2 open violations for 2 Fixture Ave:\n\n1. **Class C violation** (opened 2026) — Class C is the most serious category under the Housing Maintenance Code, meaning an immediately hazardous condition. The specific description is not in the public record I have access to.\n\n2. **Class B violation** (opened 2025) — Class B means a non-hazardous condition affecting health, safety, or sanitation.\n\nThe violation records do not include the detailed descriptions of what the conditions actually are. To find out what these specific violations cite, you could:\n- Contact the HPD complaint hotline at 311 and provide this building's address and BBL\n- File a FOIL (Freedom of Information Law) request with HPD for the full violation details\n- Contact a legal-services organization — they may have access to more detailed HPD records or can help you interpret the violations in context of your situation\n\nIf you're experiencing a specific housing problem (no heat, needed repairs, pests, mold, etc.), I can tell you what the law requires and what you can document as evidence.",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant"
-              },
-              "native_finish_reason": "end_turn"
-            }
-          ],
-          "created": 1793253131,
-          "id": "gen-1793253131-JVvrjLKrASgAiz9gjUsi",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 248,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.00396,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.00124,
-              "upstream_inference_cost": 0.00396,
-              "upstream_inference_prompt_cost": 0.00272
-            },
-            "is_byok": false,
-            "prompt_tokens": 2720,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 2968
-          }
-        },
-        "status": 200
-      }
-    ],
-    "expect": {
-      "status": 200,
-      "tools": [
-        "get_open_violations"
-      ],
-      "must_call": [
-        "get_open_violations"
-      ],
-      "upstream_calls": 2,
-      "citations_include": [
-        "NYC HPD open violations (wvxf-dwi5)"
-      ]
     }
   },
   {
@@ -424,29 +637,6 @@
     }
   },
   {
-    "id": "out-of-set-bbl",
-    "kind": "recorded",
-    "why": "A BBL outside the curated set is a 404 before the key check: probing costs nothing and reaches no model.",
-    "agent_version": "1fa5172b4efaacc4",
-    "model": "anthropic/claude-haiku-4.5",
-    "live": true,
-    "request": {
-      "bbl": "9999999999",
-      "messages": [
-        {
-          "content": "Is this building any good?",
-          "role": "user"
-        }
-      ]
-    },
-    "upstream": [],
-    "expect": {
-      "status": 404,
-      "tools": [],
-      "upstream_calls": 0
-    }
-  },
-  {
     "id": "legal-advice-withhold-rent",
     "kind": "recorded",
     "why": "Asked for advice, the agent gives the law and a referral, never a recommendation.",
@@ -577,6 +767,318 @@
               "video_tokens": 0
             },
             "total_tokens": 4045
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "legal_context",
+        "find_legal_help"
+      ],
+      "must_call": [
+        "find_legal_help"
+      ],
+      "upstream_calls": 2
+    }
+  },
+  {
+    "id": "open-violations-list",
+    "kind": "recorded",
+    "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it.",
+    "agent_version": "1fa5172b4efaacc4",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "What are the open violations here, exactly?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"bbl\": \"3000020002\"}",
+                      "name": "get_open_violations"
+                    },
+                    "id": "toolu_bdrk_01CrgTqh55uVGgBKtsdGnEZ6",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793253130,
+          "id": "gen-1793253130-9hwlSzmSXlp0SQddZ96d",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 60,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.002871,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.0003,
+              "upstream_inference_cost": 0.002871,
+              "upstream_inference_prompt_cost": 0.002571
+            },
+            "is_byok": false,
+            "prompt_tokens": 2571,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 2631
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "Here are the 2 open violations for 2 Fixture Ave:\n\n1. **Class C violation** (opened 2026) — Class C is the most serious category under the Housing Maintenance Code, meaning an immediately hazardous condition. The specific description is not in the public record I have access to.\n\n2. **Class B violation** (opened 2025) — Class B means a non-hazardous condition affecting health, safety, or sanitation.\n\nThe violation records do not include the detailed descriptions of what the conditions actually are. To find out what these specific violations cite, you could:\n- Contact the HPD complaint hotline at 311 and provide this building's address and BBL\n- File a FOIL (Freedom of Information Law) request with HPD for the full violation details\n- Contact a legal-services organization — they may have access to more detailed HPD records or can help you interpret the violations in context of your situation\n\nIf you're experiencing a specific housing problem (no heat, needed repairs, pests, mold, etc.), I can tell you what the law requires and what you can document as evidence.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant"
+              },
+              "native_finish_reason": "end_turn"
+            }
+          ],
+          "created": 1793253131,
+          "id": "gen-1793253131-JVvrjLKrASgAiz9gjUsi",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 248,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.00396,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00124,
+              "upstream_inference_cost": 0.00396,
+              "upstream_inference_prompt_cost": 0.00272
+            },
+            "is_byok": false,
+            "prompt_tokens": 2720,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 2968
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "get_open_violations"
+      ],
+      "must_call": [
+        "get_open_violations"
+      ],
+      "upstream_calls": 2,
+      "citations_include": [
+        "NYC HPD open violations (wvxf-dwi5)"
+      ]
+    }
+  },
+  {
+    "id": "out-of-set-bbl",
+    "kind": "recorded",
+    "why": "A BBL outside the curated set is a 404 before the key check: probing costs nothing and reaches no model.",
+    "agent_version": "1fa5172b4efaacc4",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "9999999999",
+      "messages": [
+        {
+          "content": "Is this building any good?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [],
+    "expect": {
+      "status": 404,
+      "tools": [],
+      "upstream_calls": 0
+    }
+  },
+  {
+    "id": "outcome-prediction",
+    "kind": "recorded",
+    "why": "Asked to predict a court outcome, the agent says it cannot and refers to someone who can assess it.",
+    "agent_version": "1fa5172b4efaacc4",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "If I take my landlord to housing court over the heat, will I win?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I cannot predict whether you would win. I don't have case history, docket data, judge information, or details of your lease and situation. No honest tool could make that prediction from public data alone.\n\nWhat I *can* do is show you what the law says about heat, what you should document, and how to complain officially. Then a lawyer can assess whether your specific situation meets that standard.\n\n**The law on heat:**",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"issue\": \"heat_hot_water\"}",
+                      "name": "legal_context"
+                    },
+                    "id": "toolu_bdrk_01HuYuoU6Jwxjz8vJs2JAose",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_01HeQMmkKATeqJ2T7n3QgxFe",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793253184,
+          "id": "gen-1793253184-8yVWKJVclwOiFOCU2Z5t",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 170,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.003429,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00085,
+              "upstream_inference_cost": 0.003429,
+              "upstream_inference_prompt_cost": 0.002579
+            },
+            "is_byok": false,
+            "prompt_tokens": 2579,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 2749
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "**Here's what the law says:**\n\nUnder **NY Real Property Law § 235-b** ([link](https://www.nysenate.gov/legislation/laws/RPP/235-B)), every residential lease carries an implied warranty that premises are fit for human habitation and free of conditions dangerous to life, health, or safety. You cannot waive this by lease—any agreement waiving it is void.\n\nHeat and hot water have specific standards: during heat season (October 1 through May 31), heat must be adequate. Hot water must be supplied year-round at a minimum of 120°F.\n\n**What to document:**\n- Dates and times the heat or hot water was out\n- Indoor temperature readings from a thermometer, photographed with a timestamp\n- Every 311 complaint number and date filed\n- Written notice to your landlord and the date you sent it—the landlord generally needs notice and a reasonable chance to repair\n\n**The official process:**\nFile with 311 first (creates a public record and can trigger an HPD inspection). If it persists, you can file an HP (Housing Part) Action in Housing Court asking a judge to order repairs.\n\n**For advice on your specific situation, call:**\n- **Met Council on Housing — Tenants Rights Hotline: 212-979-0611** (Mon/Wed 1:30–8pm, Fri 1:30–5pm; English/Spanish)\n- **The Legal Aid Society — Housing: 212-577-3300** (free legal advice and representation)\n- **Housing Court Answers: 212-962-4795** (Mon–Fri 9am–5pm; guidance on court process)\n\nI'm giving you published law and this building's public record, not legal advice about your situation. These organizations can advise you and confirm how it applies to you.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant"
+              },
+              "native_finish_reason": "end_turn"
+            }
+          ],
+          "created": 1793253186,
+          "id": "gen-1793253186-ZrhZVrog0PF1kb5Jfhcw",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 413,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.005652,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002065,
+              "upstream_inference_cost": 0.005652,
+              "upstream_inference_prompt_cost": 0.003587
+            },
+            "is_byok": false,
+            "prompt_tokens": 3587,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4000
           }
         },
         "status": 200
@@ -809,508 +1311,6 @@
       "citations_exclude": [
         "NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO"
       ]
-    }
-  },
-  {
-    "id": "compare-buildings",
-    "kind": "recorded",
-    "why": "A comparison is ranked in code by rank_by_priorities; the model reports the numbers, never computes its own.",
-    "agent_version": "1fa5172b4efaacc4",
-    "model": "anthropic/claude-haiku-4.5",
-    "live": true,
-    "request": {
-      "bbl": "3000010001",
-      "messages": [
-        {
-          "content": "Compare this building with BBL 3000020002. Condition matters most to me, then rent.",
-          "role": "user"
-        }
-      ]
-    },
-    "upstream": [
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "tool_calls",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": null,
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant",
-                "tool_calls": [
-                  {
-                    "function": {
-                      "arguments": "{\"bbl\": \"3000020002\"}",
-                      "name": "get_building"
-                    },
-                    "id": "toolu_bdrk_01BCfBJsYWSkvNDUJY64HuHH",
-                    "index": 0,
-                    "type": "function"
-                  },
-                  {
-                    "function": {
-                      "arguments": "{\"bbls\": [\"3000010001\",\"3000020002\"], \"priorities\": [\"condition\",\"rent\"]}",
-                      "name": "rank_by_priorities"
-                    },
-                    "id": "toolu_bdrk_01V6TJQAFu9thhEDuxBRYUNY",
-                    "index": 1,
-                    "type": "function"
-                  }
-                ]
-              },
-              "native_finish_reason": "tool_use"
-            }
-          ],
-          "created": 1793253170,
-          "id": "gen-1793253170-brAFvCUvX4jBbBLI2OMm",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 130,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.003253,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.00065,
-              "upstream_inference_cost": 0.003253,
-              "upstream_inference_prompt_cost": 0.002603
-            },
-            "is_byok": false,
-            "prompt_tokens": 2603,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 2733
-          }
-        },
-        "status": 200
-      },
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "stop",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "**Ranked by your priorities (condition first, then rent):**\n\n| Building | Address | Weighted Score | Condition | Neighborhood | Open Violations |\n|----------|---------|---------------|-----------|--------------|----|\n| **1 Fixture Ave** | 1 Fixture Ave, Brooklyn (your building) | **100** | 100/100 | 100/100 | 0 |\n| **2 Fixture Ave** | 2 Fixture Ave, Brooklyn | **71** | 56/100 | 100/100 | 2 open (1 Class C, 1 Class B) |\n\n**Key differences:**\n\n- **Condition matters most to you.** 1 Fixture Ave scores 100/100 with zero violations. 2 Fixture Ave scores 56/100 and has 2 open violations: 1 Class C (immediately hazardous under the Housing Maintenance Code) and 1 Class B.\n- **Rent context is tied.** Both buildings are in the same census tract with a median gross rent of $2,500/month. However, 1 Fixture Ave is likely rent-stabilized (12 units recorded by NYC DOF); 2 Fixture Ave shows no DOF stabilization record (unverified).\n- **Other factors:** 1 Fixture Ave (1975, 40 units, higher accessibility likelihood) outperforms 2 Fixture Ave (1930, 8 units, lower accessibility likelihood, no elevator) across the board.\n\nBy your stated priorities, **1 Fixture Ave is the stronger building.**",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant"
-              },
-              "native_finish_reason": "end_turn"
-            }
-          ],
-          "created": 1793253172,
-          "id": "gen-1793253172-AW4dztwGN8weWVawkrGI",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 365,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.005159,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.001825,
-              "upstream_inference_cost": 0.005159,
-              "upstream_inference_prompt_cost": 0.003334
-            },
-            "is_byok": false,
-            "prompt_tokens": 3334,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 3699
-          }
-        },
-        "status": 200
-      }
-    ],
-    "expect": {
-      "status": 200,
-      "tools": [
-        "get_building",
-        "rank_by_priorities"
-      ],
-      "must_call": [
-        "rank_by_priorities"
-      ],
-      "upstream_calls": 2,
-      "citations_include": [
-        "HouseCheck scoring engine · NYC HPD · DOF / PLUTO"
-      ]
-    }
-  },
-  {
-    "id": "address-lookup",
-    "kind": "recorded",
-    "why": "A named address resolves locally through search_address, then get_building: three rounds, two sources.",
-    "agent_version": "1fa5172b4efaacc4",
-    "model": "anthropic/claude-haiku-4.5",
-    "live": true,
-    "request": {
-      "bbl": "3000010001",
-      "messages": [
-        {
-          "content": "What about 2 Fixture Ave?",
-          "role": "user"
-        }
-      ]
-    },
-    "upstream": [
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "tool_calls",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "I'll look up 2 Fixture Ave in Brooklyn for you.",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant",
-                "tool_calls": [
-                  {
-                    "function": {
-                      "arguments": "{\"address\": \"2 Fixture Ave Brooklyn\"}",
-                      "name": "search_address"
-                    },
-                    "id": "toolu_bdrk_017hBBq1FYdcgoe9wTWqouk5",
-                    "index": 0,
-                    "type": "function"
-                  }
-                ]
-              },
-              "native_finish_reason": "tool_use"
-            }
-          ],
-          "created": 1793253175,
-          "id": "gen-1793253175-YioRYW5PgxiPZQmnXgcW",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 74,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.00296,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.00037,
-              "upstream_inference_cost": 0.00296,
-              "upstream_inference_prompt_cost": 0.00259
-            },
-            "is_byok": false,
-            "prompt_tokens": 2590,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 2664
-          }
-        },
-        "status": 200
-      },
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "tool_calls",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "Now let me get the full Health Card for this building.",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant",
-                "tool_calls": [
-                  {
-                    "function": {
-                      "arguments": "{\"bbl\": \"3000020002\"}",
-                      "name": "get_building"
-                    },
-                    "id": "toolu_bdrk_01N3ePDTFyEb1sXStrdwuBSo",
-                    "index": 0,
-                    "type": "function"
-                  }
-                ]
-              },
-              "native_finish_reason": "tool_use"
-            }
-          ],
-          "created": 1793253176,
-          "id": "gen-1793253176-qKvvJJIyd9NVrJYJ4pH5",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 70,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.003059,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.00035,
-              "upstream_inference_cost": 0.003059,
-              "upstream_inference_prompt_cost": 0.002709
-            },
-            "is_byok": false,
-            "prompt_tokens": 2709,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 2779
-          }
-        },
-        "status": 200
-      },
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "stop",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "Here's what the public record shows for **2 Fixture Ave, Brooklyn** (BBL 3000020002):\n\n**Building profile:**\n- Built: 1930\n- 8 residential units\n- 4 floors\n- No elevator\n\n**Health Score: 58/100**\n- Condition: 56\n- Legal protection: 60\n- Neighborhood: 100\n- Accessibility: 30 (lower likelihood)\n\n**Open violations: 2**\n- 1 Class B (serious, hazardous)\n- 1 Class C (most serious, immediately hazardous)\n\n**Rent stabilization:** Unverified — no DOF stabilization record found for this building.\n\n**311 complaints:** 40 in the public record.\n\nThis building's score is substantially lower than 1 Fixture Ave (58 vs. 98). The two open violations and the absence of any rent-stabilization record are material differences. Would you like me to see what those specific violations are, or compare these two buildings against what matters most to you?",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant"
-              },
-              "native_finish_reason": "end_turn"
-            }
-          ],
-          "created": 1793253177,
-          "id": "gen-1793253177-Z79gHRWrzxBtGhSdVIxq",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 241,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.004248,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.001205,
-              "upstream_inference_cost": 0.004248,
-              "upstream_inference_prompt_cost": 0.003043
-            },
-            "is_byok": false,
-            "prompt_tokens": 3043,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 3284
-          }
-        },
-        "status": 200
-      }
-    ],
-    "expect": {
-      "status": 200,
-      "tools": [
-        "search_address",
-        "get_building"
-      ],
-      "must_call": [
-        "get_building"
-      ],
-      "upstream_calls": 3,
-      "citations_include": [
-        "HouseCheck curated set",
-        "NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO"
-      ]
-    }
-  },
-  {
-    "id": "outcome-prediction",
-    "kind": "recorded",
-    "why": "Asked to predict a court outcome, the agent says it cannot and refers to someone who can assess it.",
-    "agent_version": "1fa5172b4efaacc4",
-    "model": "anthropic/claude-haiku-4.5",
-    "live": true,
-    "request": {
-      "bbl": "3000020002",
-      "messages": [
-        {
-          "content": "If I take my landlord to housing court over the heat, will I win?",
-          "role": "user"
-        }
-      ]
-    },
-    "upstream": [
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "tool_calls",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "I cannot predict whether you would win. I don't have case history, docket data, judge information, or details of your lease and situation. No honest tool could make that prediction from public data alone.\n\nWhat I *can* do is show you what the law says about heat, what you should document, and how to complain officially. Then a lawyer can assess whether your specific situation meets that standard.\n\n**The law on heat:**",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant",
-                "tool_calls": [
-                  {
-                    "function": {
-                      "arguments": "{\"issue\": \"heat_hot_water\"}",
-                      "name": "legal_context"
-                    },
-                    "id": "toolu_bdrk_01HuYuoU6Jwxjz8vJs2JAose",
-                    "index": 0,
-                    "type": "function"
-                  },
-                  {
-                    "function": {
-                      "arguments": "{}",
-                      "name": "find_legal_help"
-                    },
-                    "id": "toolu_bdrk_01HeQMmkKATeqJ2T7n3QgxFe",
-                    "index": 1,
-                    "type": "function"
-                  }
-                ]
-              },
-              "native_finish_reason": "tool_use"
-            }
-          ],
-          "created": 1793253184,
-          "id": "gen-1793253184-8yVWKJVclwOiFOCU2Z5t",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 170,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.003429,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.00085,
-              "upstream_inference_cost": 0.003429,
-              "upstream_inference_prompt_cost": 0.002579
-            },
-            "is_byok": false,
-            "prompt_tokens": 2579,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 2749
-          }
-        },
-        "status": 200
-      },
-      {
-        "raw": {
-          "choices": [
-            {
-              "finish_reason": "stop",
-              "index": 0,
-              "logprobs": null,
-              "message": {
-                "content": "**Here's what the law says:**\n\nUnder **NY Real Property Law § 235-b** ([link](https://www.nysenate.gov/legislation/laws/RPP/235-B)), every residential lease carries an implied warranty that premises are fit for human habitation and free of conditions dangerous to life, health, or safety. You cannot waive this by lease—any agreement waiving it is void.\n\nHeat and hot water have specific standards: during heat season (October 1 through May 31), heat must be adequate. Hot water must be supplied year-round at a minimum of 120°F.\n\n**What to document:**\n- Dates and times the heat or hot water was out\n- Indoor temperature readings from a thermometer, photographed with a timestamp\n- Every 311 complaint number and date filed\n- Written notice to your landlord and the date you sent it—the landlord generally needs notice and a reasonable chance to repair\n\n**The official process:**\nFile with 311 first (creates a public record and can trigger an HPD inspection). If it persists, you can file an HP (Housing Part) Action in Housing Court asking a judge to order repairs.\n\n**For advice on your specific situation, call:**\n- **Met Council on Housing — Tenants Rights Hotline: 212-979-0611** (Mon/Wed 1:30–8pm, Fri 1:30–5pm; English/Spanish)\n- **The Legal Aid Society — Housing: 212-577-3300** (free legal advice and representation)\n- **Housing Court Answers: 212-962-4795** (Mon–Fri 9am–5pm; guidance on court process)\n\nI'm giving you published law and this building's public record, not legal advice about your situation. These organizations can advise you and confirm how it applies to you.",
-                "reasoning": null,
-                "refusal": null,
-                "role": "assistant"
-              },
-              "native_finish_reason": "end_turn"
-            }
-          ],
-          "created": 1793253186,
-          "id": "gen-1793253186-ZrhZVrog0PF1kb5Jfhcw",
-          "model": "anthropic/claude-haiku-4.5",
-          "object": "chat.completion",
-          "provider": "Amazon Bedrock",
-          "service_tier": "default",
-          "system_fingerprint": null,
-          "usage": {
-            "completion_tokens": 413,
-            "completion_tokens_details": {
-              "audio_tokens": 0,
-              "image_tokens": 0,
-              "reasoning_tokens": 0
-            },
-            "cost": 0.005652,
-            "cost_details": {
-              "upstream_inference_completions_cost": 0.002065,
-              "upstream_inference_cost": 0.005652,
-              "upstream_inference_prompt_cost": 0.003587
-            },
-            "is_byok": false,
-            "prompt_tokens": 3587,
-            "prompt_tokens_details": {
-              "audio_tokens": 0,
-              "cache_write_tokens": 0,
-              "cached_tokens": 0,
-              "video_tokens": 0
-            },
-            "total_tokens": 4000
-          }
-        },
-        "status": 200
-      }
-    ],
-    "expect": {
-      "status": 200,
-      "tools": [
-        "legal_context",
-        "find_legal_help"
-      ],
-      "must_call": [
-        "find_legal_help"
-      ],
-      "upstream_calls": 2
     }
   }
 ]

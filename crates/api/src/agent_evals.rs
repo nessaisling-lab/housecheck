@@ -298,17 +298,14 @@ async fn forward(
         o.remove("stream");
     }
     req["usage"] = json!({ "include": true });
-    let auth = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    match http
-        .post(OPENROUTER_URL)
-        .header(header::AUTHORIZATION, auth)
-        .json(&req)
-        .send()
-        .await
-    {
+    // The header goes on byte for byte. This used to go through `to_str()`, which turns a key
+    // with one non-ASCII character into an empty header, so OpenRouter answered "Missing
+    // Authentication header" instead of saying the key was wrong.
+    let mut call = http.post(OPENROUTER_URL).json(&req);
+    if let Some(auth) = headers.get(header::AUTHORIZATION) {
+        call = call.header(header::AUTHORIZATION, auth.clone());
+    }
+    match call.send().await {
         Ok(r) => {
             let s = r.status().as_u16();
             let text = r.text().await.unwrap_or_default();
@@ -908,7 +905,42 @@ async fn live_eval() {
         Ok("1"),
         "refusing a billed run without HOUSECHECK_EVAL_LIVE=1"
     );
-    let key = std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY");
+    let key = std::env::var("OPENROUTER_API_KEY")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    assert!(
+        !key.is_empty(),
+        "OPENROUTER_API_KEY is empty; nothing was sent"
+    );
+    assert!(
+        key.is_ascii() && !key.contains(char::is_whitespace),
+        "OPENROUTER_API_KEY ({} characters) contains a non-ASCII or whitespace character, which \
+         usually means a paste picked up something extra; nothing was sent",
+        key.chars().count()
+    );
+    // Free: reads the key's own metadata, bills nothing. A rejected key stops here rather than
+    // failing every conversation with the same 401.
+    match reqwest::Client::new()
+        .get("https://openrouter.ai/api/v1/key")
+        .bearer_auth(&key)
+        .send()
+        .await
+    {
+        Ok(r) if r.status() == 401 || r.status() == 403 => {
+            let status = r.status();
+            let body = r.text().await.unwrap_or_default();
+            panic!(
+                "OpenRouter rejected the key ({status}, {} characters): {body}; nothing was billed",
+                key.len()
+            );
+        }
+        Ok(r) if !r.status().is_success() => {
+            eprintln!("key check answered {}; continuing", r.status());
+        }
+        Ok(_) => {}
+        Err(e) => panic!("could not reach OpenRouter for the key check: {e}"),
+    }
     let model =
         std::env::var("OPENROUTER_MODEL").unwrap_or_else(|_| DEFAULT_SUMMARY_MODEL.to_string());
     let cap: f64 = std::env::var("HOUSECHECK_EVAL_MAX_USD")
@@ -956,6 +988,19 @@ async fn live_eval() {
             out.tape.cost_usd,
             t0.elapsed().as_secs_f64()
         );
+        // An auth failure says nothing about the agent, and it will fail every case after
+        // this one the same way.
+        if out
+            .tape
+            .recorded
+            .iter()
+            .any(|x| matches!(x["status"].as_u64(), Some(401 | 403)))
+        {
+            panic!(
+                "OpenRouter refused the key mid-run: {}; stopping before the next conversation",
+                out.tape.recorded[0]["raw"]
+            );
+        }
         let msgs = out
             .tape
             .calls

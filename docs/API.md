@@ -333,10 +333,14 @@ second system turn.
 **Tools.** The model may request data instead of answering directly. Eight read-only tools are
 offered — `get_building(bbl)`, `get_open_violations(bbl)`, `search_address(address)`,
 `rank_by_priorities(bbls, priorities)`, `check_rent_fairness(bbl, monthly_rent)`,
-`legal_context(issue)`, `find_legal_help()`, `search_law(query)`.
+`lookup_law(topic)`, `find_legal_help()`, `search_law(query)`.
 
-`legal_context` returns published NY law for a housing problem with verifiable links, plus an
-evidence checklist and the official complaint route. `find_legal_help` returns free tenant
+`lookup_law` returns verbatim excerpts of official law and agency guidance for a topic (`heat`,
+`hot_water`, `repairs`, `habitability`, `mold`, `pests`, `rent_stabilization`, `general`), each
+with its citation, link and verification date, plus the checkable facts taken from them (a key,
+a value, the condition it applies under, and the sentence it was quoted from) and HouseCheck's own
+evidence checklist, labelled as not law. It reads the `law_*` tables, which `ingest` loads from
+`data/law.json`; the API refuses to start on an artifact without them. `find_legal_help` returns free tenant
 legal services with phone numbers. `search_law` searches **only** an allowlist of
 authoritative sources — nysenate.gov, law.cornell.edu, law.justia.com, nycourts.gov, nyc.gov,
 hcr.ny.gov, lawhelpny.org, govinfo.gov, ecfr.gov — via OpenRouter's web plugin, and returns

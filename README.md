@@ -95,6 +95,12 @@ Real data (needs a free [Census key](https://api.census.gov/data/key_signup.html
 cargo run -p ingest -- --real --cd 303 --limit 250 --out data/housecheck.db
 ```
 
+Both modes also load `data/law.json`, the verified law the agent may state. After editing it,
+reload only the law into an existing artifact:
+```bash
+cargo run -p ingest -- --law --out data/housecheck.db
+```
+
 ### As an MCP tool
 
 Another agent can call HouseCheck directly and get the same card the website serves —

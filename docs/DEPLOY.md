@@ -11,6 +11,8 @@ $env:CENSUS_API_KEY = [Environment]::GetEnvironmentVariable('CENSUS_API_KEY','Ma
 $env:NYC_APP_TOKEN  = [Environment]::GetEnvironmentVariable('NYC_APP_TOKEN','Machine')
 cargo run -p ingest -- --real --cd 303 --limit 250 --out data/housecheck.db
 ```
+The API refuses to start on an artifact without law tables. An artifact built before
+`data/law.json` existed needs `cargo run -p ingest -- --law --out data/housecheck.db` once.
 
 ### 2. Deploy
 ```bash

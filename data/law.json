@@ -1,0 +1,136 @@
+{
+  "sources": [
+    {
+      "id": "nyc311",
+      "publisher": "NYC311 (City of New York)",
+      "jurisdiction": "nyc",
+      "kind": "agency_guidance",
+      "base_url": "https://portal.311.nyc.gov/"
+    },
+    {
+      "id": "nyc-hpd-open-data",
+      "publisher": "NYC Department of Housing Preservation and Development (HPD), on NYC Open Data",
+      "jurisdiction": "nyc",
+      "kind": "agency_guidance",
+      "base_url": "https://data.cityofnewyork.us/"
+    },
+    {
+      "id": "nys-hcr",
+      "publisher": "New York State Homes and Community Renewal (HCR)",
+      "jurisdiction": "ny_state",
+      "kind": "agency_guidance",
+      "base_url": "https://hcr.ny.gov/"
+    }
+  ],
+  "provisions": [
+    {
+      "id": "NYC311-KA-01036",
+      "source": "nyc311",
+      "citation": "NYC311, Residential Heat and Hot Water Requirements (KA-01036)",
+      "title": "Heat or Hot Water Complaint in a Residential Building",
+      "text": "Residential Heat and Hot Water Requirements\nFrom October 1 through May 31, the City requires building owners to provide tenants with heat according to the following rules:\nBetween 6 AM and 10 PM, if the outside temperature falls below 55 degrees, the inside temperature must be at least 68 degrees Fahrenheit.\nBetween 10 PM and 6 AM, the inside temperature must be at least 62 degrees Fahrenheit at all times. There is no outside temperature requirement.\nYou can make a complaint about a residential building that does not have enough hot water at any time. Hot water must be provided 365 days per year at a constant minimum temperature of 120 degrees Fahrenheit.\nExcessive heat complaints are only accepted between June 1 and September 30.\n…\nBefore filing a complaint, you should try to resolve the issue with your landlord, managing agent, or superintendent. If you live in a co-op or condo, you should first report apartment maintenance issues to the owner, management company, or board before filing a complaint with HPD, as the specific agreements between the coop or condo owner and the board may dictate which conditions are required to be addressed by the board or the unit owner.\n…\nThe Department of Housing Preservation and Development (HPD) investigates maintenance complaints and issues violations to owners who break the law.\n…\nIf you made a complaint and your property owner didn't fix the problem, you can take legal action in Housing Court. Document all contact with your landlord and HPD about the conditions in your apartment so you can use it in court.",
+      "url": "https://portal.311.nyc.gov/article/?kanumber=KA-01036",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "topics": [
+        "heat",
+        "hot_water"
+      ],
+      "facts": [
+        {
+          "key": "heat.season.start",
+          "value": "October 1",
+          "condition": "First day the heat rules apply, every year.",
+          "quote": "From October 1 through May 31, the City requires building owners to provide tenants with heat according to the following rules:"
+        },
+        {
+          "key": "heat.season.end",
+          "value": "May 31",
+          "condition": "Last day the heat rules apply, every year.",
+          "quote": "From October 1 through May 31, the City requires building owners to provide tenants with heat according to the following rules:"
+        },
+        {
+          "key": "heat.day.min_f",
+          "value": "68",
+          "condition": "Inside minimum from 6 AM to 10 PM, October 1 to May 31, only when the outside temperature falls below 55°F.",
+          "quote": "Between 6 AM and 10 PM, if the outside temperature falls below 55 degrees, the inside temperature must be at least 68 degrees Fahrenheit."
+        },
+        {
+          "key": "heat.day.outside_below_f",
+          "value": "55",
+          "condition": "Outside temperature below which the 6 AM to 10 PM minimum of 68°F applies. It is not a condition of the night rule.",
+          "quote": "Between 6 AM and 10 PM, if the outside temperature falls below 55 degrees, the inside temperature must be at least 68 degrees Fahrenheit."
+        },
+        {
+          "key": "heat.night.min_f",
+          "value": "62",
+          "condition": "Inside minimum from 10 PM to 6 AM, October 1 to May 31, at all times, whatever the outside temperature.",
+          "quote": "Between 10 PM and 6 AM, the inside temperature must be at least 62 degrees Fahrenheit at all times. There is no outside temperature requirement."
+        },
+        {
+          "key": "hot_water.min_f",
+          "value": "120",
+          "condition": "Constant minimum, 365 days a year.",
+          "quote": "Hot water must be provided 365 days per year at a constant minimum temperature of 120 degrees Fahrenheit."
+        }
+      ]
+    },
+    {
+      "id": "NYC-OPENDATA-WVXF-DWI5",
+      "source": "nyc-hpd-open-data",
+      "citation": "HPD, Housing Maintenance Code Violations (NYC Open Data wvxf-dwi5)",
+      "title": "Housing Maintenance Code Violations: dataset description",
+      "text": "Pursuant to New York City’s Housing Maintenance Code, the Department of Housing Preservation and Development (HPD) issues violations against conditions, in rental dwelling units and buildings, that have been verified to violate the New York City Housing Maintenance Code (HMC) or the New York State Multiple Dwelling Law (MDL).\nViolations are issued by Housing Inspectors after a physical inspection is conducted (except for class I violations which are generally administratively issued). Violations are issued in four classes: Class A (non-hazardous), Class B (hazardous), Class C (immediately hazardous) and Class I (information orders).\nClass (column description): Indicator of seriousness of the violations, where A is the least serious and C is the most serious",
+      "url": "https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "topics": [
+        "repairs",
+        "habitability",
+        "mold",
+        "pests"
+      ],
+      "facts": []
+    },
+    {
+      "id": "NYS-HCR-ORA",
+      "source": "nys-hcr",
+      "citation": "NYS HCR, Office of Rent Administration (ORA)",
+      "title": "Office of Rent Administration (ORA)",
+      "text": "The Office of Rent Administration (ORA) is part of New York State Homes and Community Renewal (HCR). ORA oversees rent regulation programs to help keep housing affordable for tenants while ensuring fair practices for property owners.\nServices for Tenants\nInvestigates complaints about rent overcharges, maintenance problems, and lease renewals\nProvides information on tenant rights and how to file complaints",
+      "url": "https://hcr.ny.gov/office-rent-administration-ora",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "topics": [
+        "rent_stabilization"
+      ],
+      "facts": []
+    },
+    {
+      "id": "NYS-HCR-TENANT-RESOURCES",
+      "source": "nys-hcr",
+      "citation": "NYS HCR, Tenant Resources: NYS Rent Connect",
+      "title": "Rent Connect - Get Help with Common Rent Regulation Issues",
+      "text": "NYS Rent Connect is an online service that helps tenants find answers to the most common rent regulation issues. Use Rent Connect to:\n- File a complaint\n- Request a rent history\n- Submit documents\n- Report overcharges\n- Estimate potential rent increases for building improvements\n- Respond to open cases",
+      "url": "https://hcr.ny.gov/tenant-resources",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "topics": [
+        "rent_stabilization"
+      ],
+      "facts": []
+    }
+  ]
+}

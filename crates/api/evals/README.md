@@ -14,16 +14,17 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 45: 31 synthetic, 14 recorded from a live run |
-| Replays per run | 89: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 3,218 |
+| Conversations | 31, all synthetic: the 14 recordings went stale when `lookup_law` replaced `legal_context` |
+| Replays per run | 61: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 1,976 (2026-10-30) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
-`each_check_fails_on_the_defect_it_names` checks the checker. It plants seven defects and
-confirms the check that names each one fires: an invented number, advice phrasing, an extra
-tool round, a citation the tools never earned, an injected system turn, an orphan tool result,
-and a stale recording. Separately, four bugs were planted by hand in `main.rs` (system role let
+`each_check_fails_on_the_defect_it_names` checks the checker. It plants ten defects and
+confirms the check that names each one fires: an invented number, a code section no law
+returned (`§ 27-2005`), a temperature that is no law fact, advice phrasing, an extra tool round,
+a citation the tools never earned, an injected system turn, an orphan tool result, a superseded
+provision served, and a stale recording. Separately, four bugs were planted by hand in `main.rs` (system role let
 through, `search_law` citation claimed with zero sources, cap raised to 6, one domain dropped
 from the allowlist). The suite failed 17 checks, each naming its bug, and passed again once they
 were reverted.
@@ -40,8 +41,10 @@ schemas and the model id, logged at startup as `agent_version`. If any of the th
 recording fails with an instruction to re-record, so a prompt edit can't keep passing on answers
 written for the old prompt.
 
-The 14 recordings are from agent `db3fee8a55844c3e` on `anthropic/claude-haiku-4.5`
-(2026-10-29). See "What the live runs found" below.
+There are no recordings right now. The 14 from agent `db3fee8a55844c3e` (2026-10-29) were
+removed on 2026-10-30 when `lookup_law` replaced `legal_context`: a new tool schema is a new
+agent, so every one of them would fail the version check. They come back from the next billed
+`live_eval` run. See "What the live runs found" below.
 
 ## Checks
 
@@ -71,6 +74,14 @@ Applied to every conversation, on both endpoints:
   alongside a tool call, so `/agent/chat` has to return it too.
 - **Number grounding.** Every number in the answer appears in something the model was shown:
   the facts block, a tool result, or the user's own words.
+- **Cited sections were returned.** Every section the answer cites (after `§`, after "section"
+  when it has a hyphen, or "Local Law N of YYYY") appears in the citation or text of a provision
+  `lookup_law` returned in that conversation. An invented `§ 27-2005` fails.
+- **Temperatures are law facts.** Every `N°` or `N degrees` in the answer is the value of a
+  temperature fact (`*_f`) that `lookup_law` returned, or a number the user gave. A 58 from the
+  building's score is in the evidence, and still fails.
+- **Served law is current.** Every provision `lookup_law` handed back is `current`, with a
+  `verified_on` date.
 
 Per conversation, in `expect`: `tools` (exact order of tool results fed back, replay only),
 `must_call`, `fed_back_contains`, `citations_include` / `_exclude`, `answer_contains` (replay
@@ -138,13 +149,14 @@ glued them mid-line. `answer-written-before-referral` pins it.
   curated-set error.
 
 **Still open:**
-- **`heat-season-law` still fails live.** It no longer invents numbers, but it says it has
-  "no tool that covers heating-season dates" (`legal_context` does) and that the dates "can
-  vary slightly year to year" (they don't). The `legal_context` description says to use it
-  when the user describes a housing *problem*, so a plain question about the law doesn't
-  trigger it. A sourced local law database, now proposed, is the fix. Changing
-  the tool description changes `agent_version` and means re-recording everything, so it waits
-  for that work.
+- **`heat-season-law` failed live.** It no longer invented numbers, but it said it had "no tool
+  that covers heating-season dates" (`legal_context` did) and that the dates "can vary slightly
+  year to year" (they don't). `legal_context`'s description said to use it when the user
+  describes a housing *problem*, so a plain question about the law didn't trigger it.
+  **Changed 2026-10-30, not yet confirmed live:** `lookup_law` replaces it, reads verified
+  official text from the `law_*` tables (`data/law.json`), and its description names plain
+  questions ("when does heat season start?"). The prompt now says to call it for any question
+  about what the law says, and to keep every number with its condition.
 - **Two passing answers say things these checks can't see.** `rent-fairness` says a
   stabilized rent "is set by the Rent Guidelines Board", from memory. `court-filing-request`
   says Legal Aid "can draft an HP Action petition for you", which the directory doesn't say.
@@ -174,6 +186,10 @@ answer has to come from those facts, a tool result, or the question.
   cases) needs a human or an LLM judge reading the live transcript.
 - **Number grounding is a substring match** over everything sent upstream. A real number
   attached to the wrong fact still passes.
+- **A temperature is checked, not its condition.** "The 62°F night minimum applies when it is
+  below 55°F outside", the live run's original mistake, passes: both numbers are law facts.
+  Judging that needs a reader, or a judge model given the fact's `condition`.
+- **Sections are found by cue.** "RPL 235-b" with no `§` and no "section" is not checked.
 - **The stream is replayed as one body.** No SSE frame ever straddles a chunk boundary here, and
   OpenRouter's exact framing isn't reproduced.
 - **Not covered:** `search_address` for an address outside the curated set (it calls NYC

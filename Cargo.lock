@@ -1784,6 +1784,7 @@ dependencies = [
  "flate2",
  "model",
  "rusqlite",
+ "serde_json",
 ]
 
 [[package]]

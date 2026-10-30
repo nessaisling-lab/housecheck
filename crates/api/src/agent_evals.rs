@@ -447,7 +447,14 @@ fn tool_citation(name: &str, result: &Value) -> Option<String> {
         "get_open_violations" => "NYC HPD open violations (wvxf-dwi5)",
         "search_address" if result["in_curated_set"] == json!(true) => "HouseCheck curated set",
         "search_address" => "NYC GeoSearch (Planning Labs)",
-        "legal_context" => return result["citations"][0]["label"].as_str().map(String::from),
+        "lookup_law" => {
+            let cites: Vec<&str> = result["provisions"]
+                .as_array()?
+                .iter()
+                .filter_map(|p| p["citation"].as_str())
+                .collect();
+            return Some(cites.join(" · "));
+        }
         "rank_by_priorities" => "HouseCheck scoring engine · NYC HPD · DOF / PLUTO",
         "check_rent_fairness" => "US Census ACS B25064 · HUD Fair Market Rent",
         "search_law" if result["sources"].as_array().is_some_and(|a| !a.is_empty()) => {
@@ -529,6 +536,68 @@ fn numbers(s: &str) -> Vec<String> {
     }
     if !cur.is_empty() {
         out.push(cur);
+    }
+    out
+}
+
+/// Sections `s` cites, lowercased: the token after `§`, the token after "section" when it has a
+/// hyphen ("Section 27-2029", not "Section 8 voucher"), and "local law N of YYYY".
+///
+/// ponytail: cue-based. A section named with no cue ("RPL 235-b") is not seen. Add the cue if a
+/// live answer ever cites that way.
+fn cited_sections(s: &str) -> Vec<String> {
+    let lower = s.to_lowercase();
+    let token = |rest: &str| -> String {
+        let t: String = rest
+            .trim_start_matches(|c: char| c == '§' || c.is_whitespace())
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '.')
+            .collect();
+        t.trim_end_matches(['.', '-']).to_string()
+    };
+    let mut out = Vec::new();
+    for (i, cue) in lower.match_indices('§') {
+        let t = token(&lower[i + cue.len()..]);
+        if t.starts_with(|c: char| c.is_ascii_digit()) {
+            out.push(t);
+        }
+    }
+    for (i, cue) in lower.match_indices("section ") {
+        let t = token(&lower[i + cue.len()..]);
+        if t.starts_with(|c: char| c.is_ascii_digit()) && t.contains('-') {
+            out.push(t);
+        }
+    }
+    for (i, cue) in lower.match_indices("local law ") {
+        let rest = &lower[i + cue.len()..];
+        let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        let year: String = rest[n.len()..]
+            .strip_prefix(" of ")
+            .unwrap_or("")
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        if !n.is_empty() {
+            out.push(format!("local law {n} of {year}"));
+        }
+    }
+    out
+}
+
+/// Temperatures `s` states: a number followed by `°` or "degree", with at most one space or
+/// hyphen between ("68°F", "62 degrees", "55-degree").
+fn temperatures(s: &str) -> Vec<String> {
+    let lower = s.to_lowercase();
+    let mut out = Vec::new();
+    let mut rest = lower.as_str();
+    while let Some(i) = rest.find(|c: char| c.is_ascii_digit()) {
+        let len = rest[i..].chars().take_while(char::is_ascii_digit).count();
+        let after = &rest[i + len..];
+        let unit = after.strip_prefix([' ', '-']).unwrap_or(after);
+        if unit.starts_with('°') || unit.starts_with("degree") {
+            out.push(rest[i..i + len].to_string());
+        }
+        rest = after;
     }
     out
 }
@@ -688,6 +757,31 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             || format!("law search ran outside the allowlist: {}", req["plugins"]),
         );
     }
+    // The law handed to the model in this conversation. Every legal claim in the answer is
+    // held to it below.
+    let law: Vec<&Value> = exchanges
+        .iter()
+        .filter(|(n, _)| n == "lookup_law")
+        .map(|(_, v)| v)
+        .collect();
+    let field = |key: &str| -> Vec<&Value> {
+        law.iter()
+            .flat_map(|v| v[key].as_array().into_iter().flatten())
+            .collect()
+    };
+    let (provisions, facts) = (field("provisions"), field("facts"));
+    for p in &provisions {
+        r.check(
+            ctx,
+            p["status"] == "current" && p["verified_on"].as_str().is_some_and(|d| d.len() == 10),
+            || {
+                format!(
+                    "lookup_law served {} without status current and a verified_on date",
+                    p["id"]
+                )
+            },
+        );
+    }
 
     if e.status != 200 {
         return;
@@ -771,6 +865,50 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             format!("number {n} in the answer appears in no fact, tool result or user turn")
         });
     }
+
+    // Every section the answer cites must be one lookup_law returned in this conversation. A
+    // live run cited a code section nobody could find; this is the check that names it.
+    let returned: Vec<String> = provisions
+        .iter()
+        .flat_map(|p| {
+            cited_sections(&format!(
+                "{} {}",
+                p["citation"].as_str().unwrap_or(""),
+                p["text"].as_str().unwrap_or("")
+            ))
+        })
+        .collect();
+    for s in cited_sections(&out.answer) {
+        r.check(ctx, returned.contains(&s), || {
+            format!("cites section {s:?}, which no lookup_law result in this conversation holds")
+        });
+    }
+
+    // Every temperature must be the value of a law fact returned in this conversation, or the
+    // user's own number. Stricter than the grounding above: a 58 from the building's score is
+    // somewhere in the evidence, and is still not a legal temperature.
+    //
+    // ponytail: checks the number, not the condition it is attached to. Saying the 62°F night
+    // minimum needs it to be below 55°F outside, the live run's mistake, still passes.
+    let user_numbers: Vec<String> = case.request["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|m| m["role"] == "user")
+        .flat_map(|m| numbers(m["content"].as_str().unwrap_or("")))
+        .collect();
+    let legal_temps: Vec<&str> = facts
+        .iter()
+        .filter(|f| f["key"].as_str().is_some_and(|k| k.ends_with("_f")))
+        .filter_map(|f| f["value"].as_str())
+        .collect();
+    for t in temperatures(&out.answer) {
+        r.check(
+            ctx,
+            legal_temps.contains(&t.as_str()) || user_numbers.contains(&t),
+            || format!("temperature {t}° is no law fact returned in this conversation"),
+        );
+    }
 }
 
 fn version_check(case: &Case, r: &mut Report) {
@@ -853,6 +991,28 @@ fn grounding_skips_list_markers_and_unit_labels_only() {
     );
 }
 
+/// Sections and temperatures are read the way an answer writes them, and nothing else is.
+#[test]
+fn sections_and_temperatures_are_read_from_the_text() {
+    assert_eq!(
+        cited_sections(
+            "RPL § 235-b, Admin Code §§ 27-2029. Section 8 vouchers; section 27-2031, \
+             Local Law 1 of 2004, call 212-962-4795."
+        ),
+        [
+            "235-b",
+            "27-2029",
+            "27-2029",
+            "27-2031",
+            "local law 1 of 2004"
+        ]
+    );
+    assert_eq!(
+        temperatures("62°F at night, 68 degrees by day, a 55-degree trigger, 120 °F water, 3 days"),
+        ["62", "68", "55", "120"]
+    );
+}
+
 /// The checks are code too. Break a passing conversation in each way a check claims to
 /// catch — the model's side by editing a turn, the server's side by editing what came back —
 /// and confirm the check that names that defect is the one that fires.
@@ -892,6 +1052,25 @@ async fn each_check_fails_on_the_defect_it_names() {
         "advice phrasing",
     );
 
+    // Law the model was never handed: a section no provision holds, and a temperature that is
+    // in the evidence (the building scores 58) but is no law fact.
+    let mut wrong_section = base.clone();
+    wrong_section.upstream[answer_at] = json!({ "answer": "Under NYC Admin Code § 27-2005 the heat must be on. Call 212-962-4795." });
+    fires(
+        &wrong_section,
+        &run(&wrong_section, "/agent/chat", None).await,
+        "cites section \"27-2005\"",
+    );
+
+    let mut wrong_temp = base.clone();
+    wrong_temp.upstream[answer_at] =
+        json!({ "answer": "At night it must be at least 58°F inside. Call 212-962-4795." });
+    fires(
+        &wrong_temp,
+        &run(&wrong_temp, "/agent/chat", None).await,
+        "temperature 58",
+    );
+
     let mut extra_round = base.clone();
     extra_round
         .upstream
@@ -921,6 +1100,20 @@ async fn each_check_fails_on_the_defect_it_names() {
         .unwrap()
         .push(json!({ "role": "tool", "tool_call_id": "call_nobody_made", "content": "{}" }));
     fires(&base, &out, "answers no call");
+
+    let mut out = run(&base, "/agent/chat", None).await;
+    let last = out.tape.calls.len() - 1;
+    for m in out.tape.calls[last]["messages"].as_array_mut().unwrap() {
+        if let Some(c) = m["content"]
+            .as_str()
+            .filter(|c| c.contains("\"provisions\""))
+        {
+            let mut v: Value = serde_json::from_str(c).unwrap();
+            v["provisions"][0]["status"] = "superseded".into();
+            m["content"] = v.to_string().into();
+        }
+    }
+    fires(&base, &out, "without status current");
 
     let mut stale = base.clone();
     stale.kind = "recorded".into();

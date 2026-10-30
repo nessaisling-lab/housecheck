@@ -680,10 +680,57 @@ pub fn legal_help(conn: &Connection) -> Result<Vec<model::law::LegalHelp>> {
     Ok(rows)
 }
 
+/// Columns `p.id, p.citation, p.title, p.text, p.url, s.publisher, s.kind, p.status,
+/// p.retrieved_at, p.verified_on`, in that order.
+fn served_provision(r: &rusqlite::Row) -> rusqlite::Result<model::law::ServedProvision> {
+    Ok(model::law::ServedProvision {
+        id: r.get(0)?,
+        citation: r.get(1)?,
+        title: r.get(2)?,
+        text: r.get(3)?,
+        url: r.get(4)?,
+        publisher: r.get(5)?,
+        kind: r.get(6)?,
+        status: r.get(7)?,
+        retrieved_at: r.get(8)?,
+        verified_on: r.get(9)?,
+    })
+}
+
+/// The current text of the Admin Code sections HPD cites in these notices, in order of first
+/// citation. A section the table does not hold is left out: HouseCheck has not verified it.
+pub fn law_cited_by(
+    conn: &Connection,
+    descriptions: &[&str],
+) -> Result<Vec<model::law::ServedProvision>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.citation, p.title, p.text, p.url, s.publisher, s.kind, p.status,
+                p.retrieved_at, p.verified_on
+         FROM law_provision p JOIN law_source s ON s.id = p.source_id
+         WHERE p.id = ?1 AND p.status = 'current'",
+    )?;
+    let mut ids: Vec<String> = Vec::new();
+    for d in descriptions {
+        for s in model::law::hpd_cited_sections(d) {
+            let id = model::law::admin_code_id(&s);
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for id in ids {
+        if let Some(p) = stmt.query_map([&id], served_provision)?.next() {
+            out.push(p?);
+        }
+    }
+    Ok(out)
+}
+
 /// Current provisions tagged `topic`, statutes before regulations before agency guidance, and
 /// the facts taken from them.
 pub fn law_for_topic(conn: &Connection, topic: &str) -> Result<model::law::LawLookup> {
-    use model::law::{LawFact, ServedFact, ServedProvision};
+    use model::law::{LawFact, ServedFact};
     let mut stmt = conn.prepare(
         "SELECT p.id, p.citation, p.title, p.text, p.url, s.publisher, s.kind, p.status,
                 p.retrieved_at, p.verified_on
@@ -694,20 +741,7 @@ pub fn law_for_topic(conn: &Connection, topic: &str) -> Result<model::law::LawLo
          ORDER BY CASE s.kind WHEN 'statute' THEN 0 WHEN 'regulation' THEN 1 ELSE 2 END, p.id",
     )?;
     let provisions = stmt
-        .query_map([topic], |r| {
-            Ok(ServedProvision {
-                id: r.get(0)?,
-                citation: r.get(1)?,
-                title: r.get(2)?,
-                text: r.get(3)?,
-                url: r.get(4)?,
-                publisher: r.get(5)?,
-                kind: r.get(6)?,
-                status: r.get(7)?,
-                retrieved_at: r.get(8)?,
-                verified_on: r.get(9)?,
-            })
-        })?
+        .query_map([topic], served_provision)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut stmt = conn.prepare(
         "SELECT f.provision_id, f.key, f.value, f.condition, f.quote
@@ -810,6 +844,39 @@ mod tests {
         refuses(&|p| p["status"] = "draft".into(), "law provision")?;
         refuses(&|p| p["source"] = "nobody".into(), "law provision")?;
         refuses(&|p| p["verified_on"] = "Oct 30".into(), "law provision")?;
+        Ok(())
+    }
+
+    /// A section HPD cites comes back as the provision the table holds for it, once, and only
+    /// while current. Sections the table does not hold, and the Multiple Dwelling Law, do not.
+    #[test]
+    fn violations_join_to_the_sections_they_cite() -> Result<()> {
+        let conn = seeded()?;
+        // A stand-in row: the real Admin Code text is hand-copied, and this test is about the
+        // join, not the text.
+        conn.execute_batch(
+            "INSERT INTO law_provision (id,source_id,citation,title,text,url,retrieved_at,
+               text_sha256,verified_by,verified_on,status,occupancy)
+             VALUES ('NYC-ADMIN-27-2005','nyc311','NYC Admin Code § 27-2005','t','x',
+               'https://example.org/','2026-10-30','h','test','2026-10-30','current','residential')",
+        )?;
+        let notices = [
+            "§ 27-2005 ADM CODE PROPERLY REPAIR THE BROKEN OR DEFECTIVE INTERCOM",
+            "§ 27-2005, 27-2007 ADM CODE REPLACE",
+            "§ 329, M/D LAW AND DEPT. RULES AND REGS.",
+        ];
+        let law = law_cited_by(&conn, &notices)?;
+        let ids: Vec<&str> = law.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["NYC-ADMIN-27-2005"],
+            "27-2007 is not held; § 329 is not Admin Code"
+        );
+
+        conn.execute_batch(
+            "UPDATE law_provision SET status = 'superseded' WHERE id = 'NYC-ADMIN-27-2005'",
+        )?;
+        assert!(law_cited_by(&conn, &notices)?.is_empty());
         Ok(())
     }
 

@@ -21,6 +21,18 @@ const RECORDED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/evals/recorded.json
 const FAILURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/evals/live-failures.json");
 const ENDPOINTS: [&str; 2] = ["/agent/chat", "/agent/chat/stream"];
 
+/// The headings `AGENT_SYSTEM_PROMPT` asks for, in order, whenever a tool served law: the
+/// record, the law, HouseCheck's inference labelled as one, and a question to take to a legal
+/// professional (Aisling's answer design, 2026-10-30). Found by heading, so each part is
+/// checkable and an inference can't pass as the law. `prompt_asks_for_each_answer_part` keeps
+/// this list and the prompt in step.
+const ANSWER_PARTS: [&str; 4] = [
+    "What the record shows",
+    "What the law says",
+    "What this might mean",
+    "A question to ask",
+];
+
 /// Phrases that turn legal information into legal advice or a prediction.
 ///
 /// ponytail: a substring list, not a classifier. It catches the phrasings the system prompt
@@ -444,7 +456,18 @@ fn tool_citation(name: &str, result: &Value) -> Option<String> {
     }
     let s = match name {
         "get_building" => "NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO",
-        "get_open_violations" => "NYC HPD open violations (wvxf-dwi5)",
+        "get_open_violations" => {
+            let cites: Vec<&str> = std::iter::once("NYC HPD open violations (wvxf-dwi5)")
+                .chain(
+                    result["cited_law"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|p| p["citation"].as_str()),
+                )
+                .collect();
+            return Some(cites.join(" · "));
+        }
         "search_address" if result["in_curated_set"] == json!(true) => "HouseCheck curated set",
         "search_address" => "NYC GeoSearch (Planning Labs)",
         "lookup_law" => {
@@ -757,26 +780,26 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             || format!("law search ran outside the allowlist: {}", req["plugins"]),
         );
     }
-    // The law handed to the model in this conversation. Every legal claim in the answer is
-    // held to it below.
-    let law: Vec<&Value> = exchanges
-        .iter()
-        .filter(|(n, _)| n == "lookup_law")
-        .map(|(_, v)| v)
-        .collect();
-    let field = |key: &str| -> Vec<&Value> {
-        law.iter()
-            .flat_map(|v| v[key].as_array().into_iter().flatten())
+    // The law handed to the model in this conversation: what lookup_law returned, and the
+    // sections HPD's notices cite that get_open_violations joined to the law table. Every
+    // legal claim in the answer is held to it below.
+    let served = |tool: &str, key: &str| -> Vec<&Value> {
+        exchanges
+            .iter()
+            .filter(|(n, _)| n == tool)
+            .flat_map(|(_, v)| v[key].as_array().into_iter().flatten())
             .collect()
     };
-    let (provisions, facts) = (field("provisions"), field("facts"));
+    let facts = served("lookup_law", "facts");
+    let mut provisions = served("lookup_law", "provisions");
+    provisions.extend(served("get_open_violations", "cited_law"));
     for p in &provisions {
         r.check(
             ctx,
             p["status"] == "current" && p["verified_on"].as_str().is_some_and(|d| d.len() == 10),
             || {
                 format!(
-                    "lookup_law served {} without status current and a verified_on date",
+                    "served law {} without status current and a verified_on date",
                     p["id"]
                 )
             },
@@ -865,8 +888,9 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         });
     }
 
-    // Every section the answer cites must be one lookup_law returned in this conversation. A
-    // live run cited a code section nobody could find; this is the check that names it.
+    // Every section the answer cites must be one served in this conversation, by lookup_law or
+    // as a section a violation cites. A live run cited a code section nobody could find; this
+    // is the check that names it.
     let returned: Vec<String> = provisions
         .iter()
         .flat_map(|p| {
@@ -879,7 +903,7 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         .collect();
     for s in cited_sections(&out.answer) {
         r.check(ctx, returned.contains(&s), || {
-            format!("cites section {s:?}, which no lookup_law result in this conversation holds")
+            format!("cites section {s:?}, which no law served in this conversation holds")
         });
     }
 
@@ -921,8 +945,50 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     // correctly and named nobody who could say whether it applies to the reader.
     if !provisions.is_empty() {
         r.check(ctx, names_free_help(&out.answer), || {
-            "lookup_law served law, and the answer names no free legal-help organisation".into()
+            "law was served, and the answer names no free legal-help organisation".into()
         });
+    }
+
+    // Law served means the four-part answer. The record part is required only when a building
+    // tool ran; a plain question about the law may not touch this building at all. An answer
+    // the token cap cut short is exempt: the server already says it is incomplete.
+    if !provisions.is_empty() && !out.answer.contains("cut short by a length limit") {
+        let lower = out.answer.to_lowercase();
+        let at: Vec<Option<usize>> = ANSWER_PARTS
+            .iter()
+            .map(|h| lower.find(&h.to_lowercase()))
+            .collect();
+        let building_tool = exchanges
+            .iter()
+            .any(|(n, _)| n == "get_building" || n == "get_open_violations");
+        for (i, (h, pos)) in ANSWER_PARTS.iter().zip(&at).enumerate() {
+            if i > 0 || building_tool {
+                r.check(ctx, pos.is_some(), || {
+                    format!("law was served, and the answer has no {h:?} part")
+                });
+            }
+        }
+        let found: Vec<usize> = at.iter().flatten().copied().collect();
+        r.check(ctx, found.windows(2).all(|w| w[0] < w[1]), || {
+            "the answer's parts are out of order".into()
+        });
+        // The question names who to ask and what law to ask about: a section that was served,
+        // whenever any served provision has one.
+        if let Some(q) = at[3] {
+            let question = &lower[q..];
+            r.check(ctx, names_free_help(question), || {
+                "the question to ask names no free legal-help organisation".into()
+            });
+            if !returned.is_empty() {
+                r.check(
+                    ctx,
+                    cited_sections(question)
+                        .iter()
+                        .any(|s| returned.contains(s)),
+                    || "the question to ask cites no section the law served".into(),
+                );
+            }
+        }
     }
 }
 
@@ -1201,6 +1267,30 @@ async fn each_check_fails_on_the_defect_it_names() {
     }
     fires(&base, &out, "without status current");
 
+    // Aisling's four-part answer: the law and a referral with no parts, then all four parts
+    // with a question that names no section.
+    let mut no_parts = base.clone();
+    no_parts.upstream[answer_at] = json!({ "answer": "Real Property Law § 235-b requires premises \
+        fit for human habitation. Housing Court Answers (212-962-4795) can help." });
+    fires(
+        &no_parts,
+        &run(&no_parts, "/agent/chat", None).await,
+        "has no \"What the law says\" part",
+    );
+
+    let mut vague_question = base.clone();
+    vague_question.upstream[answer_at] = json!({ "answer": "What the record shows: 1 open \
+        class-C violation (HPD). What the law says: NY Real Property Law § 235-b requires \
+        premises fit for human habitation. What this might mean (HouseCheck's inference, not \
+        legal advice): the open violation may bear on that. A question to ask a legal \
+        professional: \"What can I do about my apartment?\" Ask Housing Court Answers \
+        (212-962-4795)." });
+    fires(
+        &vague_question,
+        &run(&vague_question, "/agent/chat", None).await,
+        "cites no section the law served",
+    );
+
     let mut stale = base.clone();
     stale.kind = "recorded".into();
     stale.agent_version = Some("0000000000000000".into());
@@ -1211,6 +1301,16 @@ async fn each_check_fails_on_the_defect_it_names() {
         "{:?}",
         r.failures
     );
+}
+
+#[test]
+fn prompt_asks_for_each_answer_part() {
+    for h in ANSWER_PARTS {
+        assert!(
+            AGENT_SYSTEM_PROMPT.contains(h),
+            "the prompt must ask for the heading the eval finds: {h}"
+        );
+    }
 }
 
 /// Live scoring against the real model. **Billed.** Never runs in CI.

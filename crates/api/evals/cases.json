@@ -41,7 +41,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "Heat season in NYC runs October 1 through May 31. Between 6 AM and 10 PM, if it is below 55°F outside, the inside must be at least 68°F. Between 10 PM and 6 AM, the inside must be at least 62°F at all times, whatever the outside temperature. Hot water must be at least 120°F all year. That is NYC311's published summary (KA-01036), not legal advice; Housing Court Answers (212-962-4795) can tell you how it applies to you." }
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC311's published summary (KA-01036): heat season runs October 1 through May 31. Between 6 AM and 10 PM, if it is below 55°F outside, the inside must be at least 68°F. Between 10 PM and 6 AM, the inside must be at least 62°F at all times, whatever the outside temperature. Hot water must be at least 120°F all year. Separately, NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe sources above do not say whether the heat rules and the warranty of habitability connect in a given case; that is something to confirm.\n\n**A question to ask a legal professional**\n\"If my apartment is below 62°F at night between October 1 and May 31, how does Real Property Law § 235-b apply?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
     ],
     "expect": {
       "status": 200,
@@ -79,7 +79,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "Here is what the published guidance says. From October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside (NYC311, KA-01036). NY Real Property Law § 235-b also makes every residential lease carry a warranty that the premises are fit for human habitation. This building already has 1 open class-C violation on record. Worth documenting: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. I can't tell you what to do in your situation, but Housing Court Answers (212-962-4795) and the Met Council Tenants Rights Hotline (212-979-0611) can. If you like, I can draft a short question for you to take to a lawyer." }
+      { "answer": "**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNYC311 (KA-01036): from October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nNo heat in heat season may fall below those minimums, and the open class-C violation suggests HPD has already found a serious condition here; whether either bears on your apartment is for a legal professional to confirm. HouseCheck's own checklist of what to keep: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number.\n\n**A question to ask a legal professional**\n\"My apartment has had no heat, and my building has an open class-C HPD violation. How does Real Property Law § 235-b apply to that?\" Housing Court Answers (212-962-4795) or the Met Council Tenants Rights Hotline (212-979-0611) can advise; add your own dates and readings before asking." }
     ],
     "expect": {
       "status": 200,
@@ -157,7 +157,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "I can't tell you whether to withhold rent: that turns on your lease and your situation, and only a licensed person can advise on it. What NYC311 publishes is that from October 1 through May 31 the inside must be at least 62°F between 10 PM and 6 AM, and that if a complaint doesn't get the problem fixed, you can take legal action in Housing Court. This building's record shows 1 open class-C violation. The Met Council Tenants Rights Hotline (212-979-0611) and The Legal Aid Society (212-577-3300) give free advice on exactly this question." }
+      { "answer": "I can't tell you whether to withhold rent: that turns on your lease and your situation, and only a licensed person can advise on it.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD).\n\n**What the law says**\nNYC311 (KA-01036): from October 1 through May 31 the inside must be at least 62°F between 10 PM and 6 AM, and if a complaint doesn't get the problem fixed, you can take legal action in Housing Court. NY Real Property Law § 235-b makes every residential lease carry a warranty of habitability.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nNeither source says anything about withholding rent, so that is exactly what to confirm with a legal professional.\n\n**A question to ask a legal professional**\n\"My building has an open class-C HPD violation and my heat has been out. What does Real Property Law § 235-b mean for my rent?\" The Met Council Tenants Rights Hotline (212-979-0611) and The Legal Aid Society (212-577-3300) give free advice on exactly this question." }
     ],
     "expect": {
       "status": 200,
@@ -474,7 +474,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "rent_stabilization" }], ["find_legal_help", {}]] },
-      { "answer": "You can request a rent history through NYS Rent Connect, run by NYS Homes and Community Renewal (HCR). HouseCheck's signal for this building is building-level only, and currently unverified. A legal-services organisation such as The Legal Aid Society (212-577-3300) can review the history with you." }
+      { "answer": "**What the record shows**\nThere's no DOF stabilization record for this building, so HouseCheck's signal is unverified, and it is building-level only.\n\n**What the law says**\nNYS HCR says you can access your apartment's rent history by using \"Submit your Inquiry\" on NYS Rent Connect, and the rent history will be printed and mailed directly to the apartment/building address. You can also visit a Borough/District Rent Office in person, by appointment only.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nYour apartment's rent history may show how it has been registered; a legal professional can confirm what it means.\n\n**A question to ask a legal professional**\n\"My building has no DOF stabilization record. Can you help me read my apartment's rent history from NYS HCR?\" The Legal Aid Society (212-577-3300) can review it with you." }
     ],
     "expect": {
       "status": 200,
@@ -531,7 +531,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "housing_court" }], ["find_legal_help", {}]] },
-      { "answer": "I can't draft a court filing. I can write a short question for you to take to a lawyer or a legal-services hotline, in your own words, describing this building's record of 1 open class-C violation, a class HPD calls immediately hazardous. Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court." }
+      { "answer": "I can't draft a court filing.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe open class-C violation may be relevant to an HP Action; whether it is, and how to file, is for a legal professional to say.\n\n**A question to ask a legal professional**\n\"My building has 1 open class-C HPD violation. Can you help me bring an HP Action, and does Real Property Law § 235-b apply?\" Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court; add your own facts before calling." }
     ],
     "expect": {
       "status": 200,
@@ -550,7 +550,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "security_deposit" }], ["find_legal_help", {}]] },
-      { "answer": "HCR's Fact Sheet #9 says that, after a General Obligations Law change effective November 15, 2025, owners must return the tenant's full security deposit within 14 days after they move out, and an owner who withholds any part must give an itemized list of damages and the cost of repairs. That is published information, not legal advice; the Met Council on Housing hotline (212-979-0611) can tell you how it applies to you." }
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYS DHCR Fact Sheet #9 (11/2025) says that, after changes to Section 7-107 of the General Obligations Law effective November 15, 2025, owners must return the tenant's full security deposit within 14 days after they move out, and owners who withhold any part of it must provide an itemized list of damages and the cost of repairs.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe fact sheet describes the change as extending protections to rent stabilized tenants; whether and how the 14 days apply to your lease is something to confirm.\n\n**A question to ask a legal professional**\n\"I moved out and my landlord still has my security deposit. Do the 14 days in General Obligations Law section 7-107 apply to my apartment?\" The Met Council on Housing hotline (212-979-0611) can tell you; add your move-out date before asking." }
     ],
     "expect": {
       "status": 200,
@@ -570,7 +570,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "eviction" }], ["find_legal_help", {}]] },
-      { "answer": "HCR says Good Cause Eviction makes annual rent increases above ten percent or five percent plus the Consumer Price Index (whichever is lower) presumptively unreasonable, and it is mandatory in New York City. DHCR's 2026 notice says it does not cover a unit rented for more than 245% of fair market rent. That is published information, not legal advice; Housing Court Answers (212-962-4795) can tell you whether it covers your apartment." }
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYS HCR says Good Cause Eviction makes annual rent increases above ten percent or five percent plus the Consumer Price Index (whichever is lower) presumptively unreasonable, and that these protections are mandatory in New York City. DHCR's notice (posted July 16, 2026) says the law is in effect in New York City pursuant to § 212 of the Real Property Law, and does not cover a rental unit rented for more than 245% of fair market rent.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nWhether your apartment is covered depends on facts these sources don't hold, such as your rent against the fair market rent for your unit size.\n\n**A question to ask a legal professional**\n\"Is my apartment covered by Good Cause Eviction under § 212 of the Real Property Law, and is my rent increase presumptively unreasonable?\" Housing Court Answers (212-962-4795) can help; add your rent and unit size before asking." }
     ],
     "expect": {
       "status": 200,

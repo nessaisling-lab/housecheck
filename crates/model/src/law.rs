@@ -64,6 +64,52 @@ pub struct LegalHelp {
     pub verified_on: String,
 }
 
+/// The provision id `data/law.json` gives an NYC Administrative Code section.
+pub fn admin_code_id(section: &str) -> String {
+    format!("NYC-ADMIN-{section}")
+}
+
+/// The Administrative Code sections an HPD notice cites in its opening citation:
+/// `§ 27-2005, 2007 ADM CODE …` gives `["27-2005", "27-2007"]`, `HMC ADM CODE: § 27-2017.4 …`
+/// gives `["27-2017.4"]`. A bare number continues the section before it only after a comma.
+///
+/// Only titles 26 and 27, the housing titles: notices also cite HPD's rules (`§ 12-06 … RCNY`,
+/// `28 RCNY §25-171`) and the Multiple Dwelling Law (`§ 329, M/D LAW`), which are not Admin
+/// Code sections.
+///
+/// ponytail: reads the first 120 characters, where the notices sampled on 2026-10-30 put their
+/// citation (50,000 recent open violations, citywide); the order text after it can hold
+/// numbers that are not sections.
+pub fn hpd_cited_sections(description: &str) -> Vec<String> {
+    let head: String = description.chars().take(120).collect();
+    let is_num = |s: &str| {
+        s.len() >= 3
+            && s.starts_with(|c: char| c.is_ascii_digit())
+            && s.bytes().all(|c| c.is_ascii_digit() || c == b'.')
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut title = "";
+    let mut continues = false;
+    for raw in head.split(|c: char| c.is_whitespace() || c == '§' || c == '(') {
+        let comma = raw.ends_with(',');
+        let t = raw.trim_end_matches([',', '.', ':', ';']);
+        match t.split_once('-') {
+            Some((a, b)) if (a == "26" || a == "27") && is_num(b) => {
+                title = a;
+                out.push(t.to_string());
+            }
+            None if continues && is_num(t) => out.push(format!("{title}-{t}")),
+            _ => {
+                continues = false;
+                continue;
+            }
+        }
+        continues = comma;
+    }
+    out.dedup();
+    out
+}
+
 /// `s` without the separators a phone number is written with, so "(212) 962-4795" and
 /// "212-962-4795" both read `2129624795`.
 pub fn phone_digits(s: &str) -> String {
@@ -188,6 +234,44 @@ mod tests {
             a,
             text_sha256("at least 68 degrees Fahrenheit at all times.")
         );
+    }
+
+    /// Openings of real open HPD violations (wvxf-dwi5), read 2026-10-30.
+    #[test]
+    fn hpd_citations_are_read_as_sections() {
+        let cases: [(&str, &[&str]); 7] = [
+            (
+                "§ 27-2005 ADM CODE PROPERLY REPAIR THE BROKEN OR DEFECTIVE INTERCOM",
+                &["27-2005"],
+            ),
+            (
+                "§ 27-2005, 27-2007, 27-2041.1 HMC, §238, § 309; § 107 (2) ( C) MDL AND 28 RCNY §25-171: REPLACE",
+                &["27-2005", "27-2007", "27-2041.1"],
+            ),
+            (
+                "§ 27-2026, 2027 HMC: PROPERLY REPAIR THE SOURCE AND ABATE THE EVIDENCE OF A WATER LEAK",
+                &["27-2026", "27-2027"],
+            ),
+            (
+                "HMC ADM CODE: § 27-2017.4 ABATE THE INFESTATION CONSISTING OF MICE",
+                &["27-2017.4"],
+            ),
+            (
+                "§ 27-2045(B)(1)(B) HMC, § 12-06, § 12-07, § 12-09 RCNY REPAIR, REPLACE OR PROVIDE",
+                &["27-2045"],
+            ),
+            (
+                "§ 329, M/D LAW AND DEPT. RULES AND REGS. PROVIDE A COMPLETED CERTIFICATE",
+                &[],
+            ),
+            (
+                "§ 27-2010, 2011, 2012 ADM CODE CLEANSE AND DISINFECT",
+                &["27-2010", "27-2011", "27-2012"],
+            ),
+        ];
+        for (desc, want) in cases {
+            assert_eq!(hpd_cited_sections(desc), want, "{desc}");
+        }
     }
 
     #[test]

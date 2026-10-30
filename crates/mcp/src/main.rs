@@ -544,6 +544,7 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use model::ViolationClass;
 
     #[test]
     fn the_card_document_points_at_the_deployed_route_for_that_building() {
@@ -633,7 +634,7 @@ mod tests {
             restaurant_grade: None,
         };
         let details = vec![model::ViolationDetail {
-            class: "B".into(),
+            class: ViolationClass::B,
             description: Some(description.into()),
             issued_on: Some("2024-03-02".into()),
             days_open: Some(528),

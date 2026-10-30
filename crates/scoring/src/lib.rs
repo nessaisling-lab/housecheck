@@ -1,4 +1,4 @@
-use model::Violation;
+use model::{Violation, ViolationClass};
 
 /// 0–100 building-condition score. Deterministic: `current_year` is passed in,
 /// never read from the clock, so scores are testable and reproducible.
@@ -6,11 +6,15 @@ use model::Violation;
 pub fn condition_score(violations: &[Violation], current_year: i32) -> u8 {
     let mut penalty: i32 = 0;
     for v in violations.iter().filter(|v| v.open) {
-        let base = match v.class.as_str() {
-            "C" => 15,
-            "B" => 7,
-            "A" => 3,
-            _ => 0,
+        // Exhaustive, with no fallthrough. The arm this replaces was `_ => 0`, which priced an
+        // unrecognised class at nothing — so a class the code did not model made the building
+        // score *better* than its record justified, in silence and in the direction that
+        // understates hazard. A new variant now has to be given a weight here, or this stops
+        // compiling.
+        let base = match v.class {
+            ViolationClass::C => 15,
+            ViolationClass::B => 7,
+            ViolationClass::A => 3,
         };
         let recency = if current_year - v.year <= 2 { 2 } else { 1 };
         penalty += base * recency;
@@ -126,7 +130,7 @@ mod tests {
     #[test]
     fn one_recent_open_class_c_costs_30_points() {
         let vs = vec![Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open: true,
             year: 2026,
             ..Default::default()
@@ -138,7 +142,7 @@ mod tests {
     #[test]
     fn closed_violations_are_ignored() {
         let vs = vec![Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open: false,
             year: 2026,
             ..Default::default()
@@ -150,7 +154,7 @@ mod tests {
     fn penalty_clamps_at_zero() {
         let vs: Vec<Violation> = (0..20)
             .map(|_| Violation {
-                class: "C".into(),
+                class: ViolationClass::C,
                 open: true,
                 year: 2026,
                 ..Default::default()

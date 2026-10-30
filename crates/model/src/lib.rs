@@ -28,9 +28,97 @@ pub struct Building {
     pub restaurant_grade: Option<String>,
 }
 
+/// HPD's hazard classes, as the city defines them.
+///
+/// This was a `String` with `// "A" | "B" | "C"` beside it, and that comment was the only thing
+/// enforcing the rule. Every dispatch site consequently needed a fallthrough arm: `scoring`
+/// gave an unrecognised class a penalty of **0** and `ViolationCounts` counted it as nothing,
+/// so a class the code did not know about made a building look *better* — silently, and in the
+/// direction that understates hazard. Those arms are gone. Adding a variant here now fails the
+/// build at every site that has to decide what it means.
+///
+/// **The wire strings are load-bearing twice.** `HealthCard.tsx` renders them (`Class {d.class}`),
+/// and `export::canonical` hashes them into the signed payload — so changing them would not merely
+/// break the frontend, it would invalidate every export already issued. `wire_form_is_the_letter`
+/// pins them against what serde actually emits, the same way `wire_form_matches_serde` does for
+/// [`StabilizationStatus`], and `the_typed_class_signs_the_same_bytes_as_the_string_it_replaced`
+/// pins the signed bytes against `main` from before this type existed.
+///
+/// Class I is deliberately absent. HPD issues it, `ingest` skips it and counts it by letter (753
+/// on the 250-building CD 303 pilot), and the count is stated on the card and in `/meta` — so a
+/// value that never reaches the database is not a state this type should be able to represent.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
+)]
+pub enum ViolationClass {
+    /// Non-hazardous.
+    ///
+    /// The default only because `Violation::default()` is a test construct and every caller
+    /// sets the class explicitly. Neither direction is harmless: defaulting to `C` would make
+    /// fixtures look hazardous and hide real ones.
+    #[default]
+    A,
+    /// Hazardous.
+    B,
+    /// Immediately hazardous — no heat, no hot water, lead paint. Shortest correction deadline.
+    C,
+}
+
+impl ViolationClass {
+    /// Every class. Lets a test iterate the whole set rather than a hand-copied list that can
+    /// fall behind the enum.
+    pub const ALL: [Self; 3] = [Self::A, Self::B, Self::C];
+
+    /// The single letter HPD uses. Must equal what serde emits — `wire_form_is_the_letter`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::A => "A",
+            Self::B => "B",
+            Self::C => "C",
+        }
+    }
+}
+
+impl std::fmt::Display for ViolationClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A class letter that is not one HPD issues.
+///
+/// Carries the offending value: "the artifact holds a class we do not model" is only actionable
+/// if it says which one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownViolationClass(pub String);
+
+impl std::fmt::Display for UnknownViolationClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "not an HPD violation class: {:?}", self.0)
+    }
+}
+
+impl std::error::Error for UnknownViolationClass {}
+
+impl std::str::FromStr for ViolationClass {
+    type Err = UnknownViolationClass;
+
+    /// Case-insensitive, because `export` already compared with `eq_ignore_ascii_case` and
+    /// narrowing that at the same time as introducing the type would be two changes wearing
+    /// one commit.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "A" | "a" => Ok(Self::A),
+            "B" | "b" => Ok(Self::B),
+            "C" | "c" => Ok(Self::C),
+            other => Err(UnknownViolationClass(other.to_string())),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Violation {
-    pub class: String, // "A" | "B" | "C"
+    pub class: ViolationClass,
     pub open: bool,
     pub year: i32,
     /// HPD's own notice text, verbatim — `§ 27-2005 ADM CODE … ABATE THE NUISANCE …`.
@@ -105,11 +193,12 @@ impl ViolationCounts {
     pub fn open_from(violations: &[Violation]) -> Self {
         let mut counts = ViolationCounts { a: 0, b: 0, c: 0 };
         for v in violations.iter().filter(|v| v.open) {
-            match v.class.as_str() {
-                "A" => counts.a += 1,
-                "B" => counts.b += 1,
-                "C" => counts.c += 1,
-                _ => {}
+            // Exhaustive on purpose: no fallthrough arm, so a new class cannot be silently
+            // counted as nothing. Adding a variant breaks this match, which is the point.
+            match v.class {
+                ViolationClass::A => counts.a += 1,
+                ViolationClass::B => counts.b += 1,
+                ViolationClass::C => counts.c += 1,
             }
         }
         counts
@@ -374,7 +463,7 @@ pub const OPEN_DETAIL_CAP: usize = 50;
 /// One open violation, as the card shows it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViolationDetail {
-    pub class: String,
+    pub class: ViolationClass,
     /// HPD's own wording. `None` where the record carries no text.
     pub description: Option<String>,
     pub issued_on: Option<String>,
@@ -394,7 +483,7 @@ impl ViolationDetail {
             .into_iter()
             .take(OPEN_DETAIL_CAP)
             .map(|v| ViolationDetail {
-                class: v.class.clone(),
+                class: v.class,
                 description: v.description.clone(),
                 issued_on: v.issued_on.clone(),
                 days_open: v.days_open(today),
@@ -507,6 +596,29 @@ mod tests {
         }
     }
 
+    /// `as_str`, `Display`, `FromStr` and serde are four spellings of one letter. The card
+    /// renders it and the export chain hashes it, so all four must agree for every class.
+    #[test]
+    fn wire_form_is_the_letter() {
+        for c in ViolationClass::ALL {
+            assert_eq!(
+                serde_json::to_string(&c).unwrap(),
+                format!("\"{}\"", c.as_str()),
+                "as_str disagrees with serde for {c:?}"
+            );
+            assert_eq!(c.to_string(), c.as_str(), "Display disagrees with as_str");
+            assert_eq!(c.as_str().parse::<ViolationClass>(), Ok(c));
+            let back: ViolationClass = serde_json::from_str(&format!("\"{c}\"")).unwrap();
+            assert_eq!(back, c);
+        }
+        // HPD's fourth class is not one this type models: it must fail to parse, not
+        // become A.
+        assert_eq!(
+            "I".parse::<ViolationClass>(),
+            Err(UnknownViolationClass("I".into()))
+        );
+    }
+
     #[test]
     fn only_a_real_dof_record_counts_as_a_source() {
         assert!(StabilizationStatus::Likely.has_dof_record());
@@ -544,7 +656,7 @@ mod tests {
     #[test]
     fn violation_detail_caps_the_list_but_never_the_count() {
         let v = |issued: Option<&str>, open: bool| Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open,
             year: 2026,
             description: Some("ABATE THE NUISANCE".into()),
@@ -593,7 +705,7 @@ mod tests {
     #[test]
     fn days_open_is_none_rather_than_zero_when_the_date_is_missing() {
         let no_date = Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open: true,
             ..Default::default()
         };
@@ -601,7 +713,7 @@ mod tests {
 
         // Still open: measured against today.
         let open = Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open: true,
             issued_on: Some("2026-03-14".into()),
             ..Default::default()
@@ -610,7 +722,7 @@ mod tests {
 
         // Closed: measured to the close date, not to today.
         let closed = Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open: false,
             issued_on: Some("2014-01-06".into()),
             closed_on: Some("2014-01-25".into()),
@@ -621,7 +733,7 @@ mod tests {
         // A close date on an OPEN violation is a status change, not a closure, so the
         // age still runs to today.
         let reopened = Violation {
-            class: "B".into(),
+            class: ViolationClass::B,
             open: true,
             issued_on: Some("2026-08-01".into()),
             closed_on: Some("2026-08-03".into()),
@@ -631,7 +743,7 @@ mod tests {
 
         // Leap day is real: 2024 had one, 2100 will not.
         let leap = Violation {
-            class: "A".into(),
+            class: ViolationClass::A,
             open: true,
             issued_on: Some("2024-02-28".into()),
             ..Default::default()
@@ -640,7 +752,7 @@ mod tests {
 
         // Dirty data must not produce a negative age.
         let backwards = Violation {
-            class: "A".into(),
+            class: ViolationClass::A,
             open: false,
             issued_on: Some("2020-06-01".into()),
             closed_on: Some("2019-01-01".into()),
@@ -650,7 +762,7 @@ mod tests {
 
         // Unparseable dates are missing dates, not a panic.
         let junk = Violation {
-            class: "A".into(),
+            class: ViolationClass::A,
             open: true,
             issued_on: Some("not-a-date".into()),
             ..Default::default()
@@ -662,19 +774,19 @@ mod tests {
     fn counts_only_open_violations_by_class() {
         let vs = vec![
             Violation {
-                class: "C".into(),
+                class: ViolationClass::C,
                 open: true,
                 year: 2025,
                 ..Default::default()
             },
             Violation {
-                class: "C".into(),
+                class: ViolationClass::C,
                 open: false,
                 year: 2020,
                 ..Default::default()
             },
             Violation {
-                class: "A".into(),
+                class: ViolationClass::A,
                 open: true,
                 year: 2024,
                 ..Default::default()

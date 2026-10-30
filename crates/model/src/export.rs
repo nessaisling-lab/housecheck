@@ -156,8 +156,12 @@ impl ExportDocument {
         let mut prev = hex_digest(GENESIS);
         let mut rows = Vec::with_capacity(details.len());
         for d in details {
+            // `as_str` and not `to_string`: this is the byte sequence the chain hashes, so it
+            // has to be the letter HPD issued and nothing else. `ViolationClass::as_str` is
+            // pinned against serde by `wire_form_is_the_letter`, which is what stops a future
+            // rename here from silently invalidating every export already in someone's hands.
             let payload_hash = hex_digest(&canonical(
-                &d.class,
+                d.class.as_str(),
                 d.description.as_deref(),
                 d.issued_on.as_deref(),
                 d.days_open,
@@ -167,7 +171,13 @@ impl ExportDocument {
             linked.extend_from_slice(payload_hash.as_bytes());
             let entry_hash = hex_digest(&linked);
             rows.push(ExportRow {
-                class: d.class.clone(),
+                // `ExportRow.class` stays a `String` while `ViolationDetail.class` is typed,
+                // and the asymmetry is deliberate. An `ExportRow` is parsed back out of a
+                // document handed to us by someone we do not trust. If this field were the
+                // enum, a forged row carrying `"class": "X"` would fail to *deserialize* —
+                // and the caller would get a parse error instead of the `Tampered` verdict the
+                // three-state contract promises. Permissive on parse, strict on hash.
+                class: d.class.to_string(),
                 description: d.description.clone(),
                 issued_on: d.issued_on.clone(),
                 days_open: d.days_open,
@@ -517,6 +527,7 @@ pub enum VerifyOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ViolationClass;
 
     fn building() -> Building {
         Building {
@@ -541,13 +552,13 @@ mod tests {
     fn details() -> Vec<ViolationDetail> {
         vec![
             ViolationDetail {
-                class: "C".into(),
+                class: ViolationClass::C,
                 description: Some("§ 27-2033 ADM CODE PROVIDE ADEQUATE HEAT".into()),
                 issued_on: Some("2026-03-14".into()),
                 days_open: Some(148),
             },
             ViolationDetail {
-                class: "B".into(),
+                class: ViolationClass::B,
                 description: None,
                 issued_on: None,
                 days_open: None,
@@ -801,7 +812,7 @@ mod tests {
         let rebuilt = ExportDocument::build(
             &building(),
             &[ViolationDetail {
-                class: d.rows[0].class.clone(),
+                class: d.rows[0].class.parse().unwrap(),
                 description: Some("DESCRIBED ON HPD\u{1A}S WEBSITE".into()),
                 issued_on: d.rows[0].issued_on.clone(),
                 days_open: d.rows[0].days_open,
@@ -828,6 +839,46 @@ mod tests {
 
     /// An empty record still has a well-defined head, so a building with nothing open
     /// produces a document that verifies rather than one that cannot be checked.
+    /// The typed class must sign exactly the bytes the `String` it replaced signed.
+    ///
+    /// `ViolationDetail.class` became [`ViolationClass`] on 2026-10-30. Exports issued before
+    /// that are already in people's hands and get re-verified from these bytes, so the change
+    /// has to be invisible here: same `canonical` input, same chain, same signature, same JSON.
+    /// The digest was measured on `main` at `03dfae6`, before the change, from this same
+    /// document built with `class: "C".into()` and friends. One row per class, because a letter
+    /// whose spelling drifted would only show in its own row.
+    #[test]
+    fn the_typed_class_signs_the_same_bytes_as_the_string_it_replaced() {
+        let row = |class, description: Option<&str>| ViolationDetail {
+            class,
+            description: description.map(str::to_string),
+            issued_on: Some("2026-03-14".into()),
+            days_open: Some(148),
+        };
+        let mut d = ExportDocument::build(
+            &building(),
+            &[
+                row(
+                    ViolationClass::C,
+                    Some("§ 27-2033 ADM CODE PROVIDE ADEQUATE HEAT"),
+                ),
+                row(ViolationClass::B, None),
+                row(
+                    ViolationClass::A,
+                    Some("(A) § HMC: FILE ANNUAL BEDBUG REPORT"),
+                ),
+            ],
+            3,
+            doc().sources,
+            1_786_400_000,
+        );
+        assert!(d.sign_with(&hex::encode([7u8; 32])));
+        assert_eq!(
+            hex_digest(&serde_json::to_vec(&d).unwrap()),
+            "53d9010f2cb406a9291a93451998d6cdeb136547ff7139f3d2de51c103fc78e5"
+        );
+    }
+
     #[test]
     fn an_empty_record_still_chains() {
         let d = ExportDocument::build(&building(), &[], 0, vec![], 1);

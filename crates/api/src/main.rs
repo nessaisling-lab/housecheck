@@ -3262,7 +3262,7 @@ mod agent_evals;
 
 #[cfg(test)]
 mod tests {
-    use model::StabilizationStatus;
+    use model::{StabilizationStatus, ViolationClass};
 
     /// A BBL present in the in-memory fixture DB (see `store::insert_fixture`).
     const FIXTURE_BBL: &str = "3000010001";
@@ -3436,7 +3436,7 @@ mod tests {
 
         // The real check: the model must be able to measure an age against it.
         let v = model::Violation {
-            class: "C".into(),
+            class: ViolationClass::C,
             open: true,
             issued_on: Some("2020-01-01".into()),
             ..Default::default()

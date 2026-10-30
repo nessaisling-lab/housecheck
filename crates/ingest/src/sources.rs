@@ -11,9 +11,9 @@
 // `lot`, plus an `Open`/`Close` `violationstatus`. The parsers below normalize all of that.
 
 use anyhow::{Context, Result};
-use model::{Building, Violation};
+use model::{Building, Violation, ViolationClass};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 
 const SODA: &str = "https://data.cityofnewyork.us/resource";
@@ -168,7 +168,11 @@ pub fn hpd_bbl(v: &Value) -> Option<String> {
 }
 
 pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
-    let class = s(v, "class")?.to_uppercase();
+    // A class outside A/B/C now makes the row unusable rather than merely unusual, because
+    // every downstream site requires a modelled class. HPD also issues `I` (753 on the CD 303
+    // pilot), and that skip is the exclusion stated on the card and in `/meta` — so it has to
+    // stay countable, not silent. `run` counts it by letter through `hpd_excluded_class`.
+    let class: ViolationClass = s(v, "class")?.trim().parse().ok()?;
     // wvxf-dwi5 `violationstatus` is exactly "Open" / "Close".
     let status = s(v, "violationstatus").unwrap_or_default().to_lowercase();
     let open = status.starts_with("open");
@@ -187,6 +191,38 @@ pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
         issued_on: date("novissueddate"),
         closed_on: date("currentstatusdate"),
     })
+}
+
+/// The letter of a row whose class `ViolationClass` does not model, or `None` for a modelled
+/// class or a row with no class field.
+///
+/// Exists so `run` can count skipped rows by the letter they carried. That count is published
+/// on the card and in `/meta`, and until 2026-10-30 every skipped letter was printed there as
+/// class I: citywide, a new letter or a junk value would have been reported as one HPD issues.
+pub fn hpd_excluded_class(v: &Value) -> Option<String> {
+    let letter = s(v, "class")?.trim().to_uppercase();
+    if letter.parse::<ViolationClass>().is_ok() {
+        return None;
+    }
+    // An empty field is still a skipped row; name it rather than print a blank.
+    Some(if letter.is_empty() {
+        "(blank)".into()
+    } else {
+        letter
+    })
+}
+
+/// The `/meta` line for skipped classes: `I (753 records skipped at ingest)`, one entry per
+/// letter. The card prints it after "excluded: class", so the single-letter form is unchanged.
+pub fn excluded_classes_note(counts: &BTreeMap<String, usize>) -> String {
+    if counts.is_empty() {
+        return "none".into();
+    }
+    counts
+        .iter()
+        .map(|(c, n)| format!("{c} ({n} records skipped at ingest)"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// A `bbl in (...)` Socrata query (used for DOB, whose `bbl` is a clean 10-digit column).
@@ -525,9 +561,48 @@ mod tests {
     fn parses_hpd_violation_open_and_class() {
         let v = json!({"class": "C", "violationstatus": "Open", "novissueddate": "2025-06-01T00:00:00.000"});
         let viol = parse_hpd_violation(&v).expect("valid");
-        assert_eq!(viol.class, "C");
+        assert_eq!(viol.class, ViolationClass::C);
         assert!(viol.open);
         assert_eq!(viol.year, 2025);
+    }
+
+    /// REVIEW-NOTES M4 at ingest: a skipped class is counted under its own letter, never
+    /// folded into class I, and never stored.
+    #[test]
+    fn excluded_classes_are_counted_by_the_letter_they_carried() {
+        // Modelled classes, in any case or padding, and rows with no class are not exclusions.
+        assert_eq!(hpd_excluded_class(&json!({"class": "C"})), None);
+        assert_eq!(hpd_excluded_class(&json!({"class": "c "})), None);
+        assert_eq!(hpd_excluded_class(&json!({})), None);
+        // HPD's class I, and anything else, keep their own letter.
+        assert_eq!(
+            hpd_excluded_class(&json!({"class": " i"})).as_deref(),
+            Some("I")
+        );
+        assert_eq!(
+            hpd_excluded_class(&json!({"class": "X"})).as_deref(),
+            Some("X")
+        );
+        assert_eq!(
+            hpd_excluded_class(&json!({"class": ""})).as_deref(),
+            Some("(blank)")
+        );
+        assert!(parse_hpd_violation(&json!({"class": "X", "violationstatus": "Open"})).is_none());
+
+        // The published line is unchanged while I is the only exclusion...
+        let mut counts = BTreeMap::new();
+        counts.insert("I".to_string(), 753);
+        assert_eq!(
+            excluded_classes_note(&counts),
+            "I (753 records skipped at ingest)"
+        );
+        // ...and a second letter is named, not reported as class I.
+        counts.insert("X".to_string(), 2);
+        assert_eq!(
+            excluded_classes_note(&counts),
+            "I (753 records skipped at ingest), X (2 records skipped at ingest)"
+        );
+        assert_eq!(excluded_classes_note(&BTreeMap::new()), "none");
     }
 
     #[test]

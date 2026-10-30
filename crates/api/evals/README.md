@@ -14,17 +14,18 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 44: 31 synthetic, 13 recorded from a live run |
-| Replays per run | 87: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 3,307 (2026-10-30) |
+| Conversations | 31, all synthetic: the 13 recordings went stale with the run-4 fixes |
+| Replays per run | 61: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 2,010 (2026-10-30) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
-`each_check_fails_on_the_defect_it_names` checks the checker. It plants ten defects and
+`each_check_fails_on_the_defect_it_names` checks the checker. It plants twelve defects and
 confirms the check that names each one fires: an invented number, a code section no law
-returned (`§ 27-2005`), a temperature that is no law fact, advice phrasing, an extra tool round,
-a citation the tools never earned, an injected system turn, an orphan tool result, a superseded
-provision served, and a stale recording. Separately, four bugs were planted by hand in `main.rs` (system role let
+returned (`§ 27-2005`), a temperature that is no law fact, law with no free legal help named, a
+link from memory, advice phrasing, an extra tool round, a citation the tools never earned, an
+injected system turn, an orphan tool result, a superseded provision served, and a stale
+recording. Separately, four bugs were planted by hand in `main.rs` (system role let
 through, `search_law` citation claimed with zero sources, cap raised to 6, one domain dropped
 from the allowlist). The suite failed 17 checks, each naming its bug, and passed again once they
 were reverted.
@@ -41,10 +42,10 @@ schemas and the model id, logged at startup as `agent_version`. If any of the th
 recording fails with an instruction to re-record, so a prompt edit can't keep passing on answers
 written for the old prompt.
 
-The 13 recordings are from agent `53fd91dd831bcb2e` on `anthropic/claude-haiku-4.5`
-(2026-10-30), the first with `lookup_law`. The 14 from `db3fee8a55844c3e` were removed when
-`lookup_law` replaced `legal_context`: a new tool schema is a new agent. See "What the live runs
-found" below.
+There are no recordings right now. The 13 from agent `53fd91dd831bcb2e` (run 4, 2026-10-30)
+were removed by the prompt change that fixed what that run found; they are in git history at
+`a9d6100`. They come back from the next billed `live_eval` run. See "What the live runs found"
+below.
 
 ## Checks
 
@@ -82,6 +83,10 @@ Applied to every conversation, on both endpoints:
   building's score is in the evidence, and still fails.
 - **Served law is current.** Every provision `lookup_law` handed back is `current`, with a
   `verified_on` date.
+- **Links were shown.** Every `http(s)://` link in the answer appears in the facts or a tool
+  result.
+- **Law comes with a referral.** If `lookup_law` served law, the answer names an organisation
+  from the legal-help directory, by name or by phone number. NYC 311 doesn't count.
 
 Per conversation, in `expect`: `tools` (exact order of tool results fed back, replay only),
 `must_call`, `fed_back_contains`, `citations_include` / `_exclude`, `answer_contains` (replay
@@ -157,12 +162,16 @@ glued them mid-line. `answer-written-before-referral` pins it.
   all times, regardless of outside temperature". It fails because it never called
   `find_legal_help`, so the answer names no free organisation and carries no "not legal
   advice" line. `multi-turn-history` skipped it the same way. Both are plain questions about
-  the law; every conversation that described a problem called it.
+  the law; every conversation that described a problem called it. **Changed, not yet confirmed
+  live:** the prompt and both tool descriptions say a plain question about the law gets
+  `find_legal_help` too, and a new check fails any answer that serves law and names nobody.
 - **`violations-for-unheld-bbl` linked a dataset from memory.** It sent the reader to
-  `a2nx-4u46` (ECB violations, not HPD's). The number check caught the digits in the URL; no
-  check looks at links as such.
+  `a2nx-4u46` (ECB violations, not HPD's). The number check caught the digits in the URL.
+  **Changed:** the prompt forbids links that no tool returned, and a link check now fails one.
 - **`rent-fairness` did its own arithmetic.** "$500/month above the median" is right, and is
-  3,000 − 2,500 computed by the model; the tool returns only the percentage.
+  3,000 − 2,500 computed by the model; the tool returned only the percentage. **Changed:**
+  `check_rent_fairness` returns `dollars_vs_median`, and the synthetic case says "$500", which
+  fails without it.
 - **Legal claims these checks can't see.** Run 3: `rent-fairness` said a stabilized rent "is
   set by the Rent Guidelines Board"; `court-filing-request` said Legal Aid "can draft an HP
   Action petition for you". Run 4: `heat-season-law` called the heat rules "part of the

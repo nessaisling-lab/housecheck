@@ -850,7 +850,7 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     //
     // ponytail: substring match over everything sent upstream, so a number that appears
     // anywhere in that text passes, even if the answer attaches it to the wrong thing.
-    let evidence: String = out
+    let shown: String = out
         .tape
         .calls
         .iter()
@@ -858,8 +858,7 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         .map(|m| m["content"].as_str().unwrap_or("").to_string())
         .collect::<Vec<_>>()
         .join("\n");
-    let evidence: String = numbers(&evidence).join(" ");
-    let evidence = format!(" {evidence} ");
+    let evidence = format!(" {} ", numbers(&shown).join(" "));
     for n in numbers(&strip_non_claims(&out.answer)) {
         r.check(ctx, evidence.contains(&format!(" {n} ")), || {
             format!("number {n} in the answer appears in no fact, tool result or user turn")
@@ -909,6 +908,63 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             || format!("temperature {t}° is no law fact returned in this conversation"),
         );
     }
+
+    // Every link must be one the model was shown. Live run 4 sent a reader to an ECB dataset
+    // from memory; only the digits in its id tripped the number check.
+    for url in links(&out.answer) {
+        r.check(ctx, shown.contains(&url), || {
+            format!("link {url} appears in no fact or tool result")
+        });
+    }
+
+    // Law served means a referral named. Live run 4 answered two plain questions about the law
+    // correctly and named nobody who could say whether it applies to the reader.
+    if !provisions.is_empty() {
+        r.check(ctx, names_free_help(&out.answer), || {
+            "lookup_law served law, and the answer names no free legal-help organisation".into()
+        });
+    }
+}
+
+/// `http(s)://` links in `s`, cut at whitespace or a closing bracket or quote, with trailing
+/// sentence punctuation dropped.
+fn links(s: &str) -> Vec<String> {
+    s.match_indices("http")
+        .filter(|(i, _)| s[*i..].starts_with("https://") || s[*i..].starts_with("http://"))
+        .map(|(i, _)| {
+            let end = s[i..]
+                .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '>' | '"' | '\''))
+                .map_or(s.len(), |e| i + e);
+            s[i..end].trim_end_matches(['.', ',', ';', ':']).to_string()
+        })
+        .collect()
+}
+
+/// Whether `answer` names an organisation from the legal-help directory: its name before any
+/// " — ", without a leading "The ", or one of its phone numbers in any formatting. NYC 311 is a
+/// complaint line, not legal help, so it does not count.
+///
+/// ponytail: name or phone, matched as text. "Legal Aid" alone, without "Society" or a number,
+/// does not count.
+fn names_free_help(answer: &str) -> bool {
+    let lower = answer.to_lowercase();
+    let digits: String = answer.chars().filter(char::is_ascii_digit).collect();
+    legal_help_directory()
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|o| o["name"] != "NYC 311")
+        .any(|o| {
+            let name = o["name"].as_str().unwrap_or("");
+            let short = name.split(" — ").next().unwrap_or(name);
+            let short = short.trim_start_matches("The ").to_lowercase();
+            let phone: String = o["phone"].as_str().unwrap_or("").to_string();
+            lower.contains(&short)
+                || phone.split(['·', ',']).any(|p| {
+                    let d: String = p.chars().filter(char::is_ascii_digit).collect();
+                    d.len() >= 10 && digits.contains(&d)
+                })
+        })
 }
 
 fn version_check(case: &Case, r: &mut Report) {
@@ -1013,6 +1069,20 @@ fn sections_and_temperatures_are_read_from_the_text() {
     );
 }
 
+/// Links end where markdown or prose ends them; a referral counts by name or by phone, in any
+/// formatting, and 311 is not one.
+#[test]
+fn links_and_referrals_are_read_from_the_text() {
+    assert_eq!(
+        links("See [HPD](https://a.gov/x?y=1). Or https://b.gov/z, then \"https://c.gov\"."),
+        ["https://a.gov/x?y=1", "https://b.gov/z", "https://c.gov"]
+    );
+    assert!(names_free_help("Call the Legal Aid Society."));
+    assert!(names_free_help("Call (212) 979-0611 on Monday."));
+    assert!(!names_free_help("File a complaint with 311."));
+    assert!(!names_free_help("Legal Aid can help."));
+}
+
 /// The checks are code too. Break a passing conversation in each way a check claims to
 /// catch — the model's side by editing a turn, the server's side by editing what came back —
 /// and confirm the check that names that defect is the one that fires.
@@ -1069,6 +1139,25 @@ async fn each_check_fails_on_the_defect_it_names() {
         &wrong_temp,
         &run(&wrong_temp, "/agent/chat", None).await,
         "temperature 58",
+    );
+
+    // Live run 4's two new failures: law with nobody named, and a link from memory.
+    let mut no_referral = base.clone();
+    no_referral.upstream[answer_at] =
+        json!({ "answer": "Heat season runs October 1 through May 31." });
+    fires(
+        &no_referral,
+        &run(&no_referral, "/agent/chat", None).await,
+        "names no free legal-help",
+    );
+
+    let mut made_up_link = base.clone();
+    made_up_link.upstream[answer_at] = json!({ "answer": "See https://data.cityofnewyork.us/d/a2nx-4u46 \
+        for this building. Housing Court Answers can help." });
+    fires(
+        &made_up_link,
+        &run(&made_up_link, "/agent/chat", None).await,
+        "link https://data.cityofnewyork.us/d/a2nx-4u46 appears in no",
     );
 
     let mut extra_round = base.clone();

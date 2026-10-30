@@ -267,12 +267,12 @@
       { "role": "user", "content": "Explain the warranty of habitability in full detail." }
     ] },
     "upstream": [
-      { "tools": [["lookup_law", { "topic": "habitability" }]] },
-      { "answer": "HPD issues violations for conditions that break the New York City Housing Maintenance Code, in four classes: Class A (non-hazardous), Class B (hazardous), Class C (immediately hazardous) and", "finish": "length" }
+      { "tools": [["lookup_law", { "topic": "habitability" }], ["find_legal_help", {}]] },
+      { "answer": "Housing Court Answers (212-962-4795) can tell you how this applies to you. HPD issues violations for conditions that break the New York City Housing Maintenance Code, in four classes: Class A (non-hazardous), Class B (hazardous), Class C (immediately hazardous) and", "finish": "length" }
     ],
     "expect": {
       "status": 200,
-      "tools": ["lookup_law"],
+      "tools": ["lookup_law", "find_legal_help"],
       "answer_contains": ["cut short by a length limit"]
     }
   },
@@ -414,7 +414,7 @@
     ] },
     "upstream": [
       { "tools": [["check_rent_fairness", { "bbl": "3000010001", "monthly_rent": 3000 }]] },
-      { "answer": "$3,000 is 20% above this neighborhood's Census tract median of $2,500. For comparison, HUD's 2026 Fair Market Rent for the area is $2,655 for a one-bedroom and $2,910 for a two-bedroom. That is a benchmark, not a ruling on whether the rent is legal." }
+      { "answer": "$3,000 is $500, or 20%, above this neighborhood's Census tract median of $2,500. For comparison, HUD's 2026 Fair Market Rent for the area is $2,655 for a one-bedroom and $2,910 for a two-bedroom. That is a benchmark, not a ruling on whether the rent is legal." }
     ],
     "expect": {
       "status": 200,

@@ -108,26 +108,28 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 `the_server_gives_up_before_the_client_does`, and a rate limiter with three tests.
 
 **The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
-replays 44 conversations (13 of them recorded from the real model, 2026-10-30) through
-`/agent/chat` and `/agent/chat/stream` with the model replaced by a local server playing back
-its turns: 87 replays, 3,307 checks, no network. It checks
+replays 31 conversations through `/agent/chat` and `/agent/chat/stream` with the model replaced
+by a local server playing back its turns: 61 replays, 2,010 checks, no network (2026-10-30; the
+13 recordings from run 4 went stale with the fixes for what it found, and wait on a billed
+re-record). It checks
 role coercion, the round cap, tool-call pairing, the law-search allowlist, citations equal to
 the tools that succeeded, advice phrasing, that both endpoints give the same answer, that every
 number in an answer was in something the model was shown, and that every cited section and
-every temperature is one `lookup_law` returned in that conversation. `each_check_fails_on_the_defect_it_names` plants a defect
+every temperature is one `lookup_law` returned in that conversation, that every link was in
+something the model was shown, and that an answer serving law names free legal help. `each_check_fails_on_the_defect_it_names` plants a defect
 for each of those and asserts the matching check fires. Details: `crates/api/evals/README.md`.
 
 ---
 
 ## What this does not cover
 
-- **Live scoring: 13 of 17 pass on the current agent.** Three billed runs (2026-10-29,
+- **Live scoring: 13 of 17 passed on the previous agent (run 4).** Three billed runs (2026-10-29,
   $0.2777 in all) found a server bug that dropped text from `/agent/chat`, and a heat-law
   answer that was confidently wrong about the night rule. Both are fixed; see
   `crates/api/evals/README.md`. Since then `legal_context` has been replaced by `lookup_law`
   over a table of verified official text. On that agent (run 4, 2026-10-30, $0.1379) 13 of 17
-  pass, and the heat answer states every rule correctly; it still fails for naming no free
-  legal help. Some passing answers make legal claims that substring and number checks can't
+  passed, and the heat answer stated every rule correctly; it failed for naming no free legal
+  help, which the current prompt and a new check address. Not yet re-run. Some passing answers make legal claims that substring and number checks can't
   judge.
 - **The Python verifier is not in CI.** It is a one-off script, and it remains the
   strongest evidence here precisely because it was written independently. The Rust test

@@ -970,4 +970,26 @@ mod tests {
         assert_eq!(get_snapshot_year(&conn)?, Some(2026));
         Ok(())
     }
+
+    /// REVIEW-NOTES M4 at the read. Before `ViolationClass`, a stored class this code did not
+    /// model came back as a `String` and `scoring` priced it at 0. Measured on `main` at
+    /// `03dfae6`: a building whose only open violation was class "X" scored condition 100, the
+    /// same as a building with none. `ingest` can no longer write such a row, so one here means
+    /// an artifact built by something else, and the read refuses it by name.
+    #[test]
+    fn an_unmodelled_class_is_an_error_not_a_clean_building() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        migrate(&conn)?;
+        conn.execute(
+            "INSERT INTO violations (bbl,class,open,year) VALUES ('3000010009','X',1,2026)",
+            [],
+        )?;
+        let err = get_open_violations(&conn, "3000010009")
+            .expect_err("an unmodelled class must not read back as a violation");
+        assert!(
+            format!("{err:#}").contains("\"X\""),
+            "the error should name the letter: {err:#}"
+        );
+        Ok(())
+    }
 }

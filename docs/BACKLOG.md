@@ -468,8 +468,12 @@ rely on it", and several are accessibility issues rather than features.
 ## Engineering debt carried from the audit
 
 - [ ] **Basis-vector weight tests** (audit ledger item 7).
-- [ ] **`enum ViolationClass`** to replace stringly-typed classes, plus a schema↔dispatch test
-      (ledger item 10).
+- [x] **`enum ViolationClass`** replaces stringly-typed classes (ledger item 10). *Done
+      2026-10-30.* Fixes REVIEW-NOTES M4: `scoring` priced an unmodelled class at 0, so an open
+      class-X violation left a building at condition 100, the same as none (measured on `main`
+      at `03dfae6`). Matches are exhaustive; ingest counts skipped classes by letter instead of
+      calling them all class I; the store read refuses an unmodelled class by name.
+- [ ] **Schema↔dispatch test** for the agent's tools (ledger item 10; build-book ch. 6).
 - [ ] **Extract `crates/agent`** out of the API crate (ledger item 10).
 - [x] **Delete unused `components/ui`** (ledger item 10). *Done 2026-08-15.* 53 shadcn files,
       **6,083 lines**, and nothing outside the directory imported any of them. `eslint.config.js`

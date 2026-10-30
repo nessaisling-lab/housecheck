@@ -1,15 +1,15 @@
 use anyhow::{Context, Result};
 use reqwest::blocking::Client;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::config::Config;
 use crate::geo::{count_within_m, haversine_m, nearest_ada_m, Station};
 use crate::sources::{
-    bbl_block, bbl_in_query, census_url, complaints_311_query, fetch_rent_stab, hpd_bbl,
-    hpd_block_query, hpd_class_raw, parse_311_point, parse_census_medians, parse_dob_has_elevator,
-    parse_hpd_violation, parse_pluto, parse_restaurant_grade, pluto_coords, pluto_query,
-    restaurant_grades_query,
+    bbl_block, bbl_in_query, census_url, complaints_311_query, excluded_classes_note,
+    fetch_rent_stab, hpd_bbl, hpd_block_query, hpd_excluded_class, parse_311_point,
+    parse_census_medians, parse_dob_has_elevator, parse_hpd_violation, parse_pluto,
+    parse_restaurant_grade, pluto_coords, pluto_query, restaurant_grades_query,
 };
 
 /// Grade of the nearest DOHMH-graded restaurant within `radius_m` metres of (lat, lon), or
@@ -243,7 +243,7 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         set.into_iter().collect()
     };
     let mut violations: HashMap<String, Vec<model::Violation>> = HashMap::new();
-    let mut unknown_classes = 0usize;
+    let mut excluded: BTreeMap<String, usize> = BTreeMap::new();
     for chunk in blocks.chunks(500) {
         let (base, params) = hpd_block_query(boroid, chunk);
         let rows = get_json_paged(&c, &base, &params)?;
@@ -254,23 +254,24 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             }
             // The class check used to live here, on an already-parsed `String`. It now happens
             // inside `parse_hpd_violation`, because the class is typed and an unmodelled letter
-            // can no longer be carried in a `Violation` at all. The tally stays exact by asking
-            // the raw row why the parse failed, so an excluded class is still counted as an
-            // excluded class and not as a malformed row.
+            // can no longer be carried in a `Violation` at all. The skip is counted by the
+            // letter the row carried, so the published exclusion names each class rather than
+            // calling every one of them I, and a malformed row is not counted as a class.
             match parse_hpd_violation(v) {
                 Some(viol) => violations.entry(bbl).or_default().push(viol),
                 None => {
-                    if hpd_class_raw(v)
-                        .is_some_and(|c| c.trim().parse::<model::ViolationClass>().is_err())
-                    {
-                        unknown_classes += 1;
+                    if let Some(letter) = hpd_excluded_class(v) {
+                        *excluded.entry(letter).or_default() += 1;
                     }
                 }
             }
         }
     }
-    if unknown_classes > 0 {
-        println!("note: {unknown_classes} violations had non-A/B/C classes (skipped)");
+    if !excluded.is_empty() {
+        println!(
+            "note: skipped violations with unmodelled classes: {}",
+            excluded_classes_note(&excluded)
+        );
     }
 
     // 3. DOB elevators (active passenger elevator on record). DOB `bbl` is a clean column.
@@ -480,10 +481,14 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         ("violations", stored_violations.to_string()),
         ("tract_medians", tracts_written.len().to_string()),
         ("complaints_311_points", points_311.len().to_string()),
-        ("violation_classes", "A,B,C".to_string()),
+        // From the enum, so the published list cannot fall behind the classes actually kept.
+        (
+            "violation_classes",
+            model::ViolationClass::ALL.map(|c| c.as_str()).join(","),
+        ),
         (
             "violation_classes_excluded",
-            format!("I ({unknown_classes} records skipped at ingest)"),
+            excluded_classes_note(&excluded),
         ),
         (
             "sources",
@@ -530,9 +535,9 @@ pub fn run_real(cfg: &Config) -> Result<()> {
 
     println!("wrote {} buildings to {}", buildings.len(), cfg.out);
     println!(
-        "provenance: {} violations (A/B/C; {} class-I skipped), {} 311 points, ingested_at_unix={}",
+        "provenance: {} violations (A/B/C; skipped: {}), {} 311 points, ingested_at_unix={}",
         stored_violations,
-        unknown_classes,
+        excluded_classes_note(&excluded),
         points_311.len(),
         ingested_at
     );

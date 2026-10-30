@@ -11,6 +11,9 @@ pub struct Config {
 pub enum Mode {
     Fixture,
     Real,
+    /// Reload only the law tables of an existing artifact, from `data/law.json`. A law fix
+    /// should not need a fresh pull of every building.
+    Law,
 }
 
 impl Config {
@@ -21,8 +24,10 @@ impl Config {
             Mode::Real
         } else if args.iter().any(|a| a == "--fixture") {
             Mode::Fixture
+        } else if args.iter().any(|a| a == "--law") {
+            Mode::Law
         } else {
-            return Err("must pass --fixture or --real".into());
+            return Err("must pass --fixture, --real or --law".into());
         };
         let out = flag("--out")
             .flatten()
@@ -64,6 +69,12 @@ mod tests {
                 limit: 200
             }
         );
+    }
+
+    #[test]
+    fn parses_law_mode() {
+        let args = ["--law", "--out", "data/hc.db"].map(String::from);
+        assert_eq!(Config::parse(&args).unwrap().mode, Mode::Law);
     }
 
     #[test]

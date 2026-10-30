@@ -10,3 +10,5 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 model = { path = "../model" }
 rusqlite.workspace = true
 anyhow.workspace = true
+# Parses the embedded `data/law.json` -- see `load_law`.
+serde_json.workspace = true

@@ -18,6 +18,19 @@ fn main() -> Result<()> {
             println!("built fixture DB at {}", cfg.out);
         }
         Mode::Real => run::run_real(&cfg)?,
+        Mode::Law => {
+            // Never create one: an artifact with law and no buildings would fail at startup
+            // anyway, but a typo in --out should say so here.
+            anyhow::ensure!(
+                std::path::Path::new(&cfg.out).exists(),
+                "{} does not exist; build it with --real or --fixture first",
+                cfg.out
+            );
+            let conn = store::open_db(&cfg.out)?;
+            store::migrate(&conn)?;
+            let n = store::load_law(&conn)?;
+            println!("loaded {n} law provisions into {}", cfg.out);
+        }
     }
     Ok(())
 }

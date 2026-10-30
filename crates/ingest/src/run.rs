@@ -396,6 +396,8 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     let _ = std::fs::remove_file(&cfg.out);
     let conn = store::open_db(&cfg.out)?;
     store::migrate(&conn)?;
+    let provisions = store::load_law(&conn)?;
+    println!("law: {provisions} provisions from data/law.json");
     // Scoring recency reads this snapshot year, not the wall clock, so runs are reproducible.
     let snapshot_year: i32 = std::env::var("SNAPSHOT_YEAR")
         .ok()

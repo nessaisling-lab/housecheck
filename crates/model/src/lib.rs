@@ -1,4 +1,5 @@
 pub mod export;
+pub mod law;
 
 use serde::{Deserialize, Serialize};
 

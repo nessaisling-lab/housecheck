@@ -108,24 +108,27 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 `the_server_gives_up_before_the_client_does`, and a rate limiter with three tests.
 
 **The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
-replays 45 conversations (14 of them recorded from the real model) through `/agent/chat` and
-`/agent/chat/stream` with the model replaced by a local server playing back its turns: 89
-replays, 3,218 checks, no network. It checks role coercion, the round cap, tool-call pairing,
-the law-search allowlist, citations equal to the tools that succeeded, advice phrasing, that
-both endpoints give the same answer, and that every number in an answer was in something the
-model was shown. `each_check_fails_on_the_defect_it_names` plants a defect
+replays 47 conversations (16 of them recorded from the real model, 2026-10-30) through
+`/agent/chat` and `/agent/chat/stream` with the model replaced by a local server playing back
+its turns: 93 replays, 3,670 checks, no network. It checks
+role coercion, the round cap, tool-call pairing, the law-search allowlist, citations equal to
+the tools that succeeded, advice phrasing, that both endpoints give the same answer, that every
+number in an answer was in something the model was shown, and that every cited section and
+every temperature is one `lookup_law` returned in that conversation, that every link was in
+something the model was shown, and that an answer serving law names free legal help. `each_check_fails_on_the_defect_it_names` plants a defect
 for each of those and asserts the matching check fires. Details: `crates/api/evals/README.md`.
 
 ---
 
 ## What this does not cover
 
-- **Live scoring: 14 of 17 pass on the current prompt.** Three billed runs (2026-10-29,
-  $0.2777 in all) found a server bug that dropped text from `/agent/chat`, and a heat-law
-  answer that was confidently wrong about the night rule. Both are fixed; see
-  `crates/api/evals/README.md`. Still open: the heat-season question doesn't reach
-  `legal_context`, and two passing answers make legal claims that substring and number checks
-  can't judge.
+- **Live scoring: 16 of 17 pass on the current agent** (run 5, 2026-10-30, $0.1333). Earlier
+  runs found a server bug that dropped text from `/agent/chat`, and a heat-law answer that was
+  confidently wrong about the night rule. Both are fixed. `legal_context` has since been
+  replaced by `lookup_law` over a table of verified official text, and the heat question passes
+  live with every rule right. `court-filing-request` failed run 5: it offered to look up legal
+  help later instead of now. Some passing answers make legal claims that substring and number
+  checks can't judge. Six runs, $0.6758 in all; see `crates/api/evals/README.md`.
 - **The Python verifier is not in CI.** It is a one-off script, and it remains the
   strongest evidence here precisely because it was written independently. The Rust test
   reproduces its finding in-process; it does not replace the outside check.

@@ -110,6 +110,42 @@ pub fn migrate(conn: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS meta (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+         );
+         -- The law the agent may state, loaded from data/law.json by `load_law`. The CHECKs
+         -- are the vocabulary: a typo in the seed fails the build instead of shipping a
+         -- provision no query will ever match.
+         CREATE TABLE IF NOT EXISTS law_source (
+            id TEXT PRIMARY KEY,
+            publisher TEXT NOT NULL,
+            jurisdiction TEXT NOT NULL CHECK (jurisdiction IN ('ny_state','nyc','federal')),
+            kind TEXT NOT NULL CHECK (kind IN ('statute','regulation','agency_guidance')),
+            base_url TEXT NOT NULL CHECK (base_url LIKE 'https://%')
+         );
+         CREATE TABLE IF NOT EXISTS law_provision (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL REFERENCES law_source(id),
+            citation TEXT NOT NULL,
+            title TEXT NOT NULL,
+            text TEXT NOT NULL,
+            url TEXT NOT NULL CHECK (url LIKE 'https://%'),
+            retrieved_at TEXT NOT NULL CHECK (retrieved_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            text_sha256 TEXT NOT NULL,
+            verified_by TEXT NOT NULL CHECK (length(verified_by) > 0),
+            verified_on TEXT NOT NULL CHECK (verified_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            status TEXT NOT NULL CHECK (status IN ('current','superseded')),
+            occupancy TEXT NOT NULL CHECK (occupancy IN ('residential','commercial','both'))
+         );
+         CREATE TABLE IF NOT EXISTS law_topic (
+            provision_id TEXT NOT NULL REFERENCES law_provision(id),
+            topic TEXT NOT NULL,
+            PRIMARY KEY (provision_id, topic)
+         );
+         CREATE TABLE IF NOT EXISTS law_fact (
+            key TEXT PRIMARY KEY,
+            provision_id TEXT NOT NULL REFERENCES law_provision(id),
+            value TEXT NOT NULL,
+            condition TEXT NOT NULL,
+            quote TEXT NOT NULL
          );",
     )?;
     // Columns added after the original schema shipped. SQLite errors on re-adding an existing
@@ -173,6 +209,8 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
         "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','A',0,2019)",
         [],
     )?;
+    // The real law, not a fixture of it: the evals check answers against these rows.
+    load_law(conn)?;
     Ok(())
 }
 
@@ -470,6 +508,154 @@ pub fn get_snapshot_year(conn: &Connection) -> Result<Option<i32>> {
     }
 }
 
+/// `data/law.json`, compiled in, so the artifact, the fixture and the tests all read the same
+/// reviewed file and no run can pick up a stray copy.
+const LAW_JSON: &str = include_str!("../../../data/law.json");
+
+/// Replace the law tables with `data/law.json`. Returns the number of provisions.
+///
+/// Refuses the whole file on the first problem: an unknown topic, a fact whose quote is not in
+/// its provision's text, a broken reference, or anything the schema's CHECKs reject. A wrong
+/// statute is worse than a missing one, so a bad row stops the build rather than being skipped.
+pub fn load_law(conn: &Connection) -> Result<usize> {
+    let seed: model::law::LawSeed =
+        serde_json::from_str(LAW_JSON).context("data/law.json does not parse")?;
+    insert_law(conn, &seed)
+}
+
+fn insert_law(conn: &Connection, seed: &model::law::LawSeed) -> Result<usize> {
+    use model::law::{normalize, text_sha256, TOPICS};
+    // Off by default in SQLite, and a no-op once a transaction is open.
+    conn.execute_batch("PRAGMA foreign_keys = ON")?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute_batch(
+        "DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_provision; DELETE FROM law_source;",
+    )?;
+    for s in &seed.sources {
+        tx.execute(
+            "INSERT INTO law_source (id,publisher,jurisdiction,kind,base_url) VALUES (?1,?2,?3,?4,?5)",
+            rusqlite::params![s.id, s.publisher, s.jurisdiction, s.kind, s.base_url],
+        )
+        .with_context(|| format!("law source {}", s.id))?;
+    }
+    for p in &seed.provisions {
+        tx.execute(
+            "INSERT INTO law_provision (id,source_id,citation,title,text,url,retrieved_at,
+               text_sha256,verified_by,verified_on,status,occupancy)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+            rusqlite::params![
+                p.id,
+                p.source,
+                p.citation,
+                p.title,
+                p.text,
+                p.url,
+                p.retrieved_at,
+                text_sha256(&p.text),
+                p.verified_by,
+                p.verified_on,
+                p.status,
+                p.occupancy
+            ],
+        )
+        .with_context(|| format!("law provision {}", p.id))?;
+        anyhow::ensure!(!p.topics.is_empty(), "{}: no topics", p.id);
+        for t in &p.topics {
+            anyhow::ensure!(
+                TOPICS.contains(&t.as_str()),
+                "{}: topic {t:?} is not one lookup_law accepts",
+                p.id
+            );
+            tx.execute(
+                "INSERT INTO law_topic (provision_id, topic) VALUES (?1, ?2)",
+                rusqlite::params![p.id, t],
+            )?;
+        }
+        let text = normalize(&p.text);
+        for f in &p.facts {
+            anyhow::ensure!(
+                text.contains(&normalize(&f.quote)),
+                "{}: the quote for {} is not in the provision's text",
+                p.id,
+                f.key
+            );
+            anyhow::ensure!(
+                f.quote.contains(&f.value),
+                "{}: {} = {:?} is not in its quote",
+                p.id,
+                f.key,
+                f.value
+            );
+            tx.execute(
+                "INSERT INTO law_fact (key,provision_id,value,condition,quote) VALUES (?1,?2,?3,?4,?5)",
+                rusqlite::params![f.key, p.id, f.value, f.condition, f.quote],
+            )
+            .with_context(|| format!("law fact {}", f.key))?;
+        }
+    }
+    tx.commit()?;
+    Ok(seed.provisions.len())
+}
+
+/// Provisions in the artifact. The API refuses to start on zero, as it does for buildings: an
+/// agent with no law to look up would answer every legal question with "I couldn't verify it".
+pub fn law_provision_count(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row("SELECT count(*) FROM law_provision", [], |r| r.get(0))?)
+}
+
+/// Current provisions tagged `topic`, statutes before regulations before agency guidance, and
+/// the facts taken from them.
+pub fn law_for_topic(conn: &Connection, topic: &str) -> Result<model::law::LawLookup> {
+    use model::law::{LawFact, ServedFact, ServedProvision};
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.citation, p.title, p.text, p.url, s.publisher, s.kind, p.status,
+                p.retrieved_at, p.verified_on
+         FROM law_provision p
+         JOIN law_topic t ON t.provision_id = p.id
+         JOIN law_source s ON s.id = p.source_id
+         WHERE t.topic = ?1 AND p.status = 'current'
+         ORDER BY CASE s.kind WHEN 'statute' THEN 0 WHEN 'regulation' THEN 1 ELSE 2 END, p.id",
+    )?;
+    let provisions = stmt
+        .query_map([topic], |r| {
+            Ok(ServedProvision {
+                id: r.get(0)?,
+                citation: r.get(1)?,
+                title: r.get(2)?,
+                text: r.get(3)?,
+                url: r.get(4)?,
+                publisher: r.get(5)?,
+                kind: r.get(6)?,
+                status: r.get(7)?,
+                retrieved_at: r.get(8)?,
+                verified_on: r.get(9)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut stmt = conn.prepare(
+        "SELECT f.provision_id, f.key, f.value, f.condition, f.quote
+         FROM law_fact f
+         JOIN law_topic t ON t.provision_id = f.provision_id
+         JOIN law_provision p ON p.id = f.provision_id
+         WHERE t.topic = ?1 AND p.status = 'current'
+         ORDER BY f.key",
+    )?;
+    let facts = stmt
+        .query_map([topic], |r| {
+            Ok(ServedFact {
+                provision: r.get(0)?,
+                fact: LawFact {
+                    key: r.get(1)?,
+                    value: r.get(2)?,
+                    condition: r.get(3)?,
+                    quote: r.get(4)?,
+                },
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(model::law::LawLookup { provisions, facts })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -480,11 +666,73 @@ mod tests {
         migrate(&conn)?;
         let count: i64 = conn.query_row(
             "SELECT count(*) FROM sqlite_master WHERE type='table'
-             AND name IN ('buildings','violations','acs_rent_by_tract')",
+             AND name IN ('buildings','violations','acs_rent_by_tract',
+                          'law_source','law_provision','law_topic','law_fact')",
             [],
             |r| r.get(0),
         )?;
-        assert_eq!(count, 3);
+        assert_eq!(count, 7);
+        Ok(())
+    }
+
+    /// The shipped seed loads, and serves only what is current.
+    #[test]
+    fn law_seed_loads_and_superseded_rows_are_never_served() -> Result<()> {
+        let conn = seeded()?;
+        assert!(law_provision_count(&conn)? > 0);
+        let heat = law_for_topic(&conn, "heat")?;
+        let night = heat
+            .facts
+            .iter()
+            .find(|f| f.fact.key == "heat.night.min_f")
+            .expect("the night rule the live eval got wrong");
+        assert_eq!(night.fact.value, "62");
+
+        conn.execute(
+            "UPDATE law_provision SET status = 'superseded' WHERE id = ?1",
+            [&night.provision],
+        )?;
+        let after = law_for_topic(&conn, "heat")?;
+        assert!(after.provisions.iter().all(|p| p.id != night.provision));
+        assert!(after.facts.iter().all(|f| f.provision != night.provision));
+        Ok(())
+    }
+
+    /// Each way a seed can be wrong stops the load, and says which row.
+    #[test]
+    fn law_seed_refuses_a_bad_row() -> Result<()> {
+        let good: serde_json::Value = serde_json::from_str(LAW_JSON)?;
+        // Each edit is made to the heat page, the provision that has facts.
+        let refuses = |edit: &dyn Fn(&mut serde_json::Value), needle: &str| -> Result<()> {
+            let mut v = good.clone();
+            let heat = v["provisions"]
+                .as_array_mut()
+                .and_then(|ps| ps.iter_mut().find(|p| p["id"] == "NYC311-KA-01036"))
+                .expect("the heat provision");
+            edit(heat);
+            let conn = open_db(":memory:")?;
+            migrate(&conn)?;
+            let err = insert_law(&conn, &serde_json::from_value(v)?)
+                .expect_err("a bad seed must not load");
+            assert!(format!("{err:#}").contains(needle), "{needle}: {err:#}");
+            Ok(())
+        };
+        refuses(
+            &|p| p["topics"] = serde_json::json!(["heating"]),
+            "is not one lookup_law accepts",
+        )?;
+        refuses(
+            &|p| p["facts"][0]["quote"] = "heat begins September 15".into(),
+            "is not in the provision's text",
+        )?;
+        refuses(
+            // facts[4] is heat.night.min_f, "62".
+            &|p| p["facts"][4]["value"] = "64".into(),
+            "is not in its quote",
+        )?;
+        refuses(&|p| p["status"] = "draft".into(), "law provision")?;
+        refuses(&|p| p["source"] = "nobody".into(), "law provision")?;
+        refuses(&|p| p["verified_on"] = "Oct 30".into(), "law provision")?;
         Ok(())
     }
 

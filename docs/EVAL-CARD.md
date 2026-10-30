@@ -109,7 +109,7 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 
 **The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
 replays 31 conversations through `/agent/chat` and `/agent/chat/stream` with the model replaced
-by a local server playing back its turns: 61 replays, 1,976 checks, no network (2026-10-30; the
+by a local server playing back its turns: 61 replays, 1,990 checks, no network (2026-10-30; the
 14 recordings were dropped when the law tool changed and wait on a billed re-record). It checks
 role coercion, the round cap, tool-call pairing, the law-search allowlist, citations equal to
 the tools that succeeded, advice phrasing, that both endpoints give the same answer, that every

@@ -16,7 +16,7 @@ Measured on this branch (Windows, debug build):
 |---|---|
 | Conversations | 31, all synthetic: the 14 recordings went stale when `lookup_law` replaced `legal_context` |
 | Replays per run | 61: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 1,976 (2026-10-30) |
+| Checks per run | 1,990 (2026-10-30) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 

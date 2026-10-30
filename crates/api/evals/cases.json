@@ -47,7 +47,7 @@
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
-      "citations_include": ["NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
+      "citations_include": ["NY Real Property Law § 235-b · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
       "answer_contains": ["October 1", "62°F"]
     }
   },
@@ -79,13 +79,13 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "Here is what the published guidance says. From October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside (NYC311, KA-01036). This building already has 1 open class-C violation on record. Worth documenting: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. I can't tell you what to do in your situation, but Housing Court Answers (212-962-4795) and the Met Council Tenants Rights Hotline (212-979-0611) can. If you like, I can draft a short question for you to take to a lawyer." }
+      { "answer": "Here is what the published guidance says. From October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside (NYC311, KA-01036). NY Real Property Law § 235-b also makes every residential lease carry a warranty that the premises are fit for human habitation. This building already has 1 open class-C violation on record. Worth documenting: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. I can't tell you what to do in your situation, but Housing Court Answers (212-962-4795) and the Met Council Tenants Rights Hotline (212-979-0611) can. If you like, I can draft a short question for you to take to a lawyer." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
-      "citations_include": ["NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
+      "citations_include": ["NY Real Property Law § 235-b · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
       "answer_contains": ["311", "212-962-4795"]
     }
   },

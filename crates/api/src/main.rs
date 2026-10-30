@@ -4056,7 +4056,11 @@ mod tests {
                 "{topic}: the checklist must say it is not law"
             );
         }
-        assert!(served >= 4, "only {served} topics hold law");
+        assert_eq!(
+            served,
+            model::law::TOPICS.len(),
+            "every topic lookup_law accepts must hold law"
+        );
     }
 
     /// The rule the live eval got wrong: at night the minimum is 62°F at all times, and the
@@ -4093,7 +4097,11 @@ mod tests {
             .unwrap()
             .contains("not a condition of the night rule"));
         assert_eq!(fact("heat.season.start")["value"], "October 1");
-        assert!(cite.is_some_and(|c| c.contains("KA-01036")));
+        // The statute before the agency's summary of it.
+        assert_eq!(out["provisions"][0]["id"], "NY-RPL-235-B");
+        assert!(cite.is_some_and(
+            |c| c.starts_with("NY Real Property Law § 235-b") && c.contains("KA-01036")
+        ));
     }
 
     #[test]
@@ -4137,6 +4145,9 @@ mod tests {
         // An unrecognised topic gets the baseline law, not "unknown topic": the user still
         // asked a legal question.
         assert_eq!(out["topic"], "general");
+        assert!(out["provisions"]
+            .as_array()
+            .is_some_and(|p| p.iter().any(|p| p["id"] == "NY-RPL-235-B")));
     }
 
     #[tokio::test]

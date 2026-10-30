@@ -702,9 +702,14 @@ mod tests {
     #[test]
     fn law_seed_refuses_a_bad_row() -> Result<()> {
         let good: serde_json::Value = serde_json::from_str(LAW_JSON)?;
+        // Each edit is made to the heat page, the provision that has facts.
         let refuses = |edit: &dyn Fn(&mut serde_json::Value), needle: &str| -> Result<()> {
             let mut v = good.clone();
-            edit(&mut v);
+            let heat = v["provisions"]
+                .as_array_mut()
+                .and_then(|ps| ps.iter_mut().find(|p| p["id"] == "NYC311-KA-01036"))
+                .expect("the heat provision");
+            edit(heat);
             let conn = open_db(":memory:")?;
             migrate(&conn)?;
             let err = insert_law(&conn, &serde_json::from_value(v)?)
@@ -713,29 +718,21 @@ mod tests {
             Ok(())
         };
         refuses(
-            &|v| v["provisions"][0]["topics"] = serde_json::json!(["heating"]),
+            &|p| p["topics"] = serde_json::json!(["heating"]),
             "is not one lookup_law accepts",
         )?;
         refuses(
-            &|v| v["provisions"][0]["facts"][0]["quote"] = "heat begins September 15".into(),
+            &|p| p["facts"][0]["quote"] = "heat begins September 15".into(),
             "is not in the provision's text",
         )?;
         refuses(
-            &|v| v["provisions"][0]["facts"][4]["value"] = "64".into(),
+            // facts[4] is heat.night.min_f, "62".
+            &|p| p["facts"][4]["value"] = "64".into(),
             "is not in its quote",
         )?;
-        refuses(
-            &|v| v["provisions"][0]["status"] = "draft".into(),
-            "law provision",
-        )?;
-        refuses(
-            &|v| v["provisions"][0]["source"] = "nobody".into(),
-            "law provision",
-        )?;
-        refuses(
-            &|v| v["provisions"][0]["verified_on"] = "Oct 30".into(),
-            "law provision",
-        )?;
+        refuses(&|p| p["status"] = "draft".into(), "law provision")?;
+        refuses(&|p| p["source"] = "nobody".into(), "law provision")?;
+        refuses(&|p| p["verified_on"] = "Oct 30".into(), "law provision")?;
         Ok(())
     }
 

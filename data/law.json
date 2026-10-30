@@ -1,6 +1,13 @@
 {
   "sources": [
     {
+      "id": "ny-senate",
+      "publisher": "New York State Senate (Consolidated Laws of New York)",
+      "jurisdiction": "ny_state",
+      "kind": "statute",
+      "base_url": "https://www.nysenate.gov/legislation/laws/"
+    },
+    {
       "id": "nyc311",
       "publisher": "NYC311 (City of New York)",
       "jurisdiction": "nyc",
@@ -23,6 +30,29 @@
     }
   ],
   "provisions": [
+    {
+      "id": "NY-RPL-235-B",
+      "source": "ny-senate",
+      "citation": "NY Real Property Law § 235-b",
+      "title": "Warranty of habitability",
+      "text": "§ 235-b. Warranty of habitability. 1. In every written or oral lease\nor rental agreement for residential premises the landlord or lessor\nshall be deemed to covenant and warrant that the premises so leased or\nrented and all areas used in connection therewith in common with other\ntenants or residents are fit for human habitation and for the uses\nreasonably intended by the parties and that the occupants of such\npremises shall not be subjected to any conditions which would be\ndangerous, hazardous or detrimental to their life, health or safety.\nWhen any such condition has been caused by the misconduct of the tenant\nor lessee or persons under his direction or control, it shall not\nconstitute a breach of such covenants and warranties.\n\n2. Any agreement by a lessee or tenant of a dwelling waiving or\nmodifying his rights as set forth in this section shall be void as\ncontrary to public policy.\n\n3. In determining the amount of damages sustained by a tenant as a\nresult of a breach of the warranty set forth in the section, the court;\n\n(a) need not require any expert testimony; and\n\n(b) shall, to the extent the warranty is breached or cannot be cured\nby reason of a strike or other labor dispute which is not caused\nprimarily by the individual landlord or lessor and such damages are\nattributable to such strike, exclude recovery to such extent, except to\nthe extent of the net savings, if any, to the landlord or lessor by\nreason of such strike or labor dispute allocable to the tenant's\npremises, provided, however, that the landlord or lesser has made a good\nfaith attempt, where practicable, to cure the breach.\n\n(c) where the premises is subject to regulation pursuant to the local\nemergency housing rent control law, the emergency tenant protection act\nof nineteen seventy-four, the rent stabilization law of nineteen hundred\nsixty-nine or the city rent and rehabilitation law, reduce the amount\nawarded hereunder by the total amount of any rent reduction ordered by\nthe state division of housing and community renewal pursuant to such\nlaws or act, awarded to the tenant, from the effective date of such rent\nreduction order, that relates to one or more matters for which relief is\nawarded hereunder.",
+      "url": "https://www.nysenate.gov/legislation/laws/RPP/235-B",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "Aisling",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "topics": [
+        "habitability",
+        "heat",
+        "hot_water",
+        "repairs",
+        "mold",
+        "pests",
+        "general"
+      ],
+      "facts": []
+    },
     {
       "id": "NYC311-KA-01036",
       "source": "nyc311",

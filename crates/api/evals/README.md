@@ -14,9 +14,9 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 31, all synthetic: the 14 recordings went stale when `lookup_law` replaced `legal_context` |
-| Replays per run | 61: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 1,990 (2026-10-30) |
+| Conversations | 44: 31 synthetic, 13 recorded from a live run |
+| Replays per run | 87: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 3,307 (2026-10-30) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
@@ -41,10 +41,10 @@ schemas and the model id, logged at startup as `agent_version`. If any of the th
 recording fails with an instruction to re-record, so a prompt edit can't keep passing on answers
 written for the old prompt.
 
-There are no recordings right now. The 14 from agent `db3fee8a55844c3e` (2026-10-29) were
-removed on 2026-10-30 when `lookup_law` replaced `legal_context`: a new tool schema is a new
-agent, so every one of them would fail the version check. They come back from the next billed
-`live_eval` run. See "What the live runs found" below.
+The 13 recordings are from agent `53fd91dd831bcb2e` on `anthropic/claude-haiku-4.5`
+(2026-10-30), the first with `lookup_law`. The 14 from `db3fee8a55844c3e` were removed when
+`lookup_law` replaced `legal_context`: a new tool schema is a new agent. See "What the live runs
+found" below.
 
 ## Checks
 
@@ -118,10 +118,11 @@ free `GET /api/v1/key`, so a rejected key costs nothing.
 
 ## What the live runs found
 
-Three billed runs on 2026-10-29, $0.2777 in all:
-- **Run 1:** old prompt, $0.1129, 10 of 17 passed.
+Four billed runs, $0.4156 in all:
+- **Run 1** (2026-10-29): old prompt, $0.1129, 10 of 17 passed.
 - **Re-run of the 7 failures:** $0.0451, 3 passed.
 - **Run 3:** new prompt (`db3fee8a55844c3e`), $0.1197, 14 of 17 passed.
+- **Run 4** (2026-10-30): `lookup_law` (`53fd91dd831bcb2e`), $0.1379, 13 of 17 passed.
 
 A fourth attempt sent a key OpenRouter rejected and cost nothing. That is why the key is now
 checked first.
@@ -149,19 +150,27 @@ glued them mid-line. `answer-written-before-referral` pins it.
   curated-set error.
 
 **Still open:**
-- **`heat-season-law` failed live.** It no longer invented numbers, but it said it had "no tool
-  that covers heating-season dates" (`legal_context` did) and that the dates "can vary slightly
-  year to year" (they don't). `legal_context`'s description said to use it when the user
-  describes a housing *problem*, so a plain question about the law didn't trigger it.
-  **Changed 2026-10-30, not yet confirmed live:** `lookup_law` replaces it, reads verified
-  official text from the `law_*` tables (`data/law.json`), and its description names plain
-  questions ("when does heat season start?"). The prompt now says to call it for any question
-  about what the law says, and to keep every number with its condition.
-- **Two passing answers say things these checks can't see.** `rent-fairness` says a
-  stabilized rent "is set by the Rent Guidelines Board", from memory. `court-filing-request`
-  says Legal Aid "can draft an HP Action petition for you", which the directory doesn't say.
-  Neither contains a number or a banned phrase. Judging claims like these needs sourced law to
-  check against, or a reader.
+- **`heat-season-law` still fails live, but no longer on the law.** In run 3 it said it had "no
+  tool that covers heating-season dates", because `legal_context`'s description was about
+  housing *problems*. In run 4 it called `lookup_law` and stated every rule correctly: October 1
+  to May 31; 68°F from 6 AM to 10 PM when it is below 55°F outside; 62°F from 10 PM to 6 AM "at
+  all times, regardless of outside temperature". It fails because it never called
+  `find_legal_help`, so the answer names no free organisation and carries no "not legal
+  advice" line. `multi-turn-history` skipped it the same way. Both are plain questions about
+  the law; every conversation that described a problem called it.
+- **`violations-for-unheld-bbl` linked a dataset from memory.** It sent the reader to
+  `a2nx-4u46` (ECB violations, not HPD's). The number check caught the digits in the URL; no
+  check looks at links as such.
+- **`rent-fairness` did its own arithmetic.** "$500/month above the median" is right, and is
+  3,000 − 2,500 computed by the model; the tool returns only the percentage.
+- **Legal claims these checks can't see.** Run 3: `rent-fairness` said a stabilized rent "is
+  set by the Rent Guidelines Board"; `court-filing-request` said Legal Aid "can draft an HP
+  Action petition for you". Run 4: `heat-season-law` called the heat rules "part of the
+  habitability warranty under NY Real Property Law § 235-b" (neither text says so; the section
+  check passes because § 235-b was returned), and `rent-fairness` said rent stabilization "has
+  strict legal limits on how much rent can increase" without calling `lookup_law`. None
+  contains a wrong number or a section nobody returned. Judging them needs a reader, or a judge
+  model given the returned provisions.
 
 ## Adding a conversation
 

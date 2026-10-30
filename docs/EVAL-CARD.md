@@ -108,9 +108,9 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 `the_server_gives_up_before_the_client_does`, and a rate limiter with three tests.
 
 **The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
-replays 31 conversations through `/agent/chat` and `/agent/chat/stream` with the model replaced
-by a local server playing back its turns: 61 replays, 1,990 checks, no network (2026-10-30; the
-14 recordings were dropped when the law tool changed and wait on a billed re-record). It checks
+replays 44 conversations (13 of them recorded from the real model, 2026-10-30) through
+`/agent/chat` and `/agent/chat/stream` with the model replaced by a local server playing back
+its turns: 87 replays, 3,307 checks, no network. It checks
 role coercion, the round cap, tool-call pairing, the law-search allowlist, citations equal to
 the tools that succeeded, advice phrasing, that both endpoints give the same answer, that every
 number in an answer was in something the model was shown, and that every cited section and
@@ -121,13 +121,14 @@ for each of those and asserts the matching check fires. Details: `crates/api/eva
 
 ## What this does not cover
 
-- **Live scoring: 14 of 17 passed on the previous prompt.** Three billed runs (2026-10-29,
+- **Live scoring: 13 of 17 pass on the current agent.** Three billed runs (2026-10-29,
   $0.2777 in all) found a server bug that dropped text from `/agent/chat`, and a heat-law
   answer that was confidently wrong about the night rule. Both are fixed; see
   `crates/api/evals/README.md`. Since then `legal_context` has been replaced by `lookup_law`
-  over a table of verified official text, which changed the agent version: the 14 recordings
-  were dropped and wait on a billed re-record. Two passing answers made legal claims that
-  substring and number checks can't judge.
+  over a table of verified official text. On that agent (run 4, 2026-10-30, $0.1379) 13 of 17
+  pass, and the heat answer states every rule correctly; it still fails for naming no free
+  legal help. Some passing answers make legal claims that substring and number checks can't
+  judge.
 - **The Python verifier is not in CI.** It is a one-off script, and it remains the
   strongest evidence here precisely because it was written independently. The Rust test
   reproduces its finding in-process; it does not replace the outside check.

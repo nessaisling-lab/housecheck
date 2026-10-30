@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::geo::{count_within_m, haversine_m, nearest_ada_m, Station};
 use crate::sources::{
     bbl_block, bbl_in_query, census_url, complaints_311_query, fetch_rent_stab, hpd_bbl,
-    hpd_block_query, parse_311_point, parse_census_medians, parse_dob_has_elevator,
+    hpd_block_query, hpd_class_raw, parse_311_point, parse_census_medians, parse_dob_has_elevator,
     parse_hpd_violation, parse_pluto, parse_restaurant_grade, pluto_coords, pluto_query,
     restaurant_grades_query,
 };
@@ -252,12 +252,20 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             if !bbl_set.contains(&bbl) {
                 continue; // a neighbor on the same block, not one of our buildings
             }
-            if let Some(viol) = parse_hpd_violation(v) {
-                if !matches!(viol.class.as_str(), "A" | "B" | "C") {
-                    unknown_classes += 1;
-                    continue;
+            // The class check used to live here, on an already-parsed `String`. It now happens
+            // inside `parse_hpd_violation`, because the class is typed and an unmodelled letter
+            // can no longer be carried in a `Violation` at all. The tally stays exact by asking
+            // the raw row why the parse failed, so an excluded class is still counted as an
+            // excluded class and not as a malformed row.
+            match parse_hpd_violation(v) {
+                Some(viol) => violations.entry(bbl).or_default().push(viol),
+                None => {
+                    if hpd_class_raw(v)
+                        .is_some_and(|c| c.trim().parse::<model::ViolationClass>().is_err())
+                    {
+                        unknown_classes += 1;
+                    }
                 }
-                violations.entry(bbl).or_default().push(viol);
             }
         }
     }

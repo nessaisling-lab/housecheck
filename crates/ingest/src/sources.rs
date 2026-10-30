@@ -11,7 +11,7 @@
 // `lot`, plus an `Open`/`Close` `violationstatus`. The parsers below normalize all of that.
 
 use anyhow::{Context, Result};
-use model::{Building, Violation};
+use model::{Building, Violation, ViolationClass};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader};
@@ -168,7 +168,12 @@ pub fn hpd_bbl(v: &Value) -> Option<String> {
 }
 
 pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
-    let class = s(v, "class")?.to_uppercase();
+    // A class outside A/B/C now makes the row unusable rather than merely unusual, because
+    // every downstream site requires a modelled class. HPD also issues `I`, and those 753
+    // records are the exclusion stated on the card and in `/meta` — so this skip has to stay
+    // countable, not silent. `run` re-reads the raw letter via `hpd_class_raw` to keep that
+    // tally exact instead of lumping it in with rows that had no class field at all.
+    let class: ViolationClass = s(v, "class")?.trim().parse().ok()?;
     // wvxf-dwi5 `violationstatus` is exactly "Open" / "Close".
     let status = s(v, "violationstatus").unwrap_or_default().to_lowercase();
     let open = status.starts_with("open");
@@ -187,6 +192,15 @@ pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
         issued_on: date("novissueddate"),
         closed_on: date("currentstatusdate"),
     })
+}
+
+/// The raw `class` letter as HPD sent it, before any parsing.
+///
+/// Exists so `run` can tell "we skipped this row because the class is one we exclude" from
+/// "we skipped it because the row was unusable for some other reason". Those are different
+/// facts and the first one is a published figure.
+pub fn hpd_class_raw(v: &Value) -> Option<String> {
+    s(v, "class")
 }
 
 /// A `bbl in (...)` Socrata query (used for DOB, whose `bbl` is a clean 10-digit column).
@@ -525,7 +539,7 @@ mod tests {
     fn parses_hpd_violation_open_and_class() {
         let v = json!({"class": "C", "violationstatus": "Open", "novissueddate": "2025-06-01T00:00:00.000"});
         let viol = parse_hpd_violation(&v).expect("valid");
-        assert_eq!(viol.class, "C");
+        assert_eq!(viol.class, ViolationClass::C);
         assert!(viol.open);
         assert_eq!(viol.year, 2025);
     }

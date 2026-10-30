@@ -24,7 +24,7 @@ Measured on real rows, 2026-10-30, then multiplied out to the city (10,547,697 v
 |---|---:|---:|
 | Violation rows + descriptions | 1.11 GB | **0.38 GB** |
 | Buildings | 79 MB | 63 MB |
-| Address search index | none (search scans every row) | 40 MB |
+| Address search index, borough in the key | none (search scans every row) | 40 MB (B-tree; FTS5 if substring search is needed, not measured) |
 | ZIP and neighborhood tables | none | under 1 MB |
 | **Serving SQLite file** | **~1.19 GB** | **~0.48 GB** |
 | DuckDB stage file, kept between runs | — | ~0.75 GB (violations 0.72 measured, the rest estimated) |

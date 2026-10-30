@@ -2,7 +2,7 @@
 
 **What this is:** a map of verification that already exists, written down so it is legible
 to someone skimming the repo. It is documentation, not a new test format. Every test named
-here runs today under `cargo test --workspace` — **178 tests, clippy clean, 7 crates.**
+here runs today under `cargo test --workspace` — **179 tests, clippy clean, 7 crates.**
 
 **What this is not:** a synthetic prompt suite. The strongest evidence in this project was
 not produced by an eval harness, and saying otherwise would be the kind of claim the
@@ -108,21 +108,24 @@ Bounded, too: `a_retried_round_can_never_outlive_the_budget_that_scheduled_it`,
 `the_server_gives_up_before_the_client_does`, and a rate limiter with three tests.
 
 **The tool loop, end to end** — `agent_evals::replayed_conversations_hold_on_both_endpoints`
-replays 30 conversations through `/agent/chat` and `/agent/chat/stream` with the model
-replaced by a local server playing back its turns: 59 replays, 1,811 checks, no network. It
-checks role coercion, the round cap, tool-call pairing, the law-search allowlist, citations
-equal to the tools that succeeded, advice phrasing, and that every number in an answer was
-in something the model was shown. `each_check_fails_on_the_defect_it_names` plants a defect
+replays 45 conversations (14 of them recorded from the real model) through `/agent/chat` and
+`/agent/chat/stream` with the model replaced by a local server playing back its turns: 89
+replays, 3,218 checks, no network. It checks role coercion, the round cap, tool-call pairing,
+the law-search allowlist, citations equal to the tools that succeeded, advice phrasing, that
+both endpoints give the same answer, and that every number in an answer was in something the
+model was shown. `each_check_fails_on_the_defect_it_names` plants a defect
 for each of those and asserts the matching check fires. Details: `crates/api/evals/README.md`.
 
 ---
 
 ## What this does not cover
 
-- **No recorded model output yet.** Every replayed conversation is synthetic: its model
-  turns were written by hand, so the suite proves what the *server* does with a turn, not
-  what the model says. `live_eval` records real conversations and scores them, but it is
-  billed and has not been run. The *quality* of the agent's wording is unmeasured until it is.
+- **Live scoring: 14 of 17 pass on the current prompt.** Three billed runs (2026-10-29,
+  $0.2777 in all) found a server bug that dropped text from `/agent/chat`, and a heat-law
+  answer that was confidently wrong about the night rule. Both are fixed; see
+  `crates/api/evals/README.md`. Still open: the heat-season question doesn't reach
+  `legal_context`, and two passing answers make legal claims that substring and number checks
+  can't judge.
 - **The Python verifier is not in CI.** It is a one-off script, and it remains the
   strongest evidence here precisely because it was written independently. The Rust test
   reproduces its finding in-process; it does not replace the outside check.
@@ -137,7 +140,7 @@ for each of those and asserts the matching check fires. Details: `crates/api/eva
 ## Running it
 
 ```bash
-cargo test --workspace                              # 178 tests
+cargo test --workspace                              # 179 tests
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 

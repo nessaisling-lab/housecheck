@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 
 /// Topics `lookup_law` accepts. The tool schema's enum is built from this list and ingest
 /// refuses a provision tagged with anything else, so the two cannot drift apart.
-pub const TOPICS: [&str; 8] = [
+pub const TOPICS: [&str; 10] = [
     "heat",
     "hot_water",
     "repairs",
@@ -19,6 +19,8 @@ pub const TOPICS: [&str; 8] = [
     "mold",
     "pests",
     "rent_stabilization",
+    "security_deposit",
+    "eviction",
     "general",
 ];
 
@@ -27,6 +29,57 @@ pub const TOPICS: [&str; 8] = [
 pub struct LawSeed {
     pub sources: Vec<LawSource>,
     pub provisions: Vec<LawProvision>,
+    pub legal_help: Vec<LegalHelp>,
+}
+
+/// A free tenant legal-services organisation or hotline that `find_legal_help` names.
+///
+/// Curated rather than web-searched, deliberately: someone asking this question is often in a
+/// housing crisis, and an open search for "tenant lawyer" surfaces lead-generation sites and
+/// operations that target exactly that desperation. A hallucinated firm is worse than no
+/// answer. Every entry is an established nonprofit or a government service, checked against
+/// its own published page, never a third-party listing: on 2026-07-26 that caught LawHelpNY
+/// listing Housing Court Answers as Tue/Wed/Thu (its own page says Monday to Friday), and on
+/// 2026-10-30 the Met Council hotline page HouseCheck linked had become a 404.
+///
+/// What this does NOT prove: that someone picks up. Nobody dialled these. A stale hotline
+/// number for a person with no heat is a real harm, not a broken link.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LegalHelp {
+    pub name: String,
+    pub what: String,
+    pub phone: Option<String>,
+    /// As the page words it, so ingest can find it in `excerpt`.
+    pub hours: Option<String>,
+    pub url: String,
+    pub free: bool,
+    /// Verbatim from `url`. Ingest refuses an entry whose phone numbers or hours are not in
+    /// it, so a number can't be changed in one place and not the other.
+    #[serde(skip_serializing)]
+    pub excerpt: String,
+    #[serde(skip_serializing)]
+    pub retrieved_at: String,
+    #[serde(skip_serializing)]
+    pub verified_by: String,
+    pub verified_on: String,
+}
+
+/// `s` without the separators a phone number is written with, so "(212) 962-4795" and
+/// "212-962-4795" both read `2129624795`.
+pub fn phone_digits(s: &str) -> String {
+    s.chars()
+        .filter(|c| !matches!(c, ' ' | '-' | '(' | ')' | '.'))
+        .collect()
+}
+
+/// Each phone number in `s`: a run of ten or more digits once separators are dropped. "311"
+/// alone is too short to count.
+pub fn phone_numbers(s: &str) -> Vec<String> {
+    phone_digits(s)
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|d| d.len() >= 10)
+        .map(String::from)
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -135,5 +188,18 @@ mod tests {
             a,
             text_sha256("at least 68 degrees Fahrenheit at all times.")
         );
+    }
+
+    #[test]
+    fn phone_numbers_read_through_formatting() {
+        assert_eq!(
+            phone_numbers("Central 212-577-3300 · Manhattan (212) 426-3000"),
+            ["2125773300", "2124263000"]
+        );
+        assert_eq!(
+            phone_numbers("311, or 212-639-9675 from outside NYC"),
+            ["2126399675"]
+        );
+        assert!(phone_numbers("Call 311").is_empty());
     }
 }

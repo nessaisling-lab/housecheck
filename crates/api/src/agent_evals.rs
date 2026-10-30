@@ -949,21 +949,18 @@ fn links(s: &str) -> Vec<String> {
 fn names_free_help(answer: &str) -> bool {
     let lower = answer.to_lowercase();
     let digits: String = answer.chars().filter(char::is_ascii_digit).collect();
-    legal_help_directory()
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|o| o["name"] != "NYC 311")
+    store::law_seed()
+        .expect("data/law.json")
+        .legal_help
+        .iter()
+        .filter(|o| o.name != "NYC 311")
         .any(|o| {
-            let name = o["name"].as_str().unwrap_or("");
-            let short = name.split(" — ").next().unwrap_or(name);
+            let short = o.name.split(" — ").next().unwrap_or(&o.name);
             let short = short.trim_start_matches("The ").to_lowercase();
-            let phone: String = o["phone"].as_str().unwrap_or("").to_string();
             lower.contains(&short)
-                || phone.split(['·', ',']).any(|p| {
-                    let d: String = p.chars().filter(char::is_ascii_digit).collect();
-                    d.len() >= 10 && digits.contains(&d)
-                })
+                || model::law::phone_numbers(o.phone.as_deref().unwrap_or(""))
+                    .iter()
+                    .any(|d| digits.contains(d.as_str()))
         })
 }
 

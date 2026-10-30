@@ -161,6 +161,170 @@
         "rent_stabilization"
       ],
       "facts": []
+    },
+    {
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "facts": [
+        {
+          "key": "good_cause.rent_increase.presumptively_unreasonable_above",
+          "value": "ten percent or five percent plus the Consumer Price Index (whichever is lower)",
+          "condition": "An annual rent increase above this is presumptively unreasonable, for a unit Good Cause Eviction covers. Mandatory in New York City.",
+          "quote": "The budget makes annual rent increases above ten percent or five percent plus the Consumer Price Index (whichever is lower) presumptively unreasonable to protect tenants against price gouging and strengthens legal protections for covered renters in eviction proceedings, where applicable."
+        }
+      ],
+      "id": "NYS-HCR-GOOD-CAUSE",
+      "source": "nys-hcr",
+      "citation": "NYS HCR, Good Cause Eviction",
+      "title": "Good Cause Eviction: overview",
+      "text": "As part of the FY2025 State Budget, Governor Hochul has secured historic anti-price gouging and eviction protections for New York renters.\nThe budget makes annual rent increases above ten percent or five percent plus the Consumer Price Index (whichever is lower) presumptively unreasonable to protect tenants against price gouging and strengthens legal protections for covered renters in eviction proceedings, where applicable.\nThese protections will be mandatory in New York City; municipalities outside of New York City will have the ability to opt-in to the program. Separately, Governor Hochul reached an agreement to reinforce existing law to make clear that squatters are not tenants, and thus are not entitled to these and other tenant protections.",
+      "url": "https://hcr.ny.gov/good-cause-eviction",
+      "topics": [
+        "eviction"
+      ]
+    },
+    {
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "facts": [
+        {
+          "key": "good_cause.fmr_exemption_pct",
+          "value": "245",
+          "condition": "In New York City, Good Cause Eviction does not cover a unit whose monthly rent is more than this percentage of HUD's fair market rent for its county and unit size. DHCR republishes the dollar thresholds each year.",
+          "quote": "In New York City and in any municipality other than New York City that adopts the GCE law and does not provide for a different fair market rent threshold, the GCE law does not cover a rental unit rented for more than 245% of fair market rent."
+        }
+      ],
+      "id": "NYS-DHCR-GCE-NOTICE-2026",
+      "source": "nys-hcr",
+      "citation": "NYS DHCR, Good Cause Eviction Law Required DHCR Notice (posted July 16, 2026)",
+      "title": "Good Cause Eviction Law: Required DHCR Notice",
+      "text": "On April 20, 2024, Governor Hochul signed the Good Cause Eviction (“GCE”) law into effect. Under that law, on or before August 1st of each year, the Division of Housing and Community Renewal (“DHCR”) is required to publish the information contained in this notice.\n…\nThe GCE law is in effect in New York City pursuant to § 212 of the Real Property Law.\n…\nPursuant to §§ 213(2)(a) and 214(15) of the Real Property Law, rental units are not covered by the GCE law if they have a monthly rent above the applicable fair market rent threshold. In New York City and in any municipality other than New York City that adopts the GCE law and does not provide for a different fair market rent threshold, the GCE law does not cover a rental unit rented for more than 245% of fair market rent. Fair market rent is determined by the U.S. Department of Housing and Urban Development by county.",
+      "url": "https://hcr.ny.gov/system/files/documents/2026/08/gce-fact-sheet-august-2026_1.pdf",
+      "topics": [
+        "eviction"
+      ]
+    },
+    {
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "facts": [],
+      "id": "NYS-HCR-COMMON-ISSUES",
+      "source": "nys-hcr",
+      "citation": "NYS HCR, Most Common Rent Regulation Issues for Tenants",
+      "title": "Most Common Rent Regulation Issues for Tenants",
+      "text": "Access Your Apartments Rental History\nApartment rents are registered annually by building owners with DHCR's Office of Rent Administration (See: Rent Regulated Building Search). Under the law, the rent information provided is confidential and can only be released to the apartment's legal tenant, the building owner, or their authorized representative. For help with understanding your rent history, you can review Guide to Understanding Registration Apartment Information (RAI) or Fact Sheet #26.\nYou can access the rent history of your apartment in one of the following ways:\nYou can access your rent history by using \"Submit your Inquiry\". The rent history will be printed and mailed directly to the apartment/building address.\nVisit a Borough/District Rent Office in person, by appointment only. When visiting, please bring proof of identity (photo ID) and proof of tenancy (copy of lease, rent receipt, or utility bill). You will be required to complete an Access to Records form and the rent history will be printed and given to you at the office.\n…\nLimits on Rent Increases\nThe Rent Guidelines Boards (one in New York City, one in the City of Kingston, and one each in Nassau, Westchester, and Rockland counties) set maximum allowable rates for rent increases in stabilized apartments for one and two-year lease renewals. These guideline rates are set once a year and are effective for leases beginning on or after October 1st of each year. If authorized by the respective boards, the guideline rates may be applied to vacancy leases.\nRents can also be increased in one of three ways:\nWith the written consent of the tenant in occupancy if the owner increases services or equipment or makes improvements to an apartment\nWithout the written consent of DHCR if the owner increases services or equipment or makes improvements to an apartment while it is vacant\nWith DHCR approval if the owner installs a building-wide major capital improvement\nOvercharge Refunds for Rent Stabilized Tenants\nTenants who believe they were overcharged can file an overcharge complaint online. If DHCR issues a written order that determines an overcharge was collected, the legal rent will be reduced, and the owner will be directed to refund the overcharged amount to the tenant.\n…\nRent Reductions if Owner Fails to Provide Services\nOwners must provide required or essential services and make necessary repairs in individual apartments and building-wide. Tenants who experience a decrease in services in their apartment may file a decrease in service complaint online. Tenants who experience a decrease in building-wide services may file form RA-84, \"Application for a Rent Reduction Based on Building-Wide Service(s),\" with DHCR.\nExamples of a decrease in services include defective electrical outlets, a lack of heat/hot water, unsanitary common areas (halls, lobby), and broken door locks. If DHCR grants an order of approval, a written order will be issued that reduces the rent. The rent reduction will remain in effect until services are restored and the owner receives an order of approval from DHCR to restore the rent.\nApplications that are filed for conditions that require emergency repair or have caused the tenants to vacate the apartment will be prioritized. For more information on essential services, visit our Living Conditions and Essential Services page.\n…\nOption to Renew Lease\nTenants must be given an opportunity to renew their lease for one or two year terms on the current terms and conditions. The renewal is to be offered several months in advance of the expiration of the existing lease and at the rates set by the Rent Guidelines Board. Tenants who are not given an opportunity to renew their lease can file a lease complaint online, or mail the completed lease complaint form to DHCR's Office of Rent Administration at 92-31 Union Hall Street, Queens, NY, 11433.",
+      "url": "https://hcr.ny.gov/most-common-rent-regulation-issues-tenants",
+      "topics": [
+        "rent_stabilization",
+        "repairs"
+      ]
+    },
+    {
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30",
+      "status": "current",
+      "occupancy": "residential",
+      "facts": [
+        {
+          "key": "security_deposit.max",
+          "value": "one month’s rent",
+          "condition": "Most a security deposit may be, for any apartment, as HCR summarizes the Housing Stability and Tenant Protection Act of 2019.",
+          "quote": "The Housing Stability and Tenant Protection Act (HSTPA) of 2019 limits the amount of a security deposit for any apartment to one month’s rent."
+        },
+        {
+          "key": "security_deposit.return_days",
+          "value": "14",
+          "condition": "Days after the tenant moves out within which the full deposit must be returned, as HCR summarizes the General Obligations Law change effective November 15, 2025 that extends it to rent stabilized tenants.",
+          "quote": "In summary, owners must return the tenant’s full security deposit within 14 days after they move out."
+        },
+        {
+          "key": "security_deposit.admin_cost_pct",
+          "value": "1%",
+          "condition": "Per year, of the deposit: what the owner may keep from the annual interest for administrative costs. The rest of the interest is the tenant's.",
+          "quote": "The owner must notify the tenant of the name and address of the bank and pay the tenant the full annual interest, less 1% of the security deposit per year for the owner’s administrative costs."
+        }
+      ],
+      "id": "NYS-DHCR-FACT-SHEET-9",
+      "source": "nys-hcr",
+      "citation": "NYS DHCR Fact Sheet #9, Renting an Apartment - Security Deposits and Other Charges (FS-09, 11/2025)",
+      "title": "Renting an Apartment - Security Deposits and Other Charges",
+      "text": "A security deposit is money that a tenant, their guarantor or other third-party deposits with the owner of the apartment for the repair of any damages to the apartment for which the tenant is responsible.\nThe Housing Stability and Tenant Protection Act (HSTPA) of 2019 limits the amount of a security deposit for any apartment to one month’s rent. It is unlawful for the owner to ask for an additional amount of money from the tenant, guarantor or third party. If two months’ security deposit was collected from a tenant by the owner when the apartment first came under rent stabilization, and the same tenant is still occupying the apartment, the owner must refund to the tenant any additional security deposit which exceeds one month’s rent. The next rent stabilized tenant cannot be required to deposit more than one month’s rent as security deposit. The tenant can file a “Tenant’s Complaint of Rent and/or Other Specific Overcharges in a Rent Stabilized Apartment” (DHCR Form RA-89) if the owner demands the tenant, a guarantor, or any third party on behalf of the tenant pay more than one month’s security.\n…\nWhen a lease is renewed at a higher rental amount, or the rent is increased during the term of the lease, the owner can collect additional money from the tenant to bring the security deposit up to the new monthly rent. Even though a tenant may be exempt from paying a lease increase because of his or her Senior Citizen Rent Increase Exemption (SCRIE) or Disability Rent Increase Exemption (DRIE), the tenant must still pay the increased security.\n…\nThe security deposit must be kept by the owner in an interest-bearing account in a New York State bank. The owner must notify the tenant of the name and address of the bank and pay the tenant the full annual interest, less 1% of the security deposit per year for the owner’s administrative costs. The tenant can choose whether the interest is to be subtracted from the rent, held in trust until the end of the tenancy, or paid in a lump sum at the end of each year.\nEffective November 15, 2025, changes to Section 7-107 of the General Obligations Law governing security deposits extend certain protections to rent stabilized tenants. In summary, owners must return the tenant’s full security deposit within 14 days after they move out. Owners may keep only the amount legally allowed for unpaid rent, utilities, damages beyond normal wear and tear, and moving and storage of the tenant’s belongings. Owners who withhold any part of the security deposit must provide the tenant with an itemized list of damages and the cost of repairs. Tenants are given the right to an inspection of the apartment upon timely notification of the owner or tenant’s intent to end the tenancy. After the inspection, the owner shall provide the tenant with an itemized statement of repairs that would be deducted from the security deposit, and the tenant shall have an opportunity to cure any such conditions before the end of the tenancy. In addition, before the commencement of the tenancy and the signing of a lease, the tenant can request an inspection to identify any issues that could lead to deductions from the security deposit.\nIf the tenant disagrees with the owner over the return of the security deposit or payment of interest, the tenant may begin a proceeding in small claims court or contact the Consumer Frauds and Protection Bureau of the New York State Attorney General’s Office.",
+      "url": "https://hcr.ny.gov/system/files/documents/2025/11/fact-sheet-09-11-2025.pdf",
+      "topics": [
+        "security_deposit"
+      ]
+    }
+  ],
+  "legal_help": [
+    {
+      "name": "Housing Court Answers",
+      "what": "Hotline for information about NYC Housing Court and its procedures, landlord and tenant rules, enforcement of housing code violations, and referrals for free legal help.",
+      "phone": "212-962-4795",
+      "hours": "Monday — Friday 9 am to 5 pm",
+      "url": "https://housingcourtanswers.org/contact-us/",
+      "free": true,
+      "excerpt": "Housing Court Hotline\nHours of Operation\nMonday — Friday\n9 am to 5 pm\nCall (212) 962-4795\nHotline Assistance\nWhat we can assist you with:\nHousing Court and Housing Court procedures\nLandlord & Tenant rules and regulations\nEnforcement of housing code violations\nReferrals for free legal help",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30"
+    },
+    {
+      "name": "Met Council on Housing — Tenants Rights Hotline",
+      "what": "Free hotline open to any tenant living in NYC: brief answers, or free referrals to agencies, community organizing groups, and tenant lawyers.",
+      "phone": "212-979-0611",
+      "hours": "Monday & Wednesday 1:30pm-8pm & Friday 1:30pm-5pm",
+      "url": "https://www.metcouncilonhousing.org/",
+      "free": true,
+      "excerpt": "TENANT's rights HOTLINE (212) 979-0611 open to\nany tenant living in New York City\nMONDAY & wednesday 1:30pm-8pm & friday 1:30PM-5pm\n…\n(212) 979-0611\nThe hotline is free and open to any tenant living in NYC\nTENANTS TELEPHONE HOTLINE\nGet brief answers or free referrals to agencies, community organizing groups, and tenant lawyers.",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30"
+    },
+    {
+      "name": "The Legal Aid Society — Housing",
+      "what": "Free legal assistance in housing matters for people who qualify; call the borough office to see if you do. A tenant with an eviction case in Housing Court goes through the Right to Counsel program at their first court date instead.",
+      "phone": "Central 212-577-3300 · Manhattan 212-426-3000 · Brooklyn 718-722-3100 · Bronx 718-991-4600 · Queens 718-286-2450 · Staten Island 347-422-5333",
+      "hours": null,
+      "url": "https://legalaidnyc.org/get-help/housing-problems/",
+      "free": true,
+      "excerpt": "Call 212-577-3300\n…\nThe fastest way to see if you qualify for free legal assistance in a housing matter is to call The Legal Aid Society neighborhood office in your borough:\nManhattan: 212-426-3000\nBrooklyn: 718-722-3100\nBronx: 718-991-4600\nQueens: 718-286-2450\nStaten Island: 347-422-5333\nIf you have an upcoming eviction case in housing court, you do NOT need to contact us. All cases are going through the Right to Counsel (“Universal Access”) program to determine if eligible NYC tenants with an eviction case in housing court will be able to get representation or advice. You must attend your first court/hearing date, either virtually or in person, whichever is indicated, to try and get connected with a legal service provider.",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30"
+    },
+    {
+      "name": "LawHelpNY",
+      "what": "Directory of free legal hotlines in New York, listed by legal topic.",
+      "phone": null,
+      "hours": null,
+      "url": "https://www.lawhelpny.org/hotlines",
+      "free": true,
+      "excerpt": "Most of the hotlines listed provide help in English and Spanish. All of these hotlines are free and confidential. Choose a legal topic:",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30"
+    },
+    {
+      "name": "NYC 311",
+      "what": "File a service request (a complaint), such as no heat in your apartment. NYC311 sends it to the agency responsible and gives you an SR number for tracking.",
+      "phone": "311, or 212-639-9675 from outside NYC",
+      "hours": "24 hours a day, 7 days a week, 365 days a year",
+      "url": "https://portal.311.nyc.gov/about-nyc-311/",
+      "free": true,
+      "excerpt": "A service request (SR) is your request for the City to provide a service or fix a problem. SRs can help you get a pothole fixed, the heat turned on in your apartment, or a refund on an overpaid parking ticket. We accept over 500 SR types.\n…\nYou file an SR with NYC311\nContact us\nor use NYC311 Online to file an SR 24 hours a day, 7 days a week.\nNYC311 sends the SR to the agency\nAs soon as the SR is submitted, we send it in real-time to the agency responsible for resolving it. We’ll also give you an SR Number for tracking.\n…\nCall 311\nWe’re here to answer your call 24 hours a day, 7 days a week, 365 days a year.\nCall 311 or 212-NEW-YORK (212-639-9675) to connect with us:\nOutside of New York City",
+      "retrieved_at": "2026-10-30",
+      "verified_by": "fetch",
+      "verified_on": "2026-10-30"
     }
   ]
 }

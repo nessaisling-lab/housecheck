@@ -341,11 +341,13 @@ impl AppState {
             "artifact at {path} has no buildings — refusing to start rather than serve a \
              404 for every address under a green health check"
         );
-        // Same rule for the law. An artifact built before the law tables existed has none,
-        // and the agent would answer every legal question with "I could not verify it".
+        // Same rule for the law and the legal-help directory. An artifact built before their
+        // tables existed has none, and the agent would answer every legal question with "I could
+        // not verify it", or name nobody to call.
         let law_provisions = store::law_provision_count(&conn).unwrap_or(0);
+        let legal_help = store::legal_help(&conn).map_or(0, |d| d.len());
         anyhow::ensure!(
-            law_provisions > 0,
+            law_provisions > 0 && legal_help > 0,
             "artifact at {path} has no law provisions — run `ingest --law --out {path}` to load \
              data/law.json into it"
         );
@@ -1513,7 +1515,10 @@ you have not seen their lease. Saying what a court would do would be fabrication
 plainly that you cannot predict outcomes and that no honest tool could from this data, then use \
 find_legal_help so a licensed person can assess it.\n\
 - Never draft a court filing, petition, or any document intended to be filed. A question for a \
-lawyer is fine; a legal instrument is not.\n\
+lawyer is fine; a legal instrument is not. When asked for one, decline, and in that same turn \
+call lookup_law with topic housing_court and find_legal_help: say what the returned sources say \
+about that court route, and name who helps people with it for free. Do not wait to be told the \
+problem first.\n\
 - Never state a building fact that did not come from the supplied facts or a tool result. Never \
 guess a number, a date, or a violation.\n\
 - Never give a link that did not come from a tool result. A link from memory can point at the \
@@ -1597,6 +1602,16 @@ fn document_this(topic: &str) -> serde_json::Value {
             "Your lease and any renewals",
             "The DHCR rent history for your specific apartment",
             "Any lease rider stating stabilization status",
+        ],
+        "security_deposit" => &[
+            "Your lease and a receipt or bank record of the deposit paid",
+            "Dated photographs of the apartment when you moved in and when you moved out",
+            "Every written message with the landlord about the deposit, and the date sent",
+        ],
+        "eviction" => &[
+            "Every notice or court paper you receive, and the date it arrived",
+            "Your lease and any renewals",
+            "Rent receipts or bank records for each payment",
         ],
         _ => &[
             "Dates, photographs, and any written communication with the landlord",
@@ -1825,67 +1840,6 @@ async fn search_law(state: &AppState, api_key: &str, query: &str) -> Option<serd
     }))
 }
 
-/// Free and low-cost tenant legal services.
-///
-/// Curated rather than web-searched, deliberately: someone asking this question is often in a
-/// housing crisis, and an open search for "tenant lawyer" surfaces lead-generation sites and
-/// operations that target exactly that desperation. A hallucinated firm is worse than no answer.
-/// Every entry here is an established nonprofit or a government service.
-///
-/// **Verified 2026-07-26** against each organisation's own published page, not against a
-/// third-party listing. Three errors were caught doing so: Housing Court Answers is open
-/// Mon-Fri (a listing said Tue/Wed/Thu), Met Council's Friday hotline opens at 1:30 not 1:00,
-/// and `hcanswers.org` is a 301 to `housingcourtanswers.org`. Legal Aid's central access line
-/// was missing entirely.
-///
-/// What this does NOT prove: that someone picks up. Nobody dialled these. Re-verify
-/// periodically — a stale hotline number for a person with no heat is a real harm, not a
-/// broken link.
-fn legal_help_directory() -> serde_json::Value {
-    serde_json::json!([
-        {
-            "name": "Housing Court Answers",
-            "what": "Information about NYC Housing Court for people without an attorney; hotline and in-court information tables.",
-            "phone": "212-962-4795",
-            "hours": "Mon-Fri 9am-5pm. English and Spanish.",
-            "url": "https://housingcourtanswers.org/contact-us/",
-            "free": true
-        },
-        {
-            "name": "Met Council on Housing — Tenants Rights Hotline",
-            "what": "Free phone advice for tenants advocating for themselves; one of the few places to call with a single question and get an answer.",
-            "phone": "212-979-0611",
-            "hours": "Mon/Wed 1:30-8pm, Fri 1:30-5pm. Volunteer-staffed; may close unexpectedly.",
-            "url": "https://www.metcouncilonhousing.org/program/tenants-rights-hotline/",
-            "free": true
-        },
-        {
-            "name": "The Legal Aid Society — Housing",
-            "what": "Free legal advice and representation on housing, eviction, and conditions.",
-            "phone": "Central 212-577-3300 · Manhattan 212-426-3000 · Brooklyn 718-722-3100 · Bronx 718-991-4600 · Queens 718-286-2450 · Staten Island 347-422-5333",
-            "hours": "See website",
-            "url": "https://legalaidnyc.org/get-help/housing-problems/",
-            "free": true
-        },
-        {
-            "name": "LawHelpNY",
-            "what": "Directory of free legal help across New York, searchable by problem and borough.",
-            "phone": null,
-            "hours": null,
-            "url": "https://www.lawhelpny.org/hotlines",
-            "free": true
-        },
-        {
-            "name": "NYC 311",
-            "what": "File a heat, hot water, or repair complaint. Creates a dated public record and can trigger an HPD inspection.",
-            "phone": "311, or 212-639-9675 from outside NYC",
-            "hours": "24/7",
-            "url": "https://portal.311.nyc.gov/",
-            "free": true
-        }
-    ])
-}
-
 /// Hard stop on the tool-calling loop.
 ///
 /// Without a cap, a model that misreads a tool result can call the same tool forever: the
@@ -2052,8 +2006,9 @@ fn tool_schemas() -> serde_json::Value {
     guidance say, from HouseCheck's table of verified official text. Use this for ANY question \
     about what the law requires or allows, including a plain question with no problem attached \
     ('when does heat season start?', 'how warm must it be at night?'), and whenever the user \
-    describes a housing problem (no heat, no hot water, repairs, mold, pests, rent \
-    stabilization). Returns verbatim provisions with citations and links, checkable facts each \
+    describes a housing problem (no heat, no hot water, repairs, mold, pests, lead paint, rent \
+    stabilization, a security deposit, an eviction or rent increase, going to Housing Court). \
+    Returns verbatim provisions with citations and links, checkable facts each \
     with the condition it applies under, and HouseCheck's checklist of what to document. State \
     only what it returns, and call find_legal_help in the same turn. This returns legal \
     INFORMATION, never advice.",
@@ -2458,10 +2413,25 @@ async fn dispatch_tool(
                 ),
             }
         }
-        "find_legal_help" => (
-            serde_json::json!({ "organisations": legal_help_directory() }),
-            Some("NYC tenant legal-services directory".to_string()),
-        ),
+        "find_legal_help" => {
+            let found = {
+                let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+                store::legal_help(&conn)
+            };
+            match found {
+                Ok(orgs) => (
+                    serde_json::json!({ "organisations": orgs }),
+                    Some("NYC tenant legal-services directory".to_string()),
+                ),
+                Err(e) => {
+                    tracing::error!(error = %e, "tool find_legal_help failed");
+                    (
+                        serde_json::json!({ "error": "legal help lookup failed" }),
+                        None,
+                    )
+                }
+            }
+        }
         other => {
             tracing::warn!(tool = %other, "model requested an unknown tool");
             (
@@ -4111,34 +4081,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn legal_help_directory_entries_are_actionable_and_free() {
-        let dir = legal_help_directory();
-        let orgs = dir.as_array().expect("array");
-        assert!(orgs.len() >= 4);
-        for o in orgs {
-            assert!(o["name"].as_str().is_some_and(|n| !n.is_empty()));
-            assert!(
-                o["url"].as_str().is_some_and(|u| u.starts_with("https://")),
-                "every referral needs a link the user can check"
-            );
-            assert!(
-                o["what"].as_str().is_some_and(|w| w.len() > 20),
-                "a referral without context is not a referral"
-            );
-            assert_eq!(
-                o["free"], true,
-                "only free services belong here — a paid lead-gen referral to someone in a \
-                 housing crisis is the exact harm this list exists to avoid"
-            );
-        }
-        // At least one must be reachable by phone right now.
-        assert!(
-            orgs.iter().any(|o| o["phone"].is_string()),
-            "at least one entry must have a phone number"
-        );
-    }
-
     #[tokio::test]
     async fn lookup_law_falls_back_to_general_on_an_unknown_topic() {
         let state = AppState::in_memory_fixture().expect("fixture");
@@ -4167,9 +4109,17 @@ mod tests {
             &serde_json::json!({}),
         )
         .await;
-        assert!(help["organisations"]
-            .as_array()
-            .is_some_and(|a| !a.is_empty()));
+        let orgs = help["organisations"].as_array().expect("organisations");
+        assert!(orgs.len() >= 4);
+        for o in orgs {
+            assert!(o["what"].as_str().is_some_and(|w| w.len() > 20), "{o}");
+            assert!(o["verified_on"].is_string(), "{o}");
+            assert!(
+                o.get("excerpt").is_none(),
+                "the page excerpt is for ingest to check, not tokens for the model"
+            );
+        }
+        assert!(orgs.iter().any(|o| o["phone"].is_string()));
         assert!(cite.is_some());
     }
 

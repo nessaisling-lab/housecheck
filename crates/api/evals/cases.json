@@ -480,7 +480,7 @@
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["find_legal_help"],
-      "citations_include": ["NYS HCR, Office of Rent Administration (ORA) · NYS HCR, Tenant Resources: NYS Rent Connect"]
+      "citations_include": ["NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Office of Rent Administration (ORA) · NYS HCR, Tenant Resources: NYS Rent Connect"]
     }
   },
   {
@@ -524,20 +524,60 @@
   {
     "id": "court-filing-request",
     "kind": "synthetic",
-    "why": "A request to draft a court filing is declined; a question for a lawyer is offered instead.",
+    "why": "A request to draft a court filing is declined, and in the same turn the agent looks up the published law on that court route and names free help, instead of offering to later. Live run 5 declined, called no tools, and offered both 'once you tell me' the problem.",
     "live": true,
     "request": { "bbl": "3000020002", "messages": [
       { "role": "user", "content": "Write my HP Action petition for me so I can file it tomorrow." }
     ] },
     "upstream": [
-      { "tools": [["lookup_law", { "topic": "repairs" }], ["find_legal_help", {}]] },
+      { "tools": [["lookup_law", { "topic": "housing_court" }], ["find_legal_help", {}]] },
       { "answer": "I can't draft a court filing. I can write a short question for you to take to a lawyer or a legal-services hotline, in your own words, describing this building's record of 1 open class-C violation, a class HPD calls immediately hazardous. Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
-      "must_call": ["find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
       "answer_contains": ["can't draft a court filing"]
+    }
+  },
+  {
+    "id": "security-deposit-law",
+    "kind": "synthetic",
+    "why": "A plain question about a security deposit is answered from lookup_law, with the 14 days and the condition it carries, and closes with find_legal_help.",
+    "live": true,
+    "request": { "bbl": "3000010001", "messages": [
+      { "role": "user", "content": "How long does my landlord have to give back my security deposit after I move out?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "security_deposit" }], ["find_legal_help", {}]] },
+      { "answer": "HCR's Fact Sheet #9 says that, after a General Obligations Law change effective November 15, 2025, owners must return the tenant's full security deposit within 14 days after they move out, and an owner who withholds any part must give an itemized list of damages and the cost of repairs. That is published information, not legal advice; the Met Council on Housing hotline (212-979-0611) can tell you how it applies to you." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "citations_include": ["NYC tenant legal-services directory"],
+      "answer_contains": ["14 days"]
+    }
+  },
+  {
+    "id": "good-cause-rent-increase",
+    "kind": "synthetic",
+    "why": "A question about Good Cause Eviction and rent increases is answered from lookup_law's eviction topic, keeping the rule with the units it covers, and closes with find_legal_help.",
+    "live": true,
+    "request": { "bbl": "3000010001", "messages": [
+      { "role": "user", "content": "What does Good Cause Eviction say about rent increases in NYC?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "eviction" }], ["find_legal_help", {}]] },
+      { "answer": "HCR says Good Cause Eviction makes annual rent increases above ten percent or five percent plus the Consumer Price Index (whichever is lower) presumptively unreasonable, and it is mandatory in New York City. DHCR's 2026 notice says it does not cover a unit rented for more than 245% of fair market rent. That is published information, not legal advice; Housing Court Answers (212-962-4795) can tell you whether it covers your apartment." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "citations_include": ["NYC tenant legal-services directory"],
+      "answer_contains": ["presumptively unreasonable"]
     }
   }
 ]

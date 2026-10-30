@@ -146,6 +146,20 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             value TEXT NOT NULL,
             condition TEXT NOT NULL,
             quote TEXT NOT NULL
+         );
+         -- find_legal_help's directory, served in rowid order. Only free services belong
+         -- here: a paid referral to someone in a housing crisis is the harm it exists to avoid.
+         CREATE TABLE IF NOT EXISTS legal_help (
+            name TEXT PRIMARY KEY,
+            what TEXT NOT NULL,
+            phone TEXT,
+            hours TEXT,
+            url TEXT NOT NULL CHECK (url LIKE 'https://%'),
+            free INTEGER NOT NULL CHECK (free = 1),
+            excerpt TEXT NOT NULL,
+            retrieved_at TEXT NOT NULL CHECK (retrieved_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            verified_by TEXT NOT NULL CHECK (length(verified_by) > 0),
+            verified_on TEXT NOT NULL CHECK (verified_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
          );",
     )?;
     // Columns added after the original schema shipped. SQLite errors on re-adding an existing
@@ -518,19 +532,57 @@ const LAW_JSON: &str = include_str!("../../../data/law.json");
 /// its provision's text, a broken reference, or anything the schema's CHECKs reject. A wrong
 /// statute is worse than a missing one, so a bad row stops the build rather than being skipped.
 pub fn load_law(conn: &Connection) -> Result<usize> {
-    let seed: model::law::LawSeed =
-        serde_json::from_str(LAW_JSON).context("data/law.json does not parse")?;
-    insert_law(conn, &seed)
+    insert_law(conn, &law_seed()?)
+}
+
+/// `data/law.json` as compiled in. The evals read the directory from here to recognise a
+/// referral by name or number.
+pub fn law_seed() -> Result<model::law::LawSeed> {
+    serde_json::from_str(LAW_JSON).context("data/law.json does not parse")
 }
 
 fn insert_law(conn: &Connection, seed: &model::law::LawSeed) -> Result<usize> {
-    use model::law::{normalize, text_sha256, TOPICS};
+    use model::law::{normalize, phone_digits, phone_numbers, text_sha256, TOPICS};
     // Off by default in SQLite, and a no-op once a transaction is open.
     conn.execute_batch("PRAGMA foreign_keys = ON")?;
     let tx = conn.unchecked_transaction()?;
     tx.execute_batch(
-        "DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_provision; DELETE FROM law_source;",
+        "DELETE FROM legal_help; DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_provision; DELETE FROM law_source;",
     )?;
+    for o in &seed.legal_help {
+        let excerpt = phone_digits(&o.excerpt);
+        for n in phone_numbers(o.phone.as_deref().unwrap_or("")) {
+            anyhow::ensure!(
+                excerpt.contains(&n),
+                "legal help {}: phone {n} is not in its excerpt",
+                o.name
+            );
+        }
+        if let Some(h) = &o.hours {
+            anyhow::ensure!(
+                normalize(&o.excerpt.to_lowercase()).contains(&normalize(&h.to_lowercase())),
+                "legal help {}: hours {h:?} are not in its excerpt",
+                o.name
+            );
+        }
+        tx.execute(
+            "INSERT INTO legal_help (name,what,phone,hours,url,free,excerpt,retrieved_at,verified_by,verified_on)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            rusqlite::params![
+                o.name,
+                o.what,
+                o.phone,
+                o.hours,
+                o.url,
+                o.free,
+                o.excerpt,
+                o.retrieved_at,
+                o.verified_by,
+                o.verified_on
+            ],
+        )
+        .with_context(|| format!("legal help {}", o.name))?;
+    }
     for s in &seed.sources {
         tx.execute(
             "INSERT INTO law_source (id,publisher,jurisdiction,kind,base_url) VALUES (?1,?2,?3,?4,?5)",
@@ -603,6 +655,31 @@ pub fn law_provision_count(conn: &Connection) -> Result<i64> {
     Ok(conn.query_row("SELECT count(*) FROM law_provision", [], |r| r.get(0))?)
 }
 
+/// The legal-help directory, in the order `data/law.json` lists it.
+pub fn legal_help(conn: &Connection) -> Result<Vec<model::law::LegalHelp>> {
+    let mut stmt = conn.prepare(
+        "SELECT name, what, phone, hours, url, free, excerpt, retrieved_at, verified_by, verified_on
+         FROM legal_help ORDER BY rowid",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(model::law::LegalHelp {
+                name: r.get(0)?,
+                what: r.get(1)?,
+                phone: r.get(2)?,
+                hours: r.get(3)?,
+                url: r.get(4)?,
+                free: r.get(5)?,
+                excerpt: r.get(6)?,
+                retrieved_at: r.get(7)?,
+                verified_by: r.get(8)?,
+                verified_on: r.get(9)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 /// Current provisions tagged `topic`, statutes before regulations before agency guidance, and
 /// the facts taken from them.
 pub fn law_for_topic(conn: &Connection, topic: &str) -> Result<model::law::LawLookup> {
@@ -667,11 +744,11 @@ mod tests {
         let count: i64 = conn.query_row(
             "SELECT count(*) FROM sqlite_master WHERE type='table'
              AND name IN ('buildings','violations','acs_rent_by_tract',
-                          'law_source','law_provision','law_topic','law_fact')",
+                          'law_source','law_provision','law_topic','law_fact','legal_help')",
             [],
             |r| r.get(0),
         )?;
-        assert_eq!(count, 7);
+        assert_eq!(count, 8);
         Ok(())
     }
 
@@ -733,6 +810,38 @@ mod tests {
         refuses(&|p| p["status"] = "draft".into(), "law provision")?;
         refuses(&|p| p["source"] = "nobody".into(), "law provision")?;
         refuses(&|p| p["verified_on"] = "Oct 30".into(), "law provision")?;
+        Ok(())
+    }
+
+    /// A directory entry has to agree with the page it was copied from, and be free.
+    #[test]
+    fn legal_help_refuses_what_its_page_does_not_say() -> Result<()> {
+        let good: serde_json::Value = serde_json::from_str(LAW_JSON)?;
+        let refuses = |edit: &dyn Fn(&mut serde_json::Value), needle: &str| -> Result<()> {
+            let mut v = good.clone();
+            edit(&mut v["legal_help"][0]);
+            let conn = open_db(":memory:")?;
+            migrate(&conn)?;
+            let err = insert_law(&conn, &serde_json::from_value(v)?)
+                .expect_err("a bad directory entry must not load");
+            assert!(format!("{err:#}").contains(needle), "{needle}: {err:#}");
+            Ok(())
+        };
+        // One digit off.
+        refuses(
+            &|o| o["phone"] = "212-962-4796".into(),
+            "is not in its excerpt",
+        )?;
+        refuses(
+            &|o| o["hours"] = "Tuesday — Thursday 9 am to 5 pm".into(),
+            "is not in its excerpt",
+        )?;
+        refuses(&|o| o["free"] = false.into(), "legal help")?;
+
+        let conn = seeded()?;
+        let dir = legal_help(&conn)?;
+        assert_eq!(dir[0].name, "Housing Court Answers", "served in seed order");
+        assert!(dir.iter().any(|o| o.phone.is_some()));
         Ok(())
     }
 

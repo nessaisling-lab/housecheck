@@ -5,6 +5,13 @@
 **Live app:** https://housecheck-wine.vercel.app · **Live API:** https://housecheck-nessa.fly.dev
 **Case study:** [pursuit-l2-portfolio / cycle-4](https://github.com/nessaisling-lab/pursuit-l2-portfolio/tree/main/cycle-4-housecheck) · Pursuit NYC Fellowship, L2 Cycle 4
 
+> **Coverage today:** 250 buildings in Brooklyn Community District 3 (Bedford-Stuyvesant), from
+> data retrieved on 10 August 2026. An address outside that set gets a coverage notice, not a
+> score. Citywide coverage, every borough, is in progress; this line changes when it lands.
+
+Open source under the [Apache License 2.0](LICENSE). Contributions welcome: see
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ---
 
 ![Searching an address through to a verifiable building record](docs/screenshots/00-workflow.gif)
@@ -180,3 +187,32 @@ for evolving the backend past the capstone; the rest of the team doesn't work in
 ## Data & honesty
 
 Every displayed number links to its source. Where public data can't support a claim (e.g. definitive rent-stabilization), the card says so — *"a signal, not a legal ruling."* Rent-stabilization data is derived from public NYC DOF tax records via [JustFix](https://github.com/JustFixNYC); no data is fabricated. *Research/educational capstone — not legal or financial advice.*
+
+### Data sources
+
+Every building fact comes from public data. The ingest stamps each source's dataset id and
+retrieval time into the database, and the API serves them at `GET /meta`.
+
+| Source | Dataset | Publisher | Used for |
+|---|---|---|---|
+| Housing Maintenance Code Violations | [`wvxf-dwi5`](https://data.cityofnewyork.us/d/wvxf-dwi5) | NYC HPD, NYC Open Data | violations, repair speed |
+| 311 Service Requests | [`erm2-nwe9`](https://data.cityofnewyork.us/d/erm2-nwe9) | NYC 311, NYC Open Data | complaint density |
+| PLUTO | [`64uk-42ks`](https://data.cityofnewyork.us/d/64uk-42ks) | NYC Dept. of City Planning, NYC Open Data | building list, year built, units |
+| DOB elevator devices | [`e5aq-a4j2`](https://data.cityofnewyork.us/d/e5aq-a4j2) | NYC DOB, NYC Open Data | elevator on record |
+| Restaurant inspections | [`43nn-pn8j`](https://data.cityofnewyork.us/d/43nn-pn8j) | NYC DOHMH, NYC Open Data | neighborhood grades |
+| MTA subway stations | [`39hk-dx4f`](https://data.ny.gov/d/39hk-dx4f) | MTA, data.ny.gov | nearest accessible station |
+| American Community Survey 5-year, 2023, table B25064 | [Census API](https://www.census.gov/data/developers.html) | U.S. Census Bureau | tract median rent |
+| Fair Market Rents, FY2026, New York metro | [HUD USER](https://www.huduser.gov/portal/datasets/fmr.html), embedded in `crates/model` | U.S. HUD | second rent comparator |
+| Rent-stabilized unit counts, 2024 | [`nyc-doffer`](https://github.com/JustFixNYC/nyc-doffer) | JustFix.org, from NYC DOF tax bills | rent-stabilization signal |
+
+The law text in `data/law.json` is copied from official sources (NY State Senate, NYC311, HPD,
+NYS HCR); each row records its URL, retrieval date and who verified it.
+
+NYC Open Data is used under the City of New York's Open Data Terms of Use.
+This product uses the Census Bureau Data API but is not endorsed or certified by the Census
+Bureau.
+
+## License
+
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for copyright. The data above stays under
+its publishers' terms.

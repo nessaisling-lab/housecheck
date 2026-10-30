@@ -504,7 +504,11 @@ Not "someday" — each has a specific blocker.
       grep for `login`, `jwt`, `session`, `user_id` returns no implementation in any of them. On a
       lawyer's tool a saved caseload is client-adjacent data, so getting it wrong is worse than
       not having it.
-- [ ] **Citywide coverage.** **The ~266 MB figure below is wrong, and the error is in the plan, not
+- [ ] **Citywide coverage.** **Decided 2026-10-30: keep every violation** (10,547,697 A/B/C
+      rows that day), not only open ones, so repair-speed history stays whole. Built and run
+      locally first; hosting is sized later from the measured artifact. Ingest design in
+      `design/citywide-ingest.md`.
+      *Earlier note:* **The ~266 MB figure below is wrong, and the error is in the plan, not
       the arithmetic.** `design/database-layer.md:36-39` sizes the city assuming *open* violations
       only (2,858,719 rows). `crates/ingest/src/run.rs:255-261` stores **every** A/B/C violation
       regardless of status — visible in the shipped artifact, which holds 26,343 violations for

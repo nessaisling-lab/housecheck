@@ -247,14 +247,24 @@ fn check_complete(dataset: &str, fetched: usize, before: usize, after: usize) ->
     Ok(())
 }
 
-/// Refuse the neighborhood figures if they are missing for more than 1% of buildings, which
-/// would put those buildings on the 70 fallback and change their scores without saying so.
-fn check_zip_rates(zips: usize, without_rate: usize, buildings: usize) -> Result<()> {
+/// Refuse the neighborhood figures when either source looks broken, since each failure scores
+/// buildings without saying so:
+/// - more than 1% of buildings without a rate (an empty or malformed PLUTO count), which puts
+///   them on the 70 fallback;
+/// - more than 10% of ZIPs at zero complaints (an empty or malformed 311 count). That gives
+///   every ZIP a real-looking 0 and every building a 100. Measured 2026-10-30: none of the
+///   184 ZIPs with homes is at zero; the quietest, 11005, has 99 per 1,000 homes.
+fn check_zip_rates(
+    zips: usize,
+    zero_rate_zips: usize,
+    without_rate: usize,
+    buildings: usize,
+) -> Result<()> {
     anyhow::ensure!(
-        zips > 0 && without_rate * 100 <= buildings,
-        "311 ZIP rates: {zips} ZIPs, {without_rate} of {buildings} buildings without a rate. \
-         The 311 or PLUTO count came back empty or malformed; refusing to score every \
-         building's neighborhood as unknown."
+        zips > 0 && zero_rate_zips * 10 <= zips && without_rate * 100 <= buildings,
+        "311 ZIP rates: {zips} ZIPs ({zero_rate_zips} at zero complaints), {without_rate} of \
+         {buildings} buildings without a rate. The 311 or PLUTO count came back empty or \
+         malformed; refusing to score neighborhoods from it."
     );
     Ok(())
 }
@@ -544,7 +554,12 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         .iter()
         .filter(|b| b.zip.as_ref().and_then(|z| rates.get(z)).is_none())
         .count();
-    check_zip_rates(rates.len(), without_zip_rate, buildings.len())?;
+    check_zip_rates(
+        rates.len(),
+        rates.values().filter(|&&r| r == 0).count(),
+        without_zip_rate,
+        buildings.len(),
+    )?;
     // Neighborhood names are a label only, so a failure here leaves them blank and carries on.
     let ntas = get_json_complete(&c, &nta_query())
         .map(|v| parse_nta(&v))
@@ -738,12 +753,19 @@ mod tests {
         // A short page that ended the pull early, or a cursor that skipped rows.
         assert!(check_complete("x", 50_000, 767_563, 767_563).is_err());
 
-        // Citywide on 2026-10-30: 184 ZIPs, 213 of 767,563 buildings without a rate.
-        assert!(check_zip_rates(184, 213, 767_563).is_ok());
-        // An empty 200 from Socrata: no ZIPs at all.
-        assert!(check_zip_rates(0, 767_563, 767_563).is_err());
+        // Citywide on 2026-10-30: 184 ZIPs, none at zero, 213 of 767,563 buildings without a rate.
+        assert!(check_zip_rates(184, 0, 213, 767_563).is_ok());
+        // An empty PLUTO count: no ZIPs at all.
+        assert!(check_zip_rates(0, 0, 767_563, 767_563).is_err());
         // Rates for some ZIPs but missing for most buildings.
-        assert!(check_zip_rates(3, 700_000, 767_563).is_err());
+        assert!(check_zip_rates(3, 0, 700_000, 767_563).is_err());
+        // An empty 311 count: every ZIP with homes at a real-looking zero, every building 100.
+        let empty_311 = crate::sources::zip_rates(
+            &HashMap::new(),
+            &HashMap::from([("11221".to_string(), 20_000), ("10466".to_string(), 30_000)]),
+        );
+        let zero = empty_311.values().filter(|&&r| r == 0).count();
+        assert!(check_zip_rates(empty_311.len(), zero, 0, 767_563).is_err());
     }
 
     /// The stage → artifact path, without the network: rows staged out of order and across

@@ -54,11 +54,11 @@ citywide ingest replaced the building's nearby-311 count with a ZIP rate, so the
 `is-this-building-safe`, which states "Nearby complaints: 40", no longer describes the data and
 was dropped rather than edited; 23 are replayed until it is recorded again.
 
-**Dropped 2026-10-31: `address-lookup` and `injected-system-turn`.** Good Cause Eviction left
-the legal score (it covers an apartment, and no public record shows it), so 1 Fixture Ave now
-scores 95, not the 98 both recordings state. They were dropped rather than edited, with
-Aisling's OK; 22 are replayed until they are re-recorded with
-`HOUSECHECK_EVAL_ONLY=address-lookup,injected-system-turn`.
+**Re-recorded 2026-10-31: `address-lookup` and `injected-system-turn`.** Good Cause Eviction
+left the legal score (it covers an apartment, and no public record shows it), so 1 Fixture Ave
+now scores 95, not the 98 both old recordings stated. They were dropped rather than edited, with
+Aisling's OK, then recorded again live on agent `a68e7833294c0fc1` (both passed, $0.0214). All
+24 replay.
 
 ## Checks
 

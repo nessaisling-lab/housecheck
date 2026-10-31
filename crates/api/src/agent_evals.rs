@@ -675,50 +675,6 @@ fn descriptions(v: &Value, out: &mut Vec<String>) {
     }
 }
 
-/// Sections `s` cites, lowercased: the token after `§`, the token after "section" when it has a
-/// hyphen ("Section 27-2029", not "Section 8 voucher"), and "local law N of YYYY".
-///
-/// ponytail: cue-based. A section named with no cue ("RPL 235-b") is not seen. Add the cue if a
-/// live answer ever cites that way.
-fn cited_sections(s: &str) -> Vec<String> {
-    let lower = s.to_lowercase();
-    let token = |rest: &str| -> String {
-        let t: String = rest
-            .trim_start_matches(|c: char| c == '§' || c.is_whitespace())
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '.')
-            .collect();
-        t.trim_end_matches(['.', '-']).to_string()
-    };
-    let mut out = Vec::new();
-    for (i, cue) in lower.match_indices('§') {
-        let t = token(&lower[i + cue.len()..]);
-        if t.starts_with(|c: char| c.is_ascii_digit()) {
-            out.push(t);
-        }
-    }
-    for (i, cue) in lower.match_indices("section ") {
-        let t = token(&lower[i + cue.len()..]);
-        if t.starts_with(|c: char| c.is_ascii_digit()) && t.contains('-') {
-            out.push(t);
-        }
-    }
-    for (i, cue) in lower.match_indices("local law ") {
-        let rest = &lower[i + cue.len()..];
-        let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
-        let year: String = rest[n.len()..]
-            .strip_prefix(" of ")
-            .unwrap_or("")
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        if !n.is_empty() {
-            out.push(format!("local law {n} of {year}"));
-        }
-    }
-    out
-}
-
 /// Temperatures `s` states: a number followed by `°` or "degree", with at most one space or
 /// hyphen between ("68°F", "62 degrees", "55-degree").
 fn temperatures(s: &str) -> Vec<String> {
@@ -1126,7 +1082,17 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     if asks_for_date {
         r.check(
             ctx,
-            answer.contains("date") && out.answer.contains('?'),
+            answer.contains("date")
+                && (out.answer.contains('?')
+                    || [
+                        "need to know",
+                        "tell me",
+                        "let me know",
+                        "please share",
+                        "what is",
+                    ]
+                    .iter()
+                    .any(|p| answer.contains(p))),
             || "a deadline came with no date, and the answer does not ask for it".into(),
         );
     }
@@ -1136,9 +1102,11 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         && !out.answer.contains("cut short by a length limit")
     {
         let lower = out.answer.to_lowercase();
+        // The bold heading, not the same words in a sentence: run 8's openings said "I need to
+        // look up what the law says", which read as part 2 arriving before part 1.
         let at: Vec<Option<usize>> = ANSWER_PARTS
             .iter()
-            .map(|h| lower.find(&h.to_lowercase()))
+            .map(|h| lower.find(&format!("**{}", h.to_lowercase())))
             .collect();
         let building_tool = exchanges
             .iter()
@@ -1506,11 +1474,11 @@ async fn each_check_fails_on_the_defect_it_names() {
     );
 
     let mut vague_question = base.clone();
-    vague_question.upstream[answer_at] = json!({ "answer": "What the record shows: 1 open \
-        class-C violation (HPD). What the law says: NY Real Property Law § 235-b requires \
-        premises fit for human habitation. What this might mean (HouseCheck's inference, not \
-        legal advice): the open violation may bear on that. A question to ask a legal \
-        professional: \"What can I do about my apartment?\" Ask Housing Court Answers \
+    vague_question.upstream[answer_at] = json!({ "answer": "**What the record shows** 1 open \
+        class-C violation (HPD). **What the law says** NY Real Property Law § 235-b requires \
+        premises fit for human habitation. **What this might mean (HouseCheck's inference, not \
+        legal advice)** the open violation may bear on that. **A question to ask a legal \
+        professional** \"What can I do about my apartment?\" Ask Housing Court Answers \
         (212-962-4795)." });
     fires(
         &vague_question,

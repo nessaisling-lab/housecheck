@@ -14,9 +14,9 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 48: 38 synthetic, 10 recorded from live run 7 |
-| Replays per run | 75 for the synthetic set: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 2,908 for the synthetic set, all passing (2026-10-31) |
+| Conversations | 55: 40 synthetic, 15 recorded from live run 8 |
+| Replays per run | 109: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 4,907, all passing (2026-10-31) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
@@ -48,8 +48,9 @@ live runs found" below.
 
 **Stale since law Phase B (2026-10-31).** Phase B added the `lead_paint` and `housing_court`
 topics, the four-part answer, the statute-over-guidance rule, law passages (`lookup_law`'s
-`about`), the urgency rules and `mark_urgent`. The agent is now `e0f659682b7d9161`; live run 7
-recorded 10 of its 24 live conversations, and those are the recordings CI replays.
+`about`), the urgency rules, `mark_urgent` and `write_answer`. The agent is now
+`a68e7833294c0fc1`; live run 8 recorded 15 of its 24 live conversations, and those are the
+recordings CI replays.
 
 ## Checks
 
@@ -137,7 +138,7 @@ free `GET /api/v1/key`, so a rejected key costs nothing.
 
 ## What the live runs found
 
-Eight billed runs, $1.1622 in all:
+Nine billed runs, $1.4386 in all:
 - **Run 1** (2026-10-29): old prompt, $0.1129, 10 of 17 passed.
 - **Re-run of the 7 failures:** $0.0451, 3 passed.
 - **Run 3:** new prompt (`db3fee8a55844c3e`), $0.1197, 14 of 17 passed.
@@ -160,6 +161,14 @@ Eight billed runs, $1.1622 in all:
   "time-sensitive under New York law"; example dates invented in the ask-for-the-date reply. One
   failure was the check: an answer quoting HPD's own notice ("citing § 27-2056.6 ADM CODE") was
   held to have invented the section; sections in HPD's notice text now count as shown.
+- **Run 8** (2026-10-31): structured answers through `write_answer` (`a68e7833294c0fc1`),
+  $0.2764, 15 of 24 passed. No answer missed a part. Of the 9 failures, four were the check
+  (it found "what the law says" in an ordinary sentence before the headings; it now looks for
+  the bold heading) and one was the check again (an ask for the date with no question mark).
+  Fixed in the server, with no change to the agent: `write_answer` now refuses a question that
+  names no § section from the law served (three answers), and the urgency block reaches the model
+  as sentences, not JSON (one answer asked a reader whose court date was "tomorrow" for the date).
+  Still the model's: a link from memory in `violations-for-unheld-bbl`.
 
 A fourth attempt sent a key OpenRouter rejected and cost nothing. That is why the key is now
 checked first.

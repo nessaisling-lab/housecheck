@@ -2669,6 +2669,7 @@ async fn dispatch_tool_in(
                     let mut out =
                         serde_json::json!({ "bbl": bbl, "count": v.len(), "violations": v });
                     if !law.is_empty() {
+                        ctx.served(&law);
                         out["answer_format"] = ANSWER_FORMAT.into();
                         out["cited_law"] = serde_json::json!(law);
                         out["cited_law_note"] = "The verified text of code sections these \
@@ -2759,6 +2760,7 @@ async fn dispatch_tool_in(
             };
             match found {
                 Ok((provisions, facts, withheld)) if !provisions.is_empty() => {
+                    ctx.served(&provisions);
                     let cite = provisions
                         .iter()
                         .map(|p| p.citation.as_str())
@@ -2914,7 +2916,10 @@ async fn dispatch_tool_in(
                 ),
             }
         }
-        "write_answer" => match render_answer(args) {
+        "write_answer" => match render_answer(
+            args,
+            &ctx.sections.lock().unwrap_or_else(|e| e.into_inner()),
+        ) {
             Ok(text) => (serde_json::json!({ "answer": text }), None),
             Err(why) => (serde_json::json!({ "error": why }), None),
         },
@@ -3098,7 +3103,10 @@ const ANSWER_HEADINGS: [(&str, &str); 4] = [
 /// law had all four parts in order. Fields cannot drift the way headings can, so the format is
 /// the server's job and the content is the model's. Incomplete fields go back to the model as an
 /// error, never out to the reader.
-fn render_answer(args: &serde_json::Value) -> Result<String, String> {
+///
+/// When the law served has § sections, the question must name one of them: a lawyer can act on
+/// "how does § 27-2029 apply?", not on "what are my rights?" (run 8: three questions named none).
+fn render_answer(args: &serde_json::Value, served: &[String]) -> Result<String, String> {
     let field = |k: &str| {
         args.get(k)
             .and_then(|v| v.as_str())
@@ -3126,6 +3134,18 @@ fn render_answer(args: &serde_json::Value) -> Result<String, String> {
             missing.join(", ")
         ));
     }
+    let question = field("question").unwrap_or_default();
+    if !served.is_empty() && !cited_sections(question).iter().any(|s| served.contains(s)) {
+        return Err(format!(
+            "write_answer's question must name a section from the law served, as § and the \
+             number: {}.",
+            served
+                .iter()
+                .map(|s| format!("§ {s}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
     for (k, heading) in ANSWER_HEADINGS {
         out.push_str(&format!(
             "**{heading}**\n{}\n\n",
@@ -3136,6 +3156,50 @@ fn render_answer(args: &serde_json::Value) -> Result<String, String> {
         out.push_str(h);
     }
     Ok(out.trim_end().to_string())
+}
+
+/// Sections `s` cites, lowercased: the token after `§`, the token after "section" when it has a
+/// hyphen ("Section 27-2029", not "Section 8 voucher"), and "local law N of YYYY".
+///
+/// ponytail: cue-based. A section named with no cue ("RPL 235-b") is not seen. Add the cue if a
+/// live answer ever cites that way.
+fn cited_sections(s: &str) -> Vec<String> {
+    let lower = s.to_lowercase();
+    let token = |rest: &str| -> String {
+        let t: String = rest
+            .trim_start_matches(|c: char| c == '§' || c.is_whitespace())
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '.')
+            .collect();
+        t.trim_end_matches(['.', '-']).to_string()
+    };
+    let mut out = Vec::new();
+    for (i, cue) in lower.match_indices('§') {
+        let t = token(&lower[i + cue.len()..]);
+        if t.starts_with(|c: char| c.is_ascii_digit()) {
+            out.push(t);
+        }
+    }
+    for (i, cue) in lower.match_indices("section ") {
+        let t = token(&lower[i + cue.len()..]);
+        if t.starts_with(|c: char| c.is_ascii_digit()) && t.contains('-') {
+            out.push(t);
+        }
+    }
+    for (i, cue) in lower.match_indices("local law ") {
+        let rest = &lower[i + cue.len()..];
+        let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        let year: String = rest[n.len()..]
+            .strip_prefix(" of ")
+            .unwrap_or("")
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        if !n.is_empty() {
+            out.push(format!("local law {n} of {year}"));
+        }
+    }
+    out
 }
 
 /// Whether a tool result handed the model law: from then on it must finish through a tool, so
@@ -3157,6 +3221,8 @@ struct ToolCtx {
     urgency: std::sync::Mutex<Option<model::urgency::Urgency>>,
     /// Characters of law Full held back to a preview, for the app's confirm step.
     withheld: std::sync::Mutex<Option<usize>>,
+    /// The § sections of every provision served so far, for `write_answer`'s question.
+    sections: std::sync::Mutex<Vec<String>>,
 }
 
 impl ToolCtx {
@@ -3171,6 +3237,18 @@ impl ToolCtx {
             full_confirmed: req.full_text_confirmed,
             urgency: std::sync::Mutex::new(urgency),
             withheld: std::sync::Mutex::new(None),
+            sections: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn served(&self, provisions: &[model::law::ServedProvision]) {
+        let mut s = self.sections.lock().unwrap_or_else(|e| e.into_inner());
+        for p in provisions {
+            for c in cited_sections(&p.citation) {
+                if !s.contains(&c) {
+                    s.push(c);
+                }
+            }
         }
     }
 
@@ -3243,10 +3321,45 @@ fn facts_message(
         s.push_str(&format!(
             "\n=== URGENCY (counted by HouseCheck from the reader's words, New York time; never \
              recount it) ===\n{}\n=== END URGENCY ===",
-            serde_json::to_string(u).unwrap_or_default()
+            urgency_note(u)
         ));
     }
     s
+}
+
+/// The urgency block in words. Run 8 handed it over as JSON, and with `"needs_date": false`
+/// in plain view the model still asked a reader whose court date was "tomorrow" for the date.
+fn urgency_note(u: &model::urgency::Urgency) -> String {
+    let mut lines = Vec::new();
+    if u.danger {
+        lines.push(format!(
+            "Danger: {}. Open the answer with \"Call 911 now.\"",
+            u.reason
+        ));
+    }
+    match (u.level, &u.date, u.days_left) {
+        (Some(level), Some(date), Some(days)) => lines.push(format!(
+            "{}: {} on {date}, {} (counted on {}). The date is known: do not ask for it.",
+            level_words(level),
+            u.reason,
+            days_words(days),
+            u.counted_on
+        )),
+        (Some(level), _, _) if !u.danger => lines.push(format!(
+            "{}: {}. Do not ask for a date.",
+            level_words(level),
+            u.reason
+        )),
+        _ => {}
+    }
+    if u.needs_date {
+        lines.push(format!(
+            "A {} was named with no date. Ask for the exact date and what paper they received \
+             before anything else.",
+            u.reason
+        ));
+    }
+    lines.join("\n")
 }
 
 /// Cut law to the reader's detail level. Returns what to serve and, when Full was asked for but
@@ -4153,7 +4266,7 @@ mod tests {
             "question": "\"How does § 732 apply to me?\"",
             "help": "Housing Court Answers, 212-962-4795."
         });
-        let text = render_answer(&full).expect("complete");
+        let text = render_answer(&full, &["732".into()]).expect("complete");
         let at = |h: &str| text.find(h).unwrap_or_else(|| panic!("{h} missing"));
         assert!(text.starts_with("Urgent:"));
         let order: Vec<usize> = ANSWER_HEADINGS.iter().map(|(_, h)| at(h)).collect();
@@ -4162,11 +4275,13 @@ mod tests {
 
         let mut partial = full.clone();
         partial["inference"] = "  ".into();
-        let err = render_answer(&partial).expect_err("an empty part is missing");
+        let err = render_answer(&partial, &[]).expect_err("an empty part is missing");
         assert!(err.contains("inference"), "{err}");
 
         let ask = serde_json::json!({ "ask_first": "What is the exact date?", "record": "x" });
-        assert_eq!(render_answer(&ask).unwrap(), "What is the exact date?");
+        assert_eq!(render_answer(&ask, &[]).unwrap(), "What is the exact date?");
+        let err = render_answer(&full, &["27-2029".into()]).expect_err("names no served section");
+        assert!(err.contains("§ 27-2029"), "{err}");
         assert!(serves_law(&serde_json::json!({ "provisions": [{}] })));
         assert!(!serves_law(&serde_json::json!({ "provisions": [] })));
     }

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
 use model::{UnknownViolationClass, ViolationClass};
 
@@ -164,6 +164,18 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             value TEXT NOT NULL,
             condition TEXT NOT NULL,
             quote TEXT NOT NULL
+         );
+         -- A provision's text cut at its own subdivisions (`model::law::passages`). Derived at
+         -- load, never edited: joined in seq order the rows are the provision's text exactly.
+         CREATE TABLE IF NOT EXISTS law_passage (
+            provision_id TEXT NOT NULL REFERENCES law_provision(id),
+            seq INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            text TEXT NOT NULL,
+            PRIMARY KEY (provision_id, seq)
+         );
+         CREATE VIRTUAL TABLE IF NOT EXISTS law_passage_fts USING fts5(
+            text, provision_id UNINDEXED, seq UNINDEXED, tokenize = 'porter unicode61'
          );
          -- find_legal_help's directory, served in rowid order. Only free services belong
          -- here: a paid referral to someone in a housing crisis is the harm it exists to avoid.
@@ -413,7 +425,6 @@ const RECORD_SEP: char = '\u{1e}'; // ASCII record separator
 
 /// Descriptions for one building, in `desc_ord` order. Empty when the building has none.
 fn read_descriptions(conn: &Connection, bbl: &str) -> Result<Vec<String>> {
-    use rusqlite::OptionalExtension;
     let z: Option<Vec<u8>> = conn
         .query_row("SELECT z FROM violation_desc WHERE bbl = ?1", [bbl], |r| {
             r.get(0)
@@ -594,7 +605,8 @@ fn insert_law(conn: &Connection, seed: &model::law::LawSeed) -> Result<usize> {
     conn.execute_batch("PRAGMA foreign_keys = ON")?;
     let tx = conn.unchecked_transaction()?;
     tx.execute_batch(
-        "DELETE FROM legal_help; DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_provision; DELETE FROM law_source;",
+        "DELETE FROM legal_help; DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_passage_fts;
+         DELETE FROM law_passage; DELETE FROM law_provision; DELETE FROM law_source;",
     )?;
     for o in &seed.legal_help {
         let excerpt = phone_digits(&o.excerpt);
@@ -670,11 +682,37 @@ fn insert_law(conn: &Connection, seed: &model::law::LawSeed) -> Result<usize> {
                 rusqlite::params![p.id, t],
             )?;
         }
+        let parts = model::law::passages(&p.text);
+        anyhow::ensure!(
+            parts.iter().map(|x| x.text.as_str()).collect::<String>() == p.text,
+            "{}: its passages do not rejoin to its text",
+            p.id
+        );
+        for (seq, x) in parts.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO law_passage (provision_id, seq, label, text) VALUES (?1,?2,?3,?4)",
+                rusqlite::params![p.id, seq as i64, x.label, x.text],
+            )?;
+            tx.execute(
+                "INSERT INTO law_passage_fts (text, provision_id, seq) VALUES (?1,?2,?3)",
+                rusqlite::params![x.text, p.id, seq as i64],
+            )?;
+        }
         let text = normalize(&p.text);
         for f in &p.facts {
             anyhow::ensure!(
                 text.contains(&normalize(&f.quote)),
                 "{}: the quote for {} is not in the provision's text",
+                p.id,
+                f.key
+            );
+            // A served fact must come with the words it was taken from, and passages are
+            // served whole, so its quote has to sit inside one of them.
+            anyhow::ensure!(
+                parts
+                    .iter()
+                    .any(|x| normalize(&x.text).contains(&normalize(&f.quote))),
+                "{}: the quote for {} crosses a passage boundary",
                 p.id,
                 f.key
             );
@@ -730,11 +768,14 @@ pub fn legal_help(conn: &Connection) -> Result<Vec<model::law::LegalHelp>> {
 /// Columns `p.id, p.citation, p.title, p.text, p.url, s.publisher, s.kind, p.status,
 /// p.retrieved_at, p.verified_on`, in that order.
 fn served_provision(r: &rusqlite::Row) -> rusqlite::Result<model::law::ServedProvision> {
+    let text: String = r.get(3)?;
     Ok(model::law::ServedProvision {
         id: r.get(0)?,
         citation: r.get(1)?,
         title: r.get(2)?,
-        text: r.get(3)?,
+        full_chars: text.chars().count(),
+        complete: true,
+        text,
         url: r.get(4)?,
         publisher: r.get(5)?,
         kind: r.get(6)?,
@@ -742,6 +783,157 @@ fn served_provision(r: &rusqlite::Row) -> rusqlite::Result<model::law::ServedPro
         retrieved_at: r.get(8)?,
         verified_on: r.get(9)?,
     })
+}
+
+/// One current provision by id, whole: what `/law/{id}` serves.
+pub fn law_provision(conn: &Connection, id: &str) -> Result<Option<model::law::ServedProvision>> {
+    Ok(conn
+        .query_row(
+            "SELECT p.id, p.citation, p.title, p.text, p.url, s.publisher, s.kind, p.status,
+                    p.retrieved_at, p.verified_on
+             FROM law_provision p JOIN law_source s ON s.id = p.source_id
+             WHERE p.id = ?1",
+            [id],
+            served_provision,
+        )
+        .optional()?)
+}
+
+/// Words worth searching for in a question: letters and digits, three or more, minus the
+/// filler every question shares. At most 16, so one long message can't make a huge query.
+fn search_terms(query: &str) -> Vec<String> {
+    const SKIP: &[&str] = &[
+        "the", "and", "for", "are", "but", "not", "you", "your", "with", "this", "that", "what",
+        "when", "how", "can", "does", "have", "has", "was", "will", "would", "should", "could",
+        "there", "here", "about", "from", "they", "them", "their", "into", "any", "who", "why",
+        "which", "our", "out", "get", "got", "just", "like", "need", "want", "know", "tell",
+    ];
+    let mut out: Vec<String> = Vec::new();
+    for w in query
+        .to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| w.len() >= 3 && !SKIP.contains(w))
+    {
+        if !out.iter().any(|o| o == w) {
+            out.push(w.to_string());
+        }
+        if out.len() == 16 {
+            break;
+        }
+    }
+    out
+}
+
+/// Cut `provisions` down to the passages that bear on `query`, within `budget` characters.
+///
+/// Passages holding a fact's quote come first, then the passages FTS5 ranks highest for the
+/// query, each with the lead-in sentence of any list it sits in (the nearest passage above it
+/// ending with a colon, past its sibling items). Passages are served whole or not at all. With nothing matched, each
+/// provision's opening passage is served, since it says what the section covers. Provisions
+/// keep their order; inside one, passages keep theirs, and a gap is a line holding only `…`.
+pub fn select_passages(
+    conn: &Connection,
+    provisions: Vec<model::law::ServedProvision>,
+    facts: &[model::law::ServedFact],
+    query: &str,
+    budget: usize,
+) -> Result<Vec<model::law::ServedProvision>> {
+    use model::law::normalize;
+    let mut stmt =
+        conn.prepare("SELECT seq, text FROM law_passage WHERE provision_id = ?1 ORDER BY seq")?;
+    let mut parts: Vec<Vec<String>> = Vec::new();
+    for p in &provisions {
+        parts.push(
+            stmt.query_map([&p.id], |r| r.get::<_, String>(1))?
+                .collect::<rusqlite::Result<Vec<_>>>()?,
+        );
+    }
+    let index = |id: &str| provisions.iter().position(|p| p.id == id);
+
+    // Candidates in priority order: (provision index, seq).
+    let mut wanted: Vec<(usize, usize)> = Vec::new();
+    for f in facts {
+        if let Some(i) = index(&f.provision) {
+            let q = normalize(&f.fact.quote);
+            if let Some(s) = parts[i].iter().position(|t| normalize(t).contains(&q)) {
+                wanted.push((i, s));
+            }
+        }
+    }
+    let terms = search_terms(query);
+    if !terms.is_empty() {
+        let fts = terms
+            .iter()
+            .map(|t| format!("\"{t}\""))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let mut stmt = conn.prepare(
+            "SELECT provision_id, seq FROM law_passage_fts WHERE law_passage_fts MATCH ?1
+             ORDER BY bm25(law_passage_fts)",
+        )?;
+        let hits = stmt
+            .query_map([fts], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for (id, seq) in hits {
+            if let Some(i) = index(&id) {
+                wanted.push((i, seq as usize));
+            }
+        }
+    }
+    let matched = !wanted.is_empty();
+    if !matched {
+        wanted.extend((0..provisions.len()).map(|i| (i, 0)));
+    }
+
+    let mut chosen: Vec<Vec<bool>> = parts.iter().map(|v| vec![false; v.len()]).collect();
+    let mut used = 0usize;
+    for (i, s) in wanted {
+        // The passage and the lead-ins of the lists it sits in: walking back over its
+        // siblings (items ending ";", "; or", "; and") to each sentence ending with a colon.
+        let mut group = vec![s];
+        let mut k = s;
+        while k > 0 {
+            let prev = parts[i][k - 1].trim_end();
+            if prev.ends_with(':') {
+                group.push(k - 1);
+            } else if !(prev.ends_with(';') || prev.ends_with("; or") || prev.ends_with("; and")) {
+                break;
+            }
+            k -= 1;
+        }
+        let cost: usize = group
+            .iter()
+            .filter(|&&g| !chosen[i][g])
+            .map(|&g| parts[i][g].chars().count())
+            .sum();
+        if cost == 0 || used + cost > budget {
+            continue;
+        }
+        used += cost;
+        for g in group {
+            chosen[i][g] = true;
+        }
+    }
+
+    let mut out = Vec::new();
+    for (i, mut p) in provisions.into_iter().enumerate() {
+        if !chosen[i].iter().any(|&c| c) {
+            continue;
+        }
+        let mut text = String::new();
+        let mut prev: Option<usize> = None;
+        for (s, piece) in parts[i].iter().enumerate().filter(|(s, _)| chosen[i][*s]) {
+            if prev.is_some_and(|q| q + 1 != s) {
+                text.push_str("\n…\n");
+            }
+            text.push_str(piece);
+            prev = Some(s);
+        }
+        p.complete = chosen[i].iter().all(|&c| c);
+        p.text = text;
+        out.push(p);
+    }
+    Ok(out)
 }
 
 /// The current text of the Admin Code sections HPD cites in these notices, in order of first
@@ -959,6 +1151,120 @@ mod tests {
         migrate(&conn)?;
         insert_fixture(&conn)?;
         Ok(conn)
+    }
+
+    /// Each served piece between `…` lines is word for word in its provision's full text.
+    fn assert_verbatim(conn: &Connection, served: &[model::law::ServedProvision]) -> Result<()> {
+        for p in served {
+            let full = law_provision(conn, &p.id)?
+                .expect("served provision exists")
+                .text;
+            for piece in p.text.split("\n…\n") {
+                assert!(
+                    full.contains(piece),
+                    "{}: a served piece is not in the full text",
+                    p.id
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Ingest stores every provision as passages that rejoin to its text exactly, and indexes
+    /// them for search.
+    #[test]
+    fn passages_rejoin_to_every_provision() -> Result<()> {
+        let conn = seeded()?;
+        let mut stmt = conn.prepare("SELECT id, text FROM law_provision")?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        assert!(!rows.is_empty());
+        for (id, text) in rows {
+            let joined: String = conn
+                .prepare("SELECT text FROM law_passage WHERE provision_id = ?1 ORDER BY seq")?
+                .query_map([&id], |r| r.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+                .concat();
+            assert_eq!(joined, text, "{id}");
+        }
+        let fts: i64 = conn.query_row("SELECT count(*) FROM law_passage_fts", [], |r| r.get(0))?;
+        let all: i64 = conn.query_row("SELECT count(*) FROM law_passage", [], |r| r.get(0))?;
+        assert_eq!(fts, all);
+        Ok(())
+    }
+
+    /// Eviction is the topic that sent 49,999 characters. A question about a rent increase gets
+    /// passages within the budget, every one verbatim, the fact passages among them.
+    #[test]
+    fn passages_fit_the_budget_and_stay_verbatim() -> Result<()> {
+        let conn = seeded()?;
+        let law = law_for_topic(&conn, "eviction")?;
+        let full: usize = law.provisions.iter().map(|p| p.full_chars).sum();
+        assert!(full > 40_000, "the eviction topic is the big one ({full})");
+        let served = select_passages(
+            &conn,
+            law.provisions,
+            &law.facts,
+            "My landlord says my rent increase notice is legal. Is it?",
+            6_000,
+        )?;
+        let gaps = served
+            .iter()
+            .map(|p| p.text.matches("\n…\n").count() * 3)
+            .sum::<usize>();
+        let sent: usize = served.iter().map(|p| p.text.chars().count()).sum();
+        assert!(sent <= 6_000 + gaps, "{sent} characters");
+        assert!(served.iter().any(|p| !p.complete));
+        assert_verbatim(&conn, &served)?;
+        for f in &law.facts {
+            let p = served
+                .iter()
+                .find(|p| p.id == f.provision)
+                .expect("fact provision served");
+            assert!(
+                model::law::normalize(&p.text).contains(&model::law::normalize(&f.fact.quote)),
+                "{}: its quote must be served",
+                f.fact.key
+            );
+        }
+        Ok(())
+    }
+
+    /// A passage that completes a sentence arrives with the sentence: asking about a false
+    /// certification of a mold violation serves § 27-2017.3's "(b)" with its "3." lead-in.
+    #[test]
+    fn a_passage_comes_with_its_lead_in() -> Result<()> {
+        let conn = seeded()?;
+        let law = law_for_topic(&conn, "mold")?;
+        let served = select_passages(
+            &conn,
+            law.provisions,
+            &law.facts,
+            "owner submitted a false certification of correction",
+            1_500,
+        )?;
+        let mold = served
+            .iter()
+            .find(|p| p.id == "NYC-ADMIN-27-2017.3")
+            .expect("27-2017.3 served");
+        assert!(mold.text.contains("false certification"));
+        assert!(mold
+            .text
+            .contains("shall constitute a hazardous violation if:"));
+        assert_verbatim(&conn, &served)
+    }
+
+    /// Nothing matched: each provision's opening passage, which says what it covers.
+    #[test]
+    fn no_match_serves_opening_passages() -> Result<()> {
+        let conn = seeded()?;
+        let law = law_for_topic(&conn, "lead_paint")?;
+        let n = law.provisions.len();
+        let served = select_passages(&conn, law.provisions, &[], "zzzz qqqq", 6_000)?;
+        assert_eq!(served.len(), n);
+        assert!(served.iter().all(|p| p.text.starts_with("§ 27-2056")));
+        assert_verbatim(&conn, &served)
     }
 
     #[test]

@@ -193,6 +193,11 @@ pub struct ServedProvision {
     pub status: String,
     pub retrieved_at: String,
     pub verified_on: String,
+    /// Whether `text` is the whole provision. When it is not, `text` holds the passages served,
+    /// in order, with a line holding only `…` where passages were left out.
+    pub complete: bool,
+    /// Characters in the whole provision, so the reader can be told what the full text costs.
+    pub full_chars: usize,
 }
 
 /// A fact as `lookup_law` hands it to the model, with the provision it came from.
@@ -221,9 +226,128 @@ pub fn text_sha256(text: &str) -> String {
     hex::encode(Sha256::digest(normalize(text).as_bytes()))
 }
 
+/// One piece of a provision's text, cut at the provision's own subdivision markers.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Passage {
+    /// The marker that opens it (`a.`, `(3)`, `* 2.`), or `""` for the opening piece.
+    pub label: String,
+    pub text: String,
+}
+
+/// The subdivision marker a line opens with, if any: `a.`, `a-1.`, `1.`, `1-a.`, `(1)`, `(a)`,
+/// `* 2.`, after any indentation, and followed by a space or tab.
+fn opening_marker(line: &str) -> Option<&str> {
+    let s = line.trim_start_matches([' ', '\t']);
+    let body = s
+        .strip_prefix('*')
+        .map_or(s, |r| r.trim_start_matches([' ', '\t']));
+    let b = body.as_bytes();
+    let end = if b.first() == Some(&b'(') {
+        let close = body.find(')')?;
+        let inner = &body[1..close];
+        if !((1..=4).contains(&inner.len())
+            && inner
+                .bytes()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()))
+        {
+            return None;
+        }
+        close + 1
+    } else {
+        let dot = body.find('.')?;
+        let head = &body[..dot];
+        let ok = match head.split_once('-') {
+            None => {
+                (head.len() == 1 && head.as_bytes()[0].is_ascii_lowercase())
+                    || (!head.is_empty() && head.bytes().all(|c| c.is_ascii_digit()))
+            }
+            Some((l, d)) if l.len() == 1 && l.as_bytes()[0].is_ascii_lowercase() => {
+                !d.is_empty() && d.bytes().all(|c| c.is_ascii_digit())
+            }
+            Some((d, l)) if !d.is_empty() && d.bytes().all(|c| c.is_ascii_digit()) => {
+                l.len() == 1 && l.as_bytes()[0].is_ascii_lowercase()
+            }
+            _ => false,
+        };
+        if !ok {
+            return None;
+        }
+        dot + 1
+    };
+    matches!(b.get(end), Some(b' ' | b'\t')).then(|| &s[..s.len() - body.len() + end])
+}
+
+/// `text` cut at every line that opens a subdivision. Lossless: the pieces joined in order are
+/// `text`, byte for byte, and ingest refuses a provision for which that fails.
+///
+/// ponytail: a wrapped line that happens to start with "a. " or "(2) " mid-sentence is cut
+/// too. Harmless (the pieces still rejoin exactly); if it splits a sentence that matters,
+/// mark subdivisions at capture instead of inferring them.
+pub fn passages(text: &str) -> Vec<Passage> {
+    let mut starts = vec![0];
+    let mut at = 0;
+    for line in text.split_inclusive('\n') {
+        if at > 0 && opening_marker(line).is_some() {
+            starts.push(at);
+        }
+        at += line.len();
+    }
+    starts.push(text.len());
+    starts
+        .windows(2)
+        .map(|w| {
+            let piece = &text[w[0]..w[1]];
+            let label = if w[0] == 0 && opening_marker(piece).is_none() {
+                ""
+            } else {
+                opening_marker(piece).unwrap_or("")
+            };
+            Passage {
+                label: label.trim().to_string(),
+                text: piece.to_string(),
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passages_rejoin_exactly_and_label_their_markers() {
+        let t = "§ 1 Title.\n\na. The owner shall:\n\n1. paint; and\n(2) repair.\n  * 3. Note.\nb.\tEnd.\n";
+        let p = passages(t);
+        assert_eq!(p.iter().map(|x| x.text.as_str()).collect::<String>(), t);
+        let labels: Vec<&str> = p.iter().map(|x| x.label.as_str()).collect();
+        assert_eq!(labels, ["", "a.", "1.", "(2)", "* 3.", "b."]);
+        // Not markers: a time, a decimal section number, a word.
+        for line in [
+            "6 a.m. to midnight",
+            "27-2005. text",
+            "ab. no",
+            "(longer) no",
+            "a.no",
+        ] {
+            assert!(opening_marker(line).is_none(), "{line}");
+        }
+    }
+
+    /// The real table: every provision splits back into exactly its own text.
+    #[test]
+    fn every_real_provision_splits_losslessly() {
+        let seed: LawSeed =
+            serde_json::from_str(include_str!("../../../data/law.json")).expect("law.json");
+        for p in &seed.provisions {
+            let parts = passages(&p.text);
+            assert_eq!(
+                parts.iter().map(|x| x.text.as_str()).collect::<String>(),
+                p.text,
+                "{}",
+                p.id
+            );
+        }
+    }
 
     #[test]
     fn hash_ignores_reflow_but_not_words() {

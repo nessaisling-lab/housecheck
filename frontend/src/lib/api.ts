@@ -186,7 +186,6 @@ function normalizeBuilding(raw: any): BuildingCard {
       asStabilization(typeof stab === "string" ? stab : stab?.status),
     stabilization_message:
       typeof stab === "string" ? raw.stabilization_message ?? null : stab?.message ?? null,
-    good_cause: facts.good_cause ?? raw.good_cause ?? null,
     rent: raw.rent ?? null,
   };
 }

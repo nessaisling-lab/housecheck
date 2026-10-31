@@ -4848,8 +4848,8 @@ mod tests {
         conn.execute(
             "INSERT INTO buildings
                (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,
-                good_cause,has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
-             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,0,NULL,NULL,NULL,NULL)",
+                has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
+             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,NULL,NULL,NULL,NULL)",
             rusqlite::params![bbl, address],
         )
         .unwrap();

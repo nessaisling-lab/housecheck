@@ -77,7 +77,6 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             -- Rent-stabilized units on the latest NYC DOF Statement-of-Account record
             -- (JustFix nyc-doffer 2024). NULL = no DOF record found for the building.
             rent_stab_units INTEGER,
-            good_cause INTEGER NOT NULL,
             has_elevator INTEGER NOT NULL,
             near_ada_subway_m INTEGER,
             zip TEXT,
@@ -239,15 +238,15 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
     // stays 100 as it was under the old 311 count and its totals do not move.
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
-         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,'11221','Bedford-Stuyvesant (East)',600,40.6829,-73.9251,12)",
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
+         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,300,'11221','Bedford-Stuyvesant (East)',600,40.6829,-73.9251,12)",
         [],
     )?;
     // Building 2: walk-up, open violations, no protections.
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
-         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,'11221','Bedford-Stuyvesant (East)',600,40.6835,-73.9240,NULL)",
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
+         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,NULL,'11221','Bedford-Stuyvesant (East)',600,40.6835,-73.9240,NULL)",
         [],
     )?;
     // HPD's own notice wording, copied from real CD 303 notices in the 2026-10-30 pilot ingest
@@ -300,7 +299,6 @@ fn row_to_building(row: &rusqlite::Row) -> rusqlite::Result<Building> {
             .get::<_, Option<i64>>("rent_stabilized")?
             .map(|v| v != 0),
         rent_stab_units: row.get("rent_stab_units")?,
-        good_cause: row.get::<_, i64>("good_cause")? != 0,
         has_elevator: row.get::<_, i64>("has_elevator")? != 0,
         near_ada_subway_m: row.get("near_ada_subway_m")?,
         zip: row.get("zip")?,
@@ -414,12 +412,12 @@ pub fn get_tract_median(conn: &Connection, tract_geoid: &str) -> Result<Option<i
 pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
          ON CONFLICT(bbl) DO UPDATE SET
           address=excluded.address, year_built=excluded.year_built, num_floors=excluded.num_floors,
           units_res=excluded.units_res, tract_geoid=excluded.tract_geoid, rent_stabilized=excluded.rent_stabilized,
-          good_cause=excluded.good_cause, has_elevator=excluded.has_elevator,
+          has_elevator=excluded.has_elevator,
           near_ada_subway_m=excluded.near_ada_subway_m, zip=excluded.zip,
           neighborhood=excluded.neighborhood,
           complaints_311_per_1k_homes=excluded.complaints_311_per_1k_homes,
@@ -427,7 +425,7 @@ pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
           rent_stab_units=excluded.rent_stab_units",
         rusqlite::params![
             b.bbl, b.address, b.year_built, b.num_floors, b.units_res, b.tract_geoid,
-            b.rent_stabilized.map(|v| v as i64), b.good_cause as i64, b.has_elevator as i64,
+            b.rent_stabilized.map(|v| v as i64), b.has_elevator as i64,
             b.near_ada_subway_m, b.zip, b.neighborhood, b.complaints_311_per_1k_homes,
             b.latitude, b.longitude, b.rent_stab_units
         ],
@@ -1571,7 +1569,6 @@ mod tests {
             tract_geoid: "36047025300".into(),
             rent_stabilized: Some(true),
             rent_stab_units: Some(9),
-            good_cause: false,
             has_elevator: true,
             near_ada_subway_m: Some(420),
             zip: Some("11216".into()),

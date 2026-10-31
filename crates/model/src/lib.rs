@@ -17,7 +17,6 @@ pub struct Building {
     /// (JustFix nyc-doffer, latest year 2024). `Some(n>0)` pairs with `rent_stabilized =
     /// Some(true)`; `Some(0)` with `Some(false)`; `None` when the building has no DOF record.
     pub rent_stab_units: Option<i32>,
-    pub good_cause: bool,
     pub has_elevator: bool,
     pub near_ada_subway_m: Option<i32>,
     /// ZIP code (PLUTO `zipcode`): the area the neighborhood figures below are counted over.

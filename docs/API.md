@@ -54,7 +54,6 @@ curl -s http://127.0.0.1:8787/building/3018420001
     "tract_geoid": "36047025300",
     "rent_stabilized": null,
     "rent_stab_units": null,
-    "good_cause": false,
     "has_elevator": false,
     "near_ada_subway_m": 420,
     "zip": "11233",

@@ -113,7 +113,6 @@ pub fn parse_pluto(v: &Value) -> Option<Building> {
         tract_geoid,
         rent_stabilized: None, // filled later from the JustFix nyc-doffer CSV; None = unknown
         rent_stab_units: None, // filled later from the JustFix nyc-doffer CSV
-        good_cause: false,     // filled later
         has_elevator: false,   // filled from DOB
         near_ada_subway_m: None, // filled from MTA
         zip: s(v, "zipcode").as_deref().and_then(zip5),

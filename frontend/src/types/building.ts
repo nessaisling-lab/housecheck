@@ -119,7 +119,6 @@ export interface BuildingCard {
   access_likelihood?: AccessLikelihood | null;
   stabilization?: Stabilization | null;
   stabilization_message?: string | null;
-  good_cause?: boolean | null;
   rent?: RentContext | null;
 }
 

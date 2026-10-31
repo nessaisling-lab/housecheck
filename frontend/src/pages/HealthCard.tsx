@@ -96,7 +96,7 @@ function subStatus(b: Building, key: "condition" | "legal" | "neighborhood" | "a
     }
     case "legal":
       return b.stabilization === "likely"
-        ? `Stabilized${b.good_cause ? " · Good Cause" : ""}`
+        ? "Stabilized"
         : b.stabilization === "unverified"
           ? "Stabilization unverified"
           : "No stabilization on record";
@@ -509,10 +509,15 @@ export default function HealthCard() {
             eviction protection for many market-rate units. Always confirm with NYS DHCR — a free
             rent-history request takes minutes.
           </p>
+          <p className="mt-3 text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
+            Public records can't show whether Good Cause covers your apartment. Your landlord must
+            tell you in writing with your lease or renewal. Not sure? Call 311 and ask for the
+            Tenant Helpline.
+          </p>
           <dl className="mt-4 space-y-2.5">
             {[
               ["Rent stabilized", stabLabel],
-              ["Good Cause covered", building.good_cause == null ? "Unverified" : building.good_cause ? "Yes" : "No"],
+              ["Good Cause covered", "Unverified"],
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
@@ -618,8 +623,7 @@ export default function HealthCard() {
                   : (building.open_violation_total ?? 0) > 0
                     ? ` with ${building.open_violation_total} open violation${building.open_violation_total === 1 ? "" : "s"}, none hazardous`
                     : " with a clean violation record"}
-              {building.stabilization === "likely" ? "; likely rent-stabilized" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}
-              {building.good_cause ? ", with Good Cause coverage" : ""}.
+              {building.stabilization === "likely" ? "; likely rent-stabilized" : building.stabilization === "unverified" ? "; stabilization unverified" : ""}.
             </span>
             <span className="mt-1.5 block text-[0.875rem] font-semibold" style={{ color: "var(--hc-ink)" }}>
               Ask the agent ➜
@@ -790,7 +794,7 @@ export default function HealthCard() {
               { label: "Rent stabilized", value: <span style={{ color: stabColor }}>{stabLabel}</span> },
               {
                 label: "Good Cause covered",
-                value: building.good_cause == null ? "Unverified" : building.good_cause ? "Yes" : "No",
+                value: "Unverified",
               },
             ]}
             sentence={

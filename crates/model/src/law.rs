@@ -11,16 +11,18 @@ use sha2::{Digest, Sha256};
 
 /// Topics `lookup_law` accepts. The tool schema's enum is built from this list and ingest
 /// refuses a provision tagged with anything else, so the two cannot drift apart.
-pub const TOPICS: [&str; 10] = [
+pub const TOPICS: [&str; 12] = [
     "heat",
     "hot_water",
     "repairs",
     "habitability",
     "mold",
     "pests",
+    "lead_paint",
     "rent_stabilization",
     "security_deposit",
     "eviction",
+    "housing_court",
     "general",
 ];
 

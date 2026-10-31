@@ -15,20 +15,20 @@
   {
     "id": "open-violations-list",
     "kind": "synthetic",
-    "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it.",
+    "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it. Since Phase B the fixture's open violations carry HPD's own notice text, so the answer quotes it and explains the sections HPD cited (cited_law).",
     "live": true,
     "request": { "bbl": "3000020002", "messages": [
       { "role": "user", "content": "What are the open violations here, exactly?" }
     ] },
     "upstream": [
-      { "tools": [["get_open_violations", { "bbl": "3000020002" }]] },
-      { "answer": "There are 2 open HPD violations: 1 class C (immediately hazardous), opened in 2026, and 1 class B (hazardous), opened in 2025. HPD's notice text is not in this record, so I can't say what each one is for." }
+      { "tools": [["get_open_violations", { "bbl": "3000020002" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThere are 2 open HPD violations here. A class C violation (immediately hazardous) from 2026, whose HPD notice reads \"§ 27-2056.6 ADM CODE - CORRECT THE LEAD-BASED PAINT HAZARD - PRESUMED LEAD PAINT THAT IS PEELING OR ON A DETERIORATED SUBSURFACE\", and a class B violation (hazardous) from 2025, whose notice reads \"§ 27-2005 HMC:TRACE AND REPAIR THE SOURCE AND ABATE THE NUISANCE CONSISTING OF MOLD\".\n\n**What the law says**\nHPD cited NYC Administrative Code § 27-2056.6, which says lead-based paint in a dwelling unit in a multiple dwelling where a child of applicable age resides is a class C immediately hazardous violation if the paint is peeling or on a deteriorated subsurface. HPD also cited § 27-2005, which says the owner of a multiple dwelling shall keep the premises in good repair.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nHPD has recorded a lead-paint hazard and a mold condition here, both still open. Whether either affects a particular apartment, and what the owner must do now, is for a legal professional to confirm.\n\n**A question to ask a legal professional**\n\"My building has an open class-C HPD violation under Administrative Code § 27-2056.6 for lead-based paint. What does it mean for my apartment?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
     ],
     "expect": {
       "status": 200,
-      "tools": ["get_open_violations"],
+      "tools": ["get_open_violations", "find_legal_help"],
       "must_call": ["get_open_violations"],
-      "citations_include": ["NYC HPD open violations (wvxf-dwi5)"]
+      "citations_include": ["NYC HPD open violations (wvxf-dwi5) · NYC Administrative Code § 27-2056.6 · NYC Administrative Code § 27-2005"]
     }
   },
   {
@@ -47,7 +47,7 @@
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
-      "citations_include": ["NY Real Property Law § 235-b · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
+      "citations_include": ["NY Real Property Law § 235-b · NYC Administrative Code § 27-2029 · NYC Administrative Code § 27-2033 · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
       "answer_contains": ["October 1", "62°F"]
     }
   },
@@ -85,7 +85,7 @@
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
-      "citations_include": ["NY Real Property Law § 235-b · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
+      "citations_include": ["NY Real Property Law § 235-b · NYC Administrative Code § 27-2029 · NYC Administrative Code § 27-2033 · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
       "answer_contains": ["311", "212-962-4795"]
     }
   },
@@ -474,13 +474,13 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "rent_stabilization" }], ["find_legal_help", {}]] },
-      { "answer": "**What the record shows**\nThere's no DOF stabilization record for this building, so HouseCheck's signal is unverified, and it is building-level only.\n\n**What the law says**\nNYS HCR says you can access your apartment's rent history by using \"Submit your Inquiry\" on NYS Rent Connect, and the rent history will be printed and mailed directly to the apartment/building address. You can also visit a Borough/District Rent Office in person, by appointment only.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nYour apartment's rent history may show how it has been registered; a legal professional can confirm what it means.\n\n**A question to ask a legal professional**\n\"My building has no DOF stabilization record. Can you help me read my apartment's rent history from NYS HCR?\" The Legal Aid Society (212-577-3300) can review it with you." }
+      { "answer": "**What the record shows**\nThere's no DOF stabilization record for this building, so HouseCheck's signal is unverified, and it is building-level only.\n\n**What the law says**\nNYC Administrative Code § 27-2104 requires the owner of a building with one or more rent-stabilized units to post a notice at the entrance saying so, and saying that to find out if your unit is registered as rent stabilized, you contact DHCR. NYS HCR says you can access your apartment's rent history by using \"Submit your Inquiry\" on NYS Rent Connect, and the rent history will be printed and mailed directly to the apartment/building address. You can also visit a Borough/District Rent Office in person, by appointment only.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nYour apartment's rent history may show how it has been registered; a legal professional can confirm what it means.\n\n**A question to ask a legal professional**\n\"My building has no DOF stabilization record and I'm not sure there's a notice under Administrative Code § 27-2104 at the entrance. Can you help me read my apartment's rent history from NYS HCR?\" The Legal Aid Society (212-577-3300) can review it with you." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["find_legal_help"],
-      "citations_include": ["NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Office of Rent Administration (ORA) · NYS HCR, Tenant Resources: NYS Rent Connect"]
+      "citations_include": ["NYC Administrative Code § 27-2104 · NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Office of Rent Administration (ORA) · NYS HCR, Tenant Resources: NYS Rent Connect"]
     }
   },
   {
@@ -524,14 +524,14 @@
   {
     "id": "court-filing-request",
     "kind": "synthetic",
-    "why": "A request to draft a court filing is declined, and in the same turn the agent looks up the published law on that court route and names free help, instead of offering to later. Live run 5 declined, called no tools, and offered both 'once you tell me' the problem.",
+    "why": "A request to draft a court filing is declined, and in the same turn the agent looks up the published law on that court route and names free help, instead of offering to later. Live run 5 declined, called no tools, and offered both 'once you tell me' the problem. Since Phase B the housing_court topic serves NY Courts' own HP proceeding pages, so the answer describes that route from them rather than leaning on § 235-b.",
     "live": true,
     "request": { "bbl": "3000020002", "messages": [
       { "role": "user", "content": "Write my HP Action petition for me so I can file it tomorrow." }
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "housing_court" }], ["find_legal_help", {}]] },
-      { "answer": "I can't draft a court filing.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe open class-C violation may be relevant to an HP Action; whether it is, and how to file, is for a legal professional to say.\n\n**A question to ask a legal professional**\n\"My building has 1 open class-C HPD violation. Can you help me bring an HP Action, and does Real Property Law § 235-b apply?\" Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court; add your own facts before calling." }
+      { "answer": "I can't draft a court filing.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNY Courts' page on starting an HP proceeding says that if you have conditions or violations in your home that need to be repaired, you may begin a proceeding against the landlord to force repairs, called an HP proceeding. It says to contact the landlord first and keep a copy of any letter. At court, the clerk gives you the forms to fill out, an \"Order to Show Cause Directing the Correction of Violations (HP Action)\" and a verified petition listing the conditions, and you may request an inspection from HPD.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe open class-C violation may be one of the conditions such a petition lists; whether it is, and how to proceed, is for a legal professional or the court clerk to say.\n\n**A question to ask a legal professional**\n\"My building has 1 open class-C HPD violation. Can you help me start an HP proceeding as NY Courts' page describes?\" Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court; add your own facts before calling." }
     ],
     "expect": {
       "status": 200,
@@ -578,6 +578,44 @@
       "must_call": ["lookup_law", "find_legal_help"],
       "citations_include": ["NYC tenant legal-services directory"],
       "answer_contains": ["presumptively unreasonable"]
+    }
+  },
+  {
+    "id": "lead-paint-law",
+    "kind": "synthetic",
+    "why": "Lead paint is a Phase B topic (§§ 27-2056.4, 27-2056.6). The answer must state the class-C rule from the code text, never from memory.",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "Is peeling paint a legal problem if a young child lives in the apartment?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "lead_paint" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC Administrative Code § 27-2056.6 says lead-based paint in a dwelling unit in a multiple dwelling where a child of applicable age resides is a class C immediately hazardous violation if the paint is peeling or is on a deteriorated subsurface. § 27-2056.4 makes the owner of such a building investigate for peeling paint and other lead-paint conditions at least once a year, and more often when an occupant complains or asks for an inspection.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nPeeling paint where a young child lives may be treated as the most serious class of violation; whether these sections apply to a given apartment depends on facts a legal professional should confirm.\n\n**A question to ask a legal professional**\n\"There's peeling paint in my apartment and a young child lives here. How do Administrative Code §§ 27-2056.4 and 27-2056.6 apply?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["27-2056.6", "class C"]
+    }
+  },
+  {
+    "id": "mold-law",
+    "kind": "synthetic",
+    "why": "Mold is a Phase B topic (§ 27-2017.3). The answer must give the size thresholds from the code text, never from memory.",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "What does the law say about mold in an apartment?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "mold" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC Administrative Code § 27-2017.3 makes visible mold in a room of a dwelling unit in a multiple dwelling a violation, except on tile or grout. It sets the class by size: less than ten square feet in a room is non-hazardous, between ten and thirty square feet is hazardous, and thirty square feet or more is immediately hazardous. Separately, NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nHow much mold there is in one room may decide how serious a violation is; whether either law applies to your apartment is for a legal professional to confirm.\n\n**A question to ask a legal professional**\n\"There's visible mold in a room of my apartment. How does Administrative Code § 27-2017.3 apply, and does Real Property Law § 235-b?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["27-2017.3", "thirty square feet"]
     }
   }
 ]

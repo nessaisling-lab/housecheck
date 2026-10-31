@@ -1501,6 +1501,10 @@ violation: say that HPD cited it, then what it says.\n\
 - Tell the user what to document as evidence from the tool's document_this list, which is \
 HouseCheck's own checklist and not a legal requirement, and the official complaint route as the \
 returned provisions describe it.\n\
+- When a statute and an agency's guidance say different things, as with the hours hot water is \
+required, state the statute's text as the law and name the guidance as that agency's guidance. \
+Never present guidance as the law, and add the difference to your question for a legal \
+professional.\n\
 \n\
 WHAT YOU MUST NOT DO\n\
 - Never give legal advice. Do not tell the user what they should do, whether to withhold rent, \
@@ -1604,6 +1608,18 @@ fn document_this(topic: &str) -> serde_json::Value {
             "The HPD violation record for the building, printed with the date retrieved",
             "311 complaint numbers",
             "Written repair requests to the landlord and any reply",
+        ],
+        "lead_paint" => &[
+            "Dated photographs of peeling paint or damaged painted surfaces",
+            "Any lead-paint notice from the landlord and your reply, with dates",
+            "Every written message to the landlord about the paint, and the date sent",
+            "311 complaint numbers",
+        ],
+        "housing_court" => &[
+            "Every court paper you receive or file, and the date it arrived or was filed",
+            "The index number printed on any court paper",
+            "Photographs, the HPD violation record and 311 complaint numbers for the conditions",
+            "Every written message to the landlord, and the date sent",
         ],
         "rent_stabilization" => &[
             "Your lease and any renewals",

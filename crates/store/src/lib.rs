@@ -229,13 +229,34 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
          VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,40,40.6835,-73.9240,NULL,NULL)",
         [],
     )?;
-    conn.execute(
-        "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','C',1,2026)",
-        [],
-    )?;
-    conn.execute(
-        "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','B',1,2025)",
-        [],
+    // HPD's own notice wording, copied from real CD 303 notices in the 2026-10-30 pilot ingest
+    // and cut before the apartment location, so `cited_law` runs end to end on the fixture.
+    let notice = |class, year, text: &str| Violation {
+        class,
+        open: true,
+        year,
+        description: Some(text.to_string()),
+        issued_on: None,
+        closed_on: None,
+    };
+    insert_violations(
+        conn,
+        "3000020002",
+        &[
+            notice(
+                model::ViolationClass::C,
+                2026,
+                "§ 27-2056.6 ADM CODE - CORRECT THE LEAD-BASED PAINT HAZARD - PRESUMED LEAD PAINT \
+                 THAT IS PEELING OR ON A DETERIORATED SUBSURFACE USING WORK PRACTICES SET FORTH IN \
+                 28 RCNY §11-06(B)(2) CEILING IN THE 1st ROOM FROM NORTH",
+            ),
+            notice(
+                model::ViolationClass::B,
+                2025,
+                "§ 27-2005 HMC:TRACE AND REPAIR THE SOURCE AND ABATE THE NUISANCE CONSISTING OF \
+                 MOLD ... AT SOUTH WALL APPROX 10 SQ. FT. IN THE KITCHEN",
+            ),
+        ],
     )?;
     conn.execute(
         "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','A',0,2019)",
@@ -877,15 +898,8 @@ mod tests {
     /// while current. Sections the table does not hold, and the Multiple Dwelling Law, do not.
     #[test]
     fn violations_join_to_the_sections_they_cite() -> Result<()> {
+        // The seed holds the real § 27-2005 (copied from amlegal, 2026-10-30) and no § 27-2007.
         let conn = seeded()?;
-        // A stand-in row: the real Admin Code text is hand-copied, and this test is about the
-        // join, not the text.
-        conn.execute_batch(
-            "INSERT INTO law_provision (id,source_id,citation,title,text,url,retrieved_at,
-               text_sha256,verified_by,verified_on,status,occupancy)
-             VALUES ('NYC-ADMIN-27-2005','nyc311','NYC Admin Code § 27-2005','t','x',
-               'https://example.org/','2026-10-30','h','test','2026-10-30','current','residential')",
-        )?;
         let notices = [
             "§ 27-2005 ADM CODE PROPERLY REPAIR THE BROKEN OR DEFECTIVE INTERCOM",
             "§ 27-2005, 27-2007 ADM CODE REPLACE",

@@ -8,10 +8,11 @@ no longer matches its source, without letting a script decide what the law says?
 for Aisling to verify. It reports. It never changes served law.**
 
 **Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status: approved by Aisling on
-2026-10-31**, with her answers recorded at the end. **Rollout step 2 is built:** the weekly text
-check, `ingest --law-check` (see "Built" at the end). Still to build: the daily bill and Council
-watches with the `pending`/`imminent` states and the "may have changed" warning, the supersede
-and changelog rules, and the workflow.
+2026-10-31**, with her answers recorded at the end. **Rollout steps 2 to 4 are done:** the weekly
+text check, `ingest --law-check`, and its workflow, dispatch-only until a dry run passes (see
+"Built" at the end). Still to build: the daily bill and Council watches with the
+`pending`/`imminent` states and the "may have changed" warning, and the supersede and changelog
+rules.
 
 ---
 
@@ -259,13 +260,17 @@ House rule: every fix ships with a check that fails without it.
 ## Rollout steps
 
 1. ~~Aisling approves the revised doc.~~ Approved 2026-10-31.
-2. Build `--law-check` and its tests. One PR, CI green, no workflow yet.
-3. Aisling runs it locally once, free, with the key read the way she reads her other keys. On
+2. ~~Build `--law-check` and its tests. One PR, CI green, no workflow yet.~~ PR #10, 2026-10-31.
+3. ~~Aisling runs it locally once, free, with the key read the way she reads her other keys. On
    today's seed the expected result is no `changed` rows. Anything else is an extractor bug,
-   fixed before step 5.
-4. Check `robots.txt` on each fetched host. On the first keyed call, confirm `activeDate`
-   matches the revision dates in the captures. (The bulk XML's 12 Admin Code sections were
-   already compared with the captures on 2026-10-31: identical; answer 5 below.)
+   fixed before step 5.~~ Run 2026-10-31: all 10 statutes read as changed, because the API sends
+   line breaks as a literal backslash and `n`. Fixed in `a2cadbc`; then all 10 match.
+4. ~~Check `robots.txt` on each fetched host. On the first keyed call, confirm `activeDate`
+   matches the revision dates in the captures.~~ 2026-10-31: every one of the 25 URLs the job
+   fetches is allowed on all 10 hosts (`files.amlegal.com` and `web.archive.org` answer `404`,
+   so no rules). Each statute's API text matches its capture, so the API holds the captured
+   revision; `activeDate` is printed only on a change. (The bulk XML's 12 Admin Code sections
+   were already compared with the captures on 2026-10-31: identical; answer 5 below.)
 5. She adds `NYSENATE_API_KEY` (and the Legistar token, if she requests one). Merge the workflow
    with `workflow_dispatch` only, run it once with `dry_run: true`, and confirm the log shows ids
    and hosts only, the `timezone` key is accepted, and the measured traffic. Then turn on the
@@ -510,9 +515,21 @@ changed. The two `…` lines are added in `data/law.json`; no word changed.
 - **Dead pages.** The Wayback CDX API gives the last good copy and the last redirect recorded
   after it; a same-site redirect target is fetched and scored by the passage check.
 
-**Not built yet:** the word diff (a workflow step, `git diff --no-index --word-diff`), Save Page
-Now for unchanged rows, sitemap leads for dead pages, the calendar re-checks (before Oct 1, Aug 1
-and Jan 1), and the daily watches.
+**The workflow** (`.github/workflows/law-check.yml`, rollout step 5) runs the job above on
+`workflow_dispatch` only, `dry_run` on by default, until one dry run has passed; the Monday
+schedule is a commented block to switch on after it. It downloads the last good run's
+`law-check-state` artifact (none means a full pass), installs `pdftotext`, runs the check with
+the key in the environment only, writes the report to the run summary, and uploads `law-check`
+(report, texts, diffs) and `law-check-state`. Not a dry run and at least one finding: it edits
+the open issue labelled `law-check`, or opens one. "A finding" is any report line that starts
+with a bold id (a test in `lawcheck.rs` holds the report to that), so a missing key or an
+unreachable page opens the issue too. With no findings it leaves the issue alone; a person
+closes it. The word diff splits both texts one word per line and runs `git diff --no-index`, for
+whole-section rows only (`NY-*` and `NYC-ADMIN-*`): a reflow is not a change, and a passage
+against a whole page would be noise.
+
+**Not built yet:** Save Page Now for unchanged rows, sitemap leads for dead pages, the calendar
+re-checks (before Oct 1, Aug 1 and Jan 1), and the daily watches.
 
 ### Running it locally (rollout step 3)
 

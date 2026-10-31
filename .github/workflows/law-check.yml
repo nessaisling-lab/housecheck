@@ -1,0 +1,116 @@
+# HouseCheck law check: re-reads the source of every law HouseCheck serves and reports what
+# changed, moved, died or is due for a hand re-check (docs/design/law-change-detection.md).
+# It never edits the repo: findings go to one rolling issue labelled `law-check`, and a person
+# verifies each one before any PR touches data/law.json.
+name: law-check
+
+on:
+  # Dispatch only until one dry run has passed (rollout step 5). Then add:
+  #   schedule:
+  #     - cron: "17 7 * * 1"   # Monday 07:17 New York, after the Senate's Friday batch
+  #       timezone: "America/New_York"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Write the report to the run summary only; open or edit no issue"
+        type: boolean
+        default: true
+      full:
+        description: "Compare every source, whatever the cursors say"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write    # the rolling law-check issue
+  actions: read    # the last run's state artifact
+
+concurrency:
+  group: law-check   # one run at a time: each reads the state the last one wrote
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  law-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # The two DHCR PDF rows are read with pdftotext; the runner image lacks poppler-utils.
+      - name: Install pdftotext
+        run: command -v pdftotext || (sudo apt-get update -q && sudo apt-get install -y -q poppler-utils)
+
+      # Cursors, validators and open findings from the last good run. None (first run, or
+      # artifacts expired after 90 days) means a full pass.
+      - name: Last run's state
+        run: |
+          id=$(gh run list --workflow law-check.yml --status success --limit 1 \
+                 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$id" ] && gh run download "$id" --name law-check-state --dir .; then
+            echo "state from run $id"
+          else
+            echo "no state: full pass"
+          fi
+
+      # The key rides only in the environment, never on a command line. A missing key leaves the
+      # Senate rows under "Not checked"; it doesn't fail the run.
+      - name: Law check
+        env:
+          NYSENATE_API_KEY: ${{ secrets.NYSENATE_API_KEY }}
+          FULL: ${{ inputs.full }}
+        run: |
+          if [ -n "$NYSENATE_API_KEY" ]; then echo "::add-mask::$NYSENATE_API_KEY"; fi
+          args=(--law-check)
+          if [ "$FULL" = true ]; then args+=(--full); fi
+          cargo run -p ingest --locked -- "${args[@]}"
+
+      # Whole-section rows (Senate and Admin Code) only: for a passage row, a page against an
+      # excerpt is noise. One word per line, so a reflow can't show as a change.
+      - name: Word diffs
+        run: |
+          cd law-check
+          for s in NY-*.stored.txt NYC-ADMIN-*.stored.txt; do
+            [ -e "$s" ] || continue
+            id=${s%.stored.txt}
+            tr -s '[:space:]' '\n' < "$s" > "$RUNNER_TEMP/stored"
+            tr -s '[:space:]' '\n' < "$id.fetched.txt" > "$RUNNER_TEMP/fetched"
+            git diff --no-index --no-color -U8 "$RUNNER_TEMP/stored" "$RUNNER_TEMP/fetched" > "$id.words.diff" || true
+          done
+
+      - name: Report to the run summary
+        run: cat law-check.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: law-check
+          path: |
+            law-check.md
+            law-check/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: law-check-state
+          path: law-check-state.json
+
+      # Every item in the report starts with a bold id. No items, no issue edit: a person closes
+      # the issue once its findings are dealt with.
+      - name: Open or update the law-check issue
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if ! grep -q '^\*\*' law-check.md; then echo "no findings"; exit 0; fi
+          title=$(head -n 1 law-check.md | sed 's/^## //')
+          n=$(gh issue list --label law-check --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --title "$title" --body-file law-check.md
+          else
+            gh label create law-check --force --color B60205 --description "Law check findings for a person to verify"
+            gh issue create --title "$title" --label law-check --body-file law-check.md
+          fi

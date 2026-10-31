@@ -360,6 +360,13 @@ impl AppState {
             "artifact at {path} has no buildings — refusing to start rather than serve a \
              404 for every address under a green health check"
         );
+        // An artifact built before the Good Cause columns would fail every card with a 500.
+        anyhow::ensure!(
+            conn.prepare("SELECT good_cause_exemption, good_cause_detail FROM buildings LIMIT 0")
+                .is_ok(),
+            "artifact at {path} predates the Good Cause columns — rebuild it with \
+             `ingest --real --out {path}`"
+        );
         // Same rule for the law and the legal-help directory. An artifact built before their
         // tables existed has none, and the agent would answer every legal question with "I could
         // not verify it", or name nobody to call.
@@ -5544,6 +5551,29 @@ mod tests {
         assert!(err.to_string().contains("no law provisions"), "{err}");
         store::load_law(&store::open_db(path)?)?;
         assert!(AppState::from_path(path).is_ok());
+        let _ = std::fs::remove_file(path);
+        Ok(())
+    }
+
+    /// An artifact built before 2026-10-31 has no Good Cause columns. Starting on it would
+    /// 500 every card, so it refuses with the rebuild command instead.
+    #[test]
+    fn an_artifact_without_good_cause_columns_refuses_to_start() -> anyhow::Result<()> {
+        let path = std::env::temp_dir().join(format!("hc-old-gc-{}.db", std::process::id()));
+        let path = path.to_str().unwrap();
+        let _ = std::fs::remove_file(path);
+        {
+            let conn = store::open_db(path)?;
+            store::migrate(&conn)?;
+            store::insert_fixture(&conn)?;
+        }
+        assert!(AppState::from_path(path).is_ok());
+        store::open_db(path)?
+            .execute_batch("ALTER TABLE buildings DROP COLUMN good_cause_exemption;")?;
+        let err = AppState::from_path(path)
+            .err()
+            .expect("old artifact, no start");
+        assert!(err.to_string().contains("Good Cause columns"), "{err}");
         let _ = std::fs::remove_file(path);
         Ok(())
     }

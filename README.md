@@ -5,9 +5,13 @@
 **Live app:** https://housecheck-wine.vercel.app · **Live API:** https://housecheck-nessa.fly.dev
 **Case study:** [pursuit-l2-portfolio / cycle-4](https://github.com/nessaisling-lab/pursuit-l2-portfolio/tree/main/cycle-4-housecheck) · Pursuit NYC Fellowship, L2 Cycle 4
 
-> **Coverage today:** 250 buildings in Brooklyn Community District 3 (Bedford-Stuyvesant), from
-> data retrieved on 10 August 2026. An address outside that set gets a coverage notice, not a
-> score. Citywide coverage, every borough, is in progress; this line changes when it lands.
+> **Coverage today:** the live app serves 250 buildings in Brooklyn Community District 3
+> (Bedford-Stuyvesant), from data retrieved on 10 August 2026. An address outside that set gets
+> a coverage notice, not a score.
+>
+> **The citywide build runs locally** (30 October 2026): 767,563 residential buildings in all
+> five boroughs and 10,428,631 HPD violations, in a 479 MB artifact. It is not served yet:
+> the API's list and search endpoints still have to handle that size.
 
 Open source under the [Apache License 2.0](LICENSE). Contributions welcome: see
 [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -34,7 +38,7 @@ Renting in NYC means committing ~$40,000 a year to a building you know almost no
 | Legal protections (rent-stabilization, Good Cause) | JustFix/DOF · NY HCR |
 | Rent fairness (your rent vs tract median + HUD FMR) | Census B25064 · HUD |
 | Accessibility (elevator-on-record + build-era) | NYC DOB · MTA |
-| Neighborhood (311 density, restaurant grades) | NYC 311 · DOHMH |
+| Neighborhood (311 requests per 1,000 homes in the building's ZIP) | NYC 311 · PLUTO · DCP |
 
 | The Building Health Card | Search, with the borough stated |
 |---|---|
@@ -97,9 +101,14 @@ HOUSECHECK_DB=data/housecheck.db cargo run -p api
 curl http://127.0.0.1:8787/building/3000010001
 ```
 
-Real data (needs a free [Census key](https://api.census.gov/data/key_signup.html) + optional NYC app token in env):
+Real data (needs a free [Census key](https://api.census.gov/data/key_signup.html) + optional NYC app token in env), the 250-building pilot:
 ```bash
 cargo run -p ingest -- --real --cd 303 --limit 250 --out data/housecheck.db
+```
+
+The whole city. Build in release: DuckDB stages the violations, and in a debug build it is slow.
+```bash
+cargo run --release -p ingest -- --real --citywide --out data/housecheck-city.db
 ```
 
 Both modes also load `data/law.json`, the verified law the agent may state. After editing it,
@@ -196,10 +205,10 @@ retrieval time into the database, and the API serves them at `GET /meta`.
 | Source | Dataset | Publisher | Used for |
 |---|---|---|---|
 | Housing Maintenance Code Violations | [`wvxf-dwi5`](https://data.cityofnewyork.us/d/wvxf-dwi5) | NYC HPD, NYC Open Data | violations, repair speed |
-| 311 Service Requests | [`erm2-nwe9`](https://data.cityofnewyork.us/d/erm2-nwe9) | NYC 311, NYC Open Data | complaint density |
+| 311 Service Requests | [`erm2-nwe9`](https://data.cityofnewyork.us/d/erm2-nwe9) | NYC 311, NYC Open Data | requests per ZIP, counted by Socrata |
 | PLUTO | [`64uk-42ks`](https://data.cityofnewyork.us/d/64uk-42ks) | NYC Dept. of City Planning, NYC Open Data | building list, year built, units |
 | DOB elevator devices | [`e5aq-a4j2`](https://data.cityofnewyork.us/d/e5aq-a4j2) | NYC DOB, NYC Open Data | elevator on record |
-| Restaurant inspections | [`43nn-pn8j`](https://data.cityofnewyork.us/d/43nn-pn8j) | NYC DOHMH, NYC Open Data | neighborhood grades |
+| 2020 Census Tracts to NTAs | [`hm78-6dwm`](https://data.cityofnewyork.us/d/hm78-6dwm) | NYC Dept. of City Planning, NYC Open Data | neighborhood names |
 | MTA subway stations | [`39hk-dx4f`](https://data.ny.gov/d/39hk-dx4f) | MTA, data.ny.gov | nearest accessible station |
 | American Community Survey 5-year, 2023, table B25064 | [Census API](https://www.census.gov/data/developers.html) | U.S. Census Bureau | tract median rent |
 | Fair Market Rents, FY2026, New York metro | [HUD USER](https://www.huduser.gov/portal/datasets/fmr.html), embedded in `crates/model` | U.S. HUD | second rent comparator |

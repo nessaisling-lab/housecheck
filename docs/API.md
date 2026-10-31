@@ -57,16 +57,17 @@ curl -s http://127.0.0.1:8787/building/3018420001
     "good_cause": false,
     "has_elevator": false,
     "near_ada_subway_m": 420,
-    "complaints_311": 37,
+    "zip": "11233",
+    "neighborhood": "Bedford-Stuyvesant (East)",
+    "complaints_311_per_1k_homes": 2769,
     "latitude": 40.6829,
-    "longitude": -73.9251,
-    "restaurant_grade": "A"
+    "longitude": -73.9251
   },
   "score": {
-    "total": 72,
+    "total": 64,
     "condition": 79,
     "legal": 60,
-    "neighborhood": 100,
+    "neighborhood": 72,
     "accessibility": 30
   },
   "open_violations": { "a": 0, "b": 1, "c": 1 },
@@ -82,8 +83,13 @@ Field notes:
 
 - `building.latitude` / `building.longitude` — building centroid from PLUTO (`null` if it was
   never geocoded). Same coordinates the `/buildings` map feed uses.
-- `building.restaurant_grade` — letter grade (`"A"`/`"B"`/`"C"`) of the nearest DOHMH-graded
-  restaurant within ~200 m, or `null`. **Neighborhood context only — never part of any score.**
+- `building.zip` — the building's ZIP code (PLUTO), or `null`.
+- `building.neighborhood` — the 2020 Neighborhood Tabulation Area its census tract falls in
+  (DCP `hm78-6dwm`), or `null`. A label only.
+- `building.complaints_311_per_1k_homes` — 311 requests since 2024-01-01 in the building's ZIP
+  per 1,000 homes in that ZIP. **An area figure: the same for every building in the ZIP.** It
+  feeds the neighborhood score; `null` (ZIP unknown) scores 70. Replaced `complaints_311` (a
+  count within 150 m) and `restaurant_grade` on 2026-10-30, when coverage went citywide.
 - `building.rent_stab_units` — count of rent-stabilized units on the latest NYC DOF
   Statement-of-Account record (2024). `>0` when stabilized, `0` when the building is on the DOF
   record with no stabilized units, `null` when no DOF record was found. Source below.

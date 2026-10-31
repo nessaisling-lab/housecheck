@@ -1,6 +1,7 @@
 # Design — Citywide ingest and storage
 
-**Dated:** 2026-10-30. **Status:** proposed, not built. Follows `database-layer.md`.
+**Dated:** 2026-10-30. **Status:** built (`1f05491`); the API and frontend work at the end is
+not. Follows `database-layer.md`.
 
 ## Decided (Aisling, 2026-10-30)
 
@@ -12,6 +13,53 @@
 - **SQLite and DuckDB together, in Rust:** DuckDB does the ingest work, SQLite serves.
 - **Neighborhood context by ZIP code and neighborhood name**, not by distance from the
   building.
+- **All 767,563 residential lots**, not only those with 3+ units.
+
+## As built: where it differs from the proposal below
+
+- **Restaurant grades are gone, not moved to ZIPs.** Nothing displayed them: not the card, the
+  MCP server, the agent or the frontend. Add a ZIP share of A grades when a screen shows one.
+- **A violation's BBL is still rebuilt from block/lot, not taken from HPD's newer `bbl`
+  column.** Tried and reverted: the column follows tax-lot mergers, which handed 88 Tompkins Ave
+  (built 2019) 55 violations from the demolished buildings on the lots merged into its own,
+  and its card read "median 6,533 days to close". Known gap: rows re-lotted with no change of
+  building (21 Prescott Pl, 9 rows) stay out; joining on HPD's `buildingid` would bring them in.
+- **Every class is fetched, A/B/C kept.** The class-I count printed on the card must be for our
+  buildings; asking Socrata to count by block reported 12,079 for the pilot instead of 657.
+- **The stage is rebuilt each run.** It keeps Socrata's `:id` on every row, so the weekly
+  `:updated_at` refresh can be added without changing its shape; the refresh itself is not
+  built yet.
+- **The neighborhood curve was refit** (`scoring::neighborhood_score`): allowance 5.5 → 6.52,
+  solved so the worst ZIP sits at 43 as the worst pilot block did. On the pilot, condition
+  scores are unchanged and totals move −3 to +6 (median +3).
+
+### Measured: the first citywide run, 2026-10-30
+
+`cargo run --release -p ingest -- --real --citywide`, on Aisling's machine, output in
+`D:\housecheck-data`.
+
+| | Estimated above | Built |
+|---|---:|---:|
+| Buildings | 767,563 | **767,563** |
+| Violations staged (A/B/C) | 10,547,697 | **10,547,697**, from 11,353,882 rows over 228 requests |
+| Violations on our buildings | — | **10,428,631** (2,619,762 open); 119,066 on lots outside the set |
+| Class I skipped on our buildings | — | 789,489 |
+| **Serving SQLite file** | ~0.48 GB | **479.1 MB** (45.9 B per violation, buildings and law included) |
+| — description blocks | 10.4 B/row | 9.6 B/row (99.8 MB) |
+| DuckDB stage file | ~0.75 GB | 0.92 GB |
+| Whole file, zstd-19 | 2.34× | **2.98×, 160.9 MB**, 19 s on all cores |
+| Wall clock | — | **35.6 min**: PLUTO 0.6, violations 19.1, context 1.4, compose 14.3 |
+| Peak memory | one page | 797 MB through the download; **6.9 GB** at compose, where DuckDB sorts 10.5M rows (it may use up to 80% of RAM by default; cap with `SET memory_limit` before running on a smaller machine) |
+| Card, MCP server round trip | 2.2 ms budget | median **0.34 ms**, p95 1.08 ms, 1,000 buildings with violations, warm OS cache |
+
+**The neighborhood pillar is narrower citywide than it was on the pilot.** By building, 67.8%
+score 70–79 and none sits on the floor; the ZIP rate separates places less finely than the
+150 m count separated blocks.
+
+**Checked against the old ingest** on the 250-building pilot: same buildings, every building
+field identical, and **all 250 buildings identical violation for violation**: 26,371 rows,
+description text, dates and order, and the same 638 class-I rows skipped. The file is 1.3 MB
+against the old 2.58 MB.
 
 ---
 
@@ -84,12 +132,15 @@ re-downloading the city each time.
 | `zstd` | 0.14.3 | store (written at ingest, read by api and mcp) | **add** | description blocks with a trained dictionary |
 | `reqwest` | 0.12, already pinned | ingest | have; **add the `gzip` feature** | 13.7× smaller downloads |
 | `serde_json`, `anyhow` | already pinned | everywhere | have | — |
-| `flate2` | 1, already pinned | store | **remove** once zstd is in | — |
+| `flate2` | 1, already pinned | store | removed from `store` (reqwest's gzip still uses it) | — |
 
 **Costs, said plainly:**
 
-- `duckdb` compiles DuckDB's C++ source on the first build. That's slow, but only the
-  ingest binary carries it. The build time isn't measured yet.
+- `duckdb` compiles DuckDB's C++ source, from a tarball inside the crate (no download), on the
+  first build. Measured: 2 min 22 s debug, 5 min 13 s release; the ingest binary is 44 MB,
+  while the API's is 7.8 MB with no DuckDB in it. It adds **63 crates** to `Cargo.lock`,
+  mostly Arrow, which the duckdb crate depends on. `default-features = false` drops the
+  unused prebuilt-library download path (and `ureq` with it).
 - `zstd` binds the C library. `flate2` was picked for being pure Rust; that matters less now
   that `rusqlite` already compiles C.
 
@@ -214,8 +265,9 @@ exists and coordinated with the session that owns that code.
 
 ## Open questions for Aisling
 
-1. **All 767,563 residential lots, or the 172,485 with 3+ units?** All is recommended: it's
-   today's filter, and it covers 1–2 family rentals.
-2. **Is it OK that every score moves** when the neighborhood pillar switches to ZIP rates?
-3. **Keep a weekly Parquet snapshot** (0.2 GB each) as history and provenance?
-4. **Output folder on D:** — default `D:\housecheck-data\`.
+Answered: all 767,563 lots (she said "build it"), output in `D:\housecheck-data\`. Still
+open:
+
+1. **Keep a weekly Parquet snapshot** (0.2 GB each) as history and provenance? Not built.
+2. **Is a narrower neighborhood pillar acceptable**, or should the curve's slope widen to
+   spread the ZIP rates (see the measured section)?

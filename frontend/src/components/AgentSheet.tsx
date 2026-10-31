@@ -3,7 +3,16 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Sheet } from "@/components/Sheet";
 import { useAgent } from "@/lib/agent-context";
-import { getSummary, streamChat, type ChatTurn } from "@/lib/api";
+import {
+  getSummary,
+  newYorkDate,
+  streamChat,
+  type ChatTurn,
+  type LawDetail,
+  type LawRef,
+  type Urgency,
+} from "@/lib/api";
+import { FullTextConfirm, LawDetailToggle, LawsUsed, UrgencyBanner } from "@/components/LawExtras";
 import { bandMeta, fmtMoney, fmtPct } from "@/lib/score";
 import { displayAddress } from "@/lib/display";
 
@@ -123,6 +132,25 @@ interface Msg {
   role: "agent" | "user";
   text: string;
   source?: string;
+  /** Laws the answer was given, for "Laws used" and the lawyer bundle. */
+  laws?: LawRef[];
+  urgency?: Urgency | null;
+  /** Characters of law held back to a preview because the reader chose Full. */
+  withheld?: number | null;
+  /** The question this answers, so "Use the full text" can ask it again. */
+  asked?: string;
+}
+
+const DETAIL_KEY = "housecheck.lawDetail";
+
+/** The reader's last choice, kept in this browser only (no accounts). */
+function savedDetail(): LawDetail {
+  try {
+    const v = localStorage.getItem(DETAIL_KEY);
+    return v === "more" || v === "full" ? v : "brief";
+  } catch {
+    return "brief";
+  }
 }
 
 const CHIPS = ["Explain this score", "Is it rent stabilized?", "Negotiate the rent?"];
@@ -259,6 +287,15 @@ export function AgentSheet() {
   const [status, setStatus] = useState<string | null>(null);
   /** Lets a closing sheet abort an in-flight stream instead of writing into a dead view. */
   const abort = useRef<AbortController | null>(null);
+  const [lawDetail, setLawDetailState] = useState<LawDetail>(savedDetail);
+  const setLawDetail = (v: LawDetail) => {
+    setLawDetailState(v);
+    try {
+      localStorage.setItem(DETAIL_KEY, v);
+    } catch {
+      // Private browsing or blocked storage: the choice still holds for this visit.
+    }
+  };
 
   /**
    * Copy one answer.
@@ -308,7 +345,11 @@ export function AgentSheet() {
     const head = [
       "HouseCheck — saved conversation",
       building ? `Building: ${displayAddress(building.address)} (BBL ${building.bbl})` : "No building selected",
-      `Saved: ${when.toISOString().slice(0, 16).replace("T", " ")}`,
+      `Saved: ${new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(when)} (New York time)`,
       "",
       "This is a transcript of an assistant conversation. It is not legal advice, and the",
       "assistant does not predict case outcomes. Figures come from public NYC records.",
@@ -323,9 +364,7 @@ export function AgentSheet() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `housecheck-conversation-${building?.bbl ?? "session"}-${when
-      .toISOString()
-      .slice(0, 10)}.txt`;
+    a.download = `housecheck-conversation-${building?.bbl ?? "session"}-${newYorkDate(when)}.txt`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -423,7 +462,7 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
     return { ...canned, source: `${canned.source ?? "Source: HouseCheck"} · offline answer` };
   };
 
-  const send = async (text: string) => {
+  const send = async (text: string, opts: { confirmed?: boolean } = {}) => {
     const t = text.trim();
     if (!t || busy) return;
     setInput("");
@@ -455,25 +494,32 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
       // and those showed nothing for 25-67 s. An empty bubble is indistinguishable from
       // a broken app, so the bubble is created first and filled as text arrives.
       let placed = false;
-      const { answer, citations } = await streamChat(
+      const { answer, citations, laws, urgency, fullTextWithheld } = await streamChat(
         building.bbl,
         history,
         {
           onStatus: (s) => setStatus(s),
-          onToken: (t) =>
+          // `placed` changes here, never inside an updater: React may run an updater twice
+          // (it does in development), and an updater that flipped it would append the
+          // first piece to the reader's own question, which the settled answer then
+          // overwrote. The question vanished from the conversation.
+          onToken: (t) => {
+            if (!placed) {
+              placed = true;
+              setStatus(null); // the answer itself is now the progress indicator
+              setMsgs((m) => [...m, { role: "agent", text: t }]);
+              return;
+            }
             setMsgs((m) => {
-              if (!placed) {
-                placed = true;
-                setStatus(null); // the answer itself is now the progress indicator
-                return [...m, { role: "agent", text: t }];
-              }
               const next = [...m];
               const last = next[next.length - 1];
               next[next.length - 1] = { ...last, text: last.text + t };
               return next;
-            }),
+            });
+          },
         },
-        abort.current?.signal
+        abort.current?.signal,
+        { lawDetail, fullTextConfirmed: opts.confirmed }
       );
       setStatus(null);
       setMsgs((m) => {
@@ -482,8 +528,17 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
         // Replace the streamed bubble with the settled answer. The text should already
         // match; assigning it means a dropped frame cannot leave a truncated answer on
         // screen looking complete.
-        if (placed) next[next.length - 1] = { role: "agent", text: answer, source: src };
-        else next.push({ role: "agent", text: answer, source: src });
+        const settled: Msg = {
+          role: "agent",
+          text: answer,
+          source: src,
+          laws,
+          urgency,
+          withheld: fullTextWithheld,
+          asked: t,
+        };
+        if (placed) next[next.length - 1] = settled;
+        else next.push(settled);
         return next;
       });
     } catch {
@@ -590,7 +645,9 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
       */}
       <div
         ref={scrollRef}
-        className="min-h-[220px] flex-1 space-y-3 overflow-y-auto px-4 py-2"
+        // relative: the sr-only labels inside are absolutely positioned, and without a
+        // positioned ancestor here they escape this box's scrolling and stretch the sheet.
+        className="relative min-h-[220px] flex-1 space-y-3 overflow-y-auto px-4 py-2"
         role="log"
         aria-live="polite"
         aria-atomic="false"
@@ -608,11 +665,22 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
               {/* Who is speaking is carried only by bubble colour and side,
                   which is invisible to a screen reader (1.3.1). */}
               <span className="sr-only">Agent said: </span>
+              {m.urgency && <UrgencyBanner urgency={m.urgency} />}
               <MarkdownMessage text={m.text} />
               {m.source && (
                 <p className="mt-2 text-[0.6875rem]" style={{ color: "var(--hc-ink-3)" }}>
                   {m.source}
                 </p>
+              )}
+              {m.withheld ? (
+                <FullTextConfirm
+                  chars={m.withheld}
+                  // Ask the same question again, this time with every word of the law.
+                  onConfirm={() => m.asked && send(m.asked, { confirmed: true })}
+                />
+              ) : null}
+              {building && m.laws && m.laws.length > 0 && (
+                <LawsUsed laws={m.laws} bbl={building.bbl} answer={m.text} urgency={m.urgency ?? null} />
               )}
               <button
                 type="button"
@@ -660,6 +728,8 @@ Right now I can tell you **what HouseCheck checks**, **which buildings are cover
           </div>
         )}
       </div>
+
+      {building && <LawDetailToggle value={lawDetail} onChange={setLawDetail} />}
 
       <div className="flex flex-wrap gap-2 px-4 pb-2">
         {(building ? CHIPS : GENERAL_CHIPS).map((c) => (

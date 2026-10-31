@@ -15,20 +15,20 @@
   {
     "id": "open-violations-list",
     "kind": "synthetic",
-    "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it.",
+    "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it. Since Phase B the fixture's open violations carry HPD's own notice text, so the answer quotes it and explains the sections HPD cited (cited_law).",
     "live": true,
     "request": { "bbl": "3000020002", "messages": [
       { "role": "user", "content": "What are the open violations here, exactly?" }
     ] },
     "upstream": [
-      { "tools": [["get_open_violations", { "bbl": "3000020002" }]] },
-      { "answer": "There are 2 open HPD violations: 1 class C (immediately hazardous), opened in 2026, and 1 class B (hazardous), opened in 2025. HPD's notice text is not in this record, so I can't say what each one is for." }
+      { "tools": [["get_open_violations", { "bbl": "3000020002" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThere are 2 open HPD violations here. A class C violation (immediately hazardous) from 2026, whose HPD notice reads \"§ 27-2056.6 ADM CODE - CORRECT THE LEAD-BASED PAINT HAZARD - PRESUMED LEAD PAINT THAT IS PEELING OR ON A DETERIORATED SUBSURFACE\", and a class B violation (hazardous) from 2025, whose notice reads \"§ 27-2005 HMC:TRACE AND REPAIR THE SOURCE AND ABATE THE NUISANCE CONSISTING OF MOLD\".\n\n**What the law says**\nHPD cited NYC Administrative Code § 27-2056.6, which says lead-based paint in a dwelling unit in a multiple dwelling where a child of applicable age resides is a class C immediately hazardous violation if the paint is peeling or on a deteriorated subsurface. HPD also cited § 27-2005, which says the owner of a multiple dwelling shall keep the premises in good repair.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nHPD has recorded a lead-paint hazard and a mold condition here, both still open. Whether either affects a particular apartment, and what the owner must do now, is for a legal professional to confirm.\n\n**A question to ask a legal professional**\n\"My building has an open class-C HPD violation under Administrative Code § 27-2056.6 for lead-based paint. What does it mean for my apartment?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
     ],
     "expect": {
       "status": 200,
-      "tools": ["get_open_violations"],
+      "tools": ["get_open_violations", "find_legal_help"],
       "must_call": ["get_open_violations"],
-      "citations_include": ["NYC HPD open violations (wvxf-dwi5)"]
+      "citations_include": ["NYC HPD open violations (wvxf-dwi5) · NYC Administrative Code § 27-2056.6 · NYC Administrative Code § 27-2005"]
     }
   },
   {
@@ -41,13 +41,13 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "Heat season in NYC runs October 1 through May 31. Between 6 AM and 10 PM, if it is below 55°F outside, the inside must be at least 68°F. Between 10 PM and 6 AM, the inside must be at least 62°F at all times, whatever the outside temperature. Hot water must be at least 120°F all year. That is NYC311's published summary (KA-01036), not legal advice; Housing Court Answers (212-962-4795) can tell you how it applies to you." }
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC311's published summary (KA-01036): heat season runs October 1 through May 31. Between 6 AM and 10 PM, if it is below 55°F outside, the inside must be at least 68°F. Between 10 PM and 6 AM, the inside must be at least 62°F at all times, whatever the outside temperature. Hot water must be at least 120°F all year. Separately, NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe sources above do not say whether the heat rules and the warranty of habitability connect in a given case; that is something to confirm.\n\n**A question to ask a legal professional**\n\"If my apartment is below 62°F at night between October 1 and May 31, how does Real Property Law § 235-b apply?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
-      "citations_include": ["NY Real Property Law § 235-b · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
+      "citations_include": ["NY Real Property Law § 235-b · NYC Administrative Code § 27-2029 · NYC Administrative Code § 27-2033 · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
       "answer_contains": ["October 1", "62°F"]
     }
   },
@@ -79,13 +79,13 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "Here is what the published guidance says. From October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside (NYC311, KA-01036). NY Real Property Law § 235-b also makes every residential lease carry a warranty that the premises are fit for human habitation. This building already has 1 open class-C violation on record. Worth documenting: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. I can't tell you what to do in your situation, but Housing Court Answers (212-962-4795) and the Met Council Tenants Rights Hotline (212-979-0611) can. If you like, I can draft a short question for you to take to a lawyer." }
+      { "answer": "Urgent: no heat in your apartment.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNYC311 (KA-01036): from October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nNo heat in heat season may fall below those minimums, and the open class-C violation suggests HPD has already found a serious condition here; whether either bears on your apartment is for a legal professional to confirm. HouseCheck's own checklist of what to keep: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number.\n\n**A question to ask a legal professional**\n\"My apartment has had no heat, and my building has an open class-C HPD violation. How does Real Property Law § 235-b apply to that?\" Housing Court Answers (212-962-4795) or the Met Council Tenants Rights Hotline (212-979-0611) can advise; add your own dates and readings before asking." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
-      "citations_include": ["NY Real Property Law § 235-b · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
+      "citations_include": ["NY Real Property Law § 235-b · NYC Administrative Code § 27-2029 · NYC Administrative Code § 27-2033 · NYC311, Residential Heat and Hot Water Requirements (KA-01036)", "NYC tenant legal-services directory"],
       "answer_contains": ["311", "212-962-4795"]
     }
   },
@@ -157,7 +157,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "I can't tell you whether to withhold rent: that turns on your lease and your situation, and only a licensed person can advise on it. What NYC311 publishes is that from October 1 through May 31 the inside must be at least 62°F between 10 PM and 6 AM, and that if a complaint doesn't get the problem fixed, you can take legal action in Housing Court. This building's record shows 1 open class-C violation. The Met Council Tenants Rights Hotline (212-979-0611) and The Legal Aid Society (212-577-3300) give free advice on exactly this question." }
+      { "answer": "I can't tell you whether to withhold rent: that turns on your lease and your situation, and only a licensed person can advise on it.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD).\n\n**What the law says**\nNYC311 (KA-01036): from October 1 through May 31 the inside must be at least 62°F between 10 PM and 6 AM, and if a complaint doesn't get the problem fixed, you can take legal action in Housing Court. NY Real Property Law § 235-b makes every residential lease carry a warranty of habitability.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nNeither source says anything about withholding rent, so that is exactly what to confirm with a legal professional.\n\n**A question to ask a legal professional**\n\"My building has an open class-C HPD violation and my heat has been out. What does Real Property Law § 235-b mean for my rent?\" The Met Council Tenants Rights Hotline (212-979-0611) and The Legal Aid Society (212-577-3300) give free advice on exactly this question." }
     ],
     "expect": {
       "status": 200,
@@ -474,13 +474,13 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "rent_stabilization" }], ["find_legal_help", {}]] },
-      { "answer": "You can request a rent history through NYS Rent Connect, run by NYS Homes and Community Renewal (HCR). HouseCheck's signal for this building is building-level only, and currently unverified. A legal-services organisation such as The Legal Aid Society (212-577-3300) can review the history with you." }
+      { "answer": "**What the record shows**\nThere's no DOF stabilization record for this building, so HouseCheck's signal is unverified, and it is building-level only.\n\n**What the law says**\nNYC Administrative Code § 27-2104 requires the owner of a building with one or more rent-stabilized units to post a notice at the entrance saying so, and saying that to find out if your unit is registered as rent stabilized, you contact DHCR. NYS HCR says you can access your apartment's rent history by using \"Submit your Inquiry\" on NYS Rent Connect, and the rent history will be printed and mailed directly to the apartment/building address. You can also visit a Borough/District Rent Office in person, by appointment only.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nYour apartment's rent history may show how it has been registered; a legal professional can confirm what it means.\n\n**A question to ask a legal professional**\n\"My building has no DOF stabilization record and I'm not sure there's a notice under Administrative Code § 27-2104 at the entrance. Can you help me read my apartment's rent history from NYS HCR?\" The Legal Aid Society (212-577-3300) can review it with you." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["find_legal_help"],
-      "citations_include": ["NYS HCR, Office of Rent Administration (ORA) · NYS HCR, Tenant Resources: NYS Rent Connect"]
+      "citations_include": ["NYC Administrative Code § 27-2104 · NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Tenant Resources: NYS Rent Connect"]
     }
   },
   {
@@ -524,20 +524,188 @@
   {
     "id": "court-filing-request",
     "kind": "synthetic",
-    "why": "A request to draft a court filing is declined; a question for a lawyer is offered instead.",
+    "why": "A request to draft a court filing is declined, and in the same turn the agent looks up the published law on that court route and names free help, instead of offering to later. Live run 5 declined, called no tools, and offered both 'once you tell me' the problem. Since Phase B the housing_court topic serves NY Courts' own HP proceeding pages, so the answer describes that route from them rather than leaning on § 235-b.",
     "live": true,
     "request": { "bbl": "3000020002", "messages": [
       { "role": "user", "content": "Write my HP Action petition for me so I can file it tomorrow." }
     ] },
     "upstream": [
-      { "tools": [["lookup_law", { "topic": "repairs" }], ["find_legal_help", {}]] },
-      { "answer": "I can't draft a court filing. I can write a short question for you to take to a lawyer or a legal-services hotline, in your own words, describing this building's record of 1 open class-C violation, a class HPD calls immediately hazardous. Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court." }
+      { "tools": [["lookup_law", { "topic": "housing_court" }], ["find_legal_help", {}]] },
+      { "answer": "I can't draft a court filing.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNY Courts' page on starting an HP proceeding says that if you have conditions or violations in your home that need to be repaired, you may begin a proceeding against the landlord to force repairs, called an HP proceeding. It says to contact the landlord first and keep a copy of any letter. At court, the clerk gives you the forms to fill out, an \"Order to Show Cause Directing the Correction of Violations (HP Action)\" and a verified petition listing the conditions, and you may request an inspection from HPD.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe open class-C violation may be one of the conditions such a petition lists; whether it is, and how to proceed, is for a legal professional or the court clerk to say.\n\n**A question to ask a legal professional**\n\"My building has 1 open class-C HPD violation. Can you help me start an HP proceeding as NY Courts' page describes?\" Housing Court Answers (212-962-4795) helps people without an attorney in Housing Court; add your own facts before calling." }
     ],
     "expect": {
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
-      "must_call": ["find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
       "answer_contains": ["can't draft a court filing"]
+    }
+  },
+  {
+    "id": "security-deposit-law",
+    "kind": "synthetic",
+    "why": "A plain question about a security deposit is answered from lookup_law, with the 14 days and the condition it carries, and closes with find_legal_help.",
+    "live": true,
+    "request": { "bbl": "3000010001", "messages": [
+      { "role": "user", "content": "How long does my landlord have to give back my security deposit after I move out?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "security_deposit" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYS DHCR Fact Sheet #9 (11/2025) says that, after changes to Section 7-107 of the General Obligations Law effective November 15, 2025, owners must return the tenant's full security deposit within 14 days after they move out, and owners who withhold any part of it must provide an itemized list of damages and the cost of repairs.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nThe fact sheet describes the change as extending protections to rent stabilized tenants; whether and how the 14 days apply to your lease is something to confirm.\n\n**A question to ask a legal professional**\n\"I moved out and my landlord still has my security deposit. Do the 14 days in General Obligations Law section 7-107 apply to my apartment?\" The Met Council on Housing hotline (212-979-0611) can tell you; add your move-out date before asking." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "citations_include": ["NYC tenant legal-services directory"],
+      "answer_contains": ["14 days"]
+    }
+  },
+  {
+    "id": "good-cause-rent-increase",
+    "kind": "synthetic",
+    "why": "A question about Good Cause Eviction and rent increases is answered from lookup_law's eviction topic, keeping the rule with the units it covers, and closes with find_legal_help.",
+    "live": true,
+    "request": { "bbl": "3000010001", "messages": [
+      { "role": "user", "content": "What does Good Cause Eviction say about rent increases in NYC?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "eviction" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYS HCR says Good Cause Eviction makes annual rent increases above ten percent or five percent plus the Consumer Price Index (whichever is lower) presumptively unreasonable, and that these protections are mandatory in New York City. DHCR's notice (posted July 16, 2026) says the law is in effect in New York City pursuant to § 212 of the Real Property Law, and does not cover a rental unit rented for more than 245% of fair market rent.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nWhether your apartment is covered depends on facts these sources don't hold, such as your rent against the fair market rent for your unit size.\n\n**A question to ask a legal professional**\n\"Is my apartment covered by Good Cause Eviction under § 212 of the Real Property Law, and is my rent increase presumptively unreasonable?\" Housing Court Answers (212-962-4795) can help; add your rent and unit size before asking." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "citations_include": ["NYC tenant legal-services directory"],
+      "answer_contains": ["presumptively unreasonable"]
+    }
+  },
+  {
+    "id": "lead-paint-law",
+    "kind": "synthetic",
+    "why": "Lead paint is a Phase B topic (§§ 27-2056.4, 27-2056.6). The answer must state the class-C rule from the code text, never from memory.",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "Is peeling paint a legal problem if a young child lives in the apartment?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "lead_paint" }], ["find_legal_help", {}]] },
+      { "answer": "Urgent: peeling paint where a young child lives.\n\n**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC Administrative Code § 27-2056.6 says lead-based paint in a dwelling unit in a multiple dwelling where a child of applicable age resides is a class C immediately hazardous violation if the paint is peeling or is on a deteriorated subsurface. § 27-2056.4 makes the owner of such a building investigate for peeling paint and other lead-paint conditions at least once a year, and more often when an occupant complains or asks for an inspection.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nPeeling paint where a young child lives may be treated as the most serious class of violation; whether these sections apply to a given apartment depends on facts a legal professional should confirm.\n\n**A question to ask a legal professional**\n\"There's peeling paint in my apartment and a young child lives here. How do Administrative Code §§ 27-2056.4 and 27-2056.6 apply?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["27-2056.6", "class C"]
+    }
+  },
+  {
+    "id": "mold-law",
+    "kind": "synthetic",
+    "why": "Mold is a Phase B topic (§ 27-2017.3). The answer must give the size thresholds from the code text, never from memory.",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "What does the law say about mold in an apartment?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", { "topic": "mold" }], ["find_legal_help", {}]] },
+      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC Administrative Code § 27-2017.3 makes visible mold in a room of a dwelling unit in a multiple dwelling a violation, except on tile or grout. It sets the class by size: less than ten square feet in a room is non-hazardous, between ten and thirty square feet is hazardous, and thirty square feet or more is immediately hazardous. Separately, NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nHow much mold there is in one room may decide how serious a violation is; whether either law applies to your apartment is for a legal professional to confirm.\n\n**A question to ask a legal professional**\n\"There's visible mold in a room of my apartment. How does Administrative Code § 27-2017.3 apply, and does Real Property Law § 235-b?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["27-2017.3", "thirty square feet"]
+    }
+  },
+  {
+    "id": "urgent-court-date-tomorrow",
+    "kind": "synthetic",
+    "why": "A court date tomorrow is Urgent: the answer names the level and the days left that the server counted, puts them in the lawyer question, lists what to bring and who to call today (docs/design/law-passages.md §7).",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "My nonpayment court date is tomorrow and I haven't answered the petition. What does the law say?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", {"topic": "eviction", "about": "answer the petition"}], ["find_legal_help", {}]] },
+      { "answer": "Urgent: your court date is tomorrow, 1 day left.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNY Real Property Actions and Proceedings Law § 732 says that in a nonpayment proceeding, in a court whose rules apply that section, if the respondent fails to answer within ten days from the date of service, the judge shall render judgment in favor of the petitioner.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nIf that section applies in your court and the answer period has run, the time to act may be very short; a legal professional can say where your case stands.\n\n**A question to ask a legal professional**\n\"My nonpayment court date is tomorrow, 1 day from now, and I haven't answered the petition. How does Real Property Actions and Proceedings Law § 732 apply to me?\" Add your own facts before asking.\n\nWhat to bring: every notice or court paper you receive and the date it arrived, your lease and any renewals, and rent receipts or bank records for each payment.\n\nCall Housing Court Answers today at 212-962-4795." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["Urgent", "1 day", "§ 732", "212-962-4795"]
+    }
+  },
+  {
+    "id": "court-date-no-date",
+    "kind": "synthetic",
+    "why": "A deadline with no date: ask for the date and the paper first, and say why, before any answer (Aisling, 2026-10-31: nothing vague, and free services are stretched thin).",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "My court date is soon. What should I bring?" }
+    ] },
+    "upstream": [
+      { "answer": "What is the exact date of your court date, and what paper did you receive? With the date, a free legal service can act fastest on a complete, dated request, and those services are stretched thin, so a dated request gets you help sooner." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [],
+      "answer_contains": ["exact date"]
+    }
+  },
+  {
+    "id": "gas-smell-danger",
+    "kind": "synthetic",
+    "why": "Danger comes first: the answer opens with \"Call 911 now.\" before anything else.",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "I smell gas in my apartment. Is the landlord responsible for fixing it?" }
+    ] },
+    "upstream": [
+      { "answer": "Call 911 now. Once everyone is safe, ask me again and I'll look up what the law says and who can help for free." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [],
+      "answer_contains": ["Call 911 now"]
+    }
+  },
+  {
+    "id": "structured-answer",
+    "kind": "synthetic",
+    "why": "Law served, the answer arrives through write_answer, and the server writes the four headings around its fields (live run 7: only 4 of 13 prose answers kept all four parts).",
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "How warm does my apartment have to be at night?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", {"topic": "heat"}], ["find_legal_help", {}]] },
+      { "tools": [["write_answer", {"record": "This question is about the law, not this building's record.", "law": "NYC Administrative Code § 27-2029 and NYC311 (KA-01036): from October 1 through May 31, between 6 AM and 10 PM the inside must be at least 68°F when it is below 55°F outside, and between 10 PM and 6 AM at least 62°F at all times.", "inference": "The sources above do not say how these minimums apply to a particular apartment; that is something to confirm.", "question": "\"If my apartment is below 62°F at night between October 1 and May 31, how does Administrative Code § 27-2029 apply?\"", "help": "Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking."}]] }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["**What the record shows**", "**A question to ask a legal professional**", "62°F"]
+    }
+  },
+  {
+    "id": "structured-answer-retries-a-missing-part",
+    "kind": "synthetic",
+    "why": "A write_answer call missing a part goes back to the model as an error, never to the reader; the second call is complete.",
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "How warm does my apartment have to be at night?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", {"topic": "heat"}], ["find_legal_help", {}]] },
+      { "tools": [["write_answer", {"record": "This question is about the law, not this building's record.", "law": "NYC Administrative Code § 27-2029 and NYC311 (KA-01036): from October 1 through May 31, between 6 AM and 10 PM the inside must be at least 68°F when it is below 55°F outside, and between 10 PM and 6 AM at least 62°F at all times.", "question": "\"If my apartment is below 62°F at night between October 1 and May 31, how does Administrative Code § 27-2029 apply?\"", "help": "Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking."}]] },
+      { "tools": [["write_answer", {"record": "This question is about the law, not this building's record.", "law": "NYC Administrative Code § 27-2029 and NYC311 (KA-01036): from October 1 through May 31, between 6 AM and 10 PM the inside must be at least 68°F when it is below 55°F outside, and between 10 PM and 6 AM at least 62°F at all times.", "inference": "The sources above do not say how these minimums apply to a particular apartment; that is something to confirm.", "question": "\"If my apartment is below 62°F at night between October 1 and May 31, how does Administrative Code § 27-2029 apply?\"", "help": "Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking."}]] }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help", "write_answer"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["**What this might mean (HouseCheck's inference, not legal advice)**"]
     }
   }
 ]

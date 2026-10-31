@@ -40,6 +40,8 @@ cheaper and faster.
 3. A verbosity toggle the reader controls.
 4. "No illusions": the full text is always verified against the source, in testing and as the
    product runs. A passage is never a paraphrase and never drifts from the full text.
+5. Time-sensitive questions get an urgency warning, a dated question for the lawyer, and the full
+   law ready to hand over (section 7), in a form an elderly, non-technical reader can use (section 8).
 
 ## Design
 
@@ -124,6 +126,88 @@ as decided). Sent with each chat request as `law_detail`.
 `about` changes the tool schema and the format note changes what the model reads, so
 `agent_version` changes. One billed re-record covers it all.
 
+### 7. Time-sensitive questions: urgency, a date first, and a bundle for the lawyer
+
+Aisling's requirement (2026-10-31): when a question shows a deadline or a danger, the answer says
+so plainly, tells the reader how much time is left, and hands them everything a lawyer needs,
+with the full law, so nothing is missing that could work against them. Her answers to the
+questionnaire are in the table at the end.
+
+**Levels.** Each is a word, an icon and a colour together, never colour alone (section 8):
+
+| Level | When |
+|---|---|
+| **Urgent** | 3 days or less; a marshal's notice, a lockout, a court date today or tomorrow; or danger |
+| **Time-sensitive** | 4 to 14 days |
+| **Coming up** | 15 to 30 days |
+
+**Detection: rules first, the model may only raise it.**
+
+1. The server reads the reader's messages for dates ("Nov 5", "11/5", "2026-11-05", "Monday",
+   "tomorrow", "in 3 days") and counts the days left itself, in New York time. The model never
+   does date arithmetic (the evals already forbid arithmetic by the model).
+2. It reads them for deadline words (court date, hearing, petition, served, marshal, eviction
+   notice, rent demand, locked out) and condition words (no heat, no hot water, no water, peeling
+   paint with a child, gas smell, smoke, fire, carbon monoxide).
+3. The result, `urgency: {level, reason, days_left, date}`, goes to the model with the building
+   facts, and to the app with the answer.
+4. The model may raise the level, with a reason, through a small `mark_urgent` tool. The server
+   accepts a higher level only, never a lower one.
+
+**Danger comes first.** Anything that sounds like immediate danger (gas, smoke, fire, carbon
+monoxide) opens with "Call 911 now" before anything else, with no questions asked.
+
+**A deadline with no date: ask first.** If the reader names a deadline but no date ("my court
+date is soon"), the agent answers with one question: the exact date, and what paper they
+received. It says why: a lawyer at a free service can act fastest on a complete, dated request,
+and those services are stretched thin. Aisling's words: nothing should be vague here. Once the
+date is given, the full answer follows.
+
+**What the urgent answer says.** Legal information, never advice:
+
+- At the top: the level, the deadline as the served law words it, and the days left
+  ("Urgent: your court date is in 2 days").
+- The four parts, with part 4's question carrying the date and the days left, so the lawyer
+  sees the urgency in the first line.
+- "Bring these": HouseCheck's checklist for the topic, with the record and the laws used.
+- Call a named free legal-help organisation today, with its phone number and hours.
+- Never which legal step to take, or how it will go.
+
+**The bundle for the lawyer.** One plain-text file, offered first and prominently: "Download
+everything for your lawyer". It holds:
+
+1. The urgency summary (level, date, days left, counted on date X in New York time).
+2. The question for the lawyer, labelled as drafted by HouseCheck's assistant.
+3. The checklist of what to bring.
+4. The building's record with sources.
+5. The **full text** of every law used, each with its official link, verified date and SHA-256.
+
+The answer itself still uses passages, so it comes back fast when time is short; the full text
+travels in the file. A secondary option, offered after the first: a `.zip` of separate files
+plus the signed building export (`/building/{bbl}/export`). Built later; the `.txt` comes first.
+
+### 8. Accessibility: built for someone in a crisis, on a phone, maybe elderly
+
+Aisling's requirement: a person who is not comfortable with technology, possibly elderly, with
+low vision or other access needs, may use this in an emergency. So:
+
+- **Never colour alone** (WCAG 2.2, 1.4.1): every level shows its word and an icon (Urgent: a
+  warning triangle; Time-sensitive: a clock; Coming up: a calendar) beside the colour.
+- **Contrast** of at least 4.5:1 for text (1.4.3), and 3:1 for the icon and the banner's edge
+  (1.4.11). The "Coming up" yellow uses dark text on a pale background, never yellow text.
+- **Announced, not only shown:** the Urgent banner is `role="alert"`, so a screen reader reads it
+  first; the others are `role="status"`.
+- **Big, plain targets:** the download and call buttons are at least 44 by 44 pixels (2.5.8 asks
+  for 24; 44 is the platform guideline) and say exactly what they do ("Download everything for
+  your lawyer", "Call Housing Court Answers"). Phone numbers are `tel:` links.
+- **Plain language:** short sentences, no legal jargon in HouseCheck's own words, dates written
+  out ("Tuesday, November 4"), days left as a number.
+- **Text scales** to 200% without losing anything (1.4.4), and nothing depends on hover.
+- **One clear next step** at the top of an urgent answer, not a menu.
+
+These are checked in the build with an automated accessibility scan of the chat sheet and a
+manual pass with a screen reader and 200% zoom.
+
 ## What to measure
 
 Before (live run 6) and after, per conversation: tool-result characters (p50, p95), cost, time,
@@ -145,3 +229,11 @@ lookup, and at least 19 of 21 live conversations pass.
 | Default and place | Brief by default; the toggle in the chat sheet, remembered in this browser |
 | Download format | Plain text with the verification header now, PDF later |
 | Full-mode cap | 40,000 characters is a preview and a warning; the full text only after the reader explicitly confirms |
+| Urgency detection | Rules first (dates and words, days counted by the server in New York time); the model may raise the level, never lower it |
+| Levels | Three: Urgent (3 days or less), Time-sensitive (14), Coming up (30) |
+| Full text when urgent | A bundle for the lawyer with the full text of every law used; the answer stays on passages |
+| Emergencies | Safety emergencies count; anything that sounds like danger leads with 911 |
+| Warning wording | The deadline as the law words it, the days left, what to bring, and to call free legal help today; never a legal step or an outcome |
+| Bundle | One `.txt` first, offered prominently; a `.zip` with the signed export as a secondary option later |
+| No date given | Ask for the date first, and explain why: a complete, dated request lets a stretched free service act fast. Nothing vague |
+| Level names | Words with colours and icons together, accessible to an elderly, non-technical reader in a crisis (section 8) |

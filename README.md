@@ -124,6 +124,24 @@ without one they are listed as not checked. See `docs/design/law-change-detectio
 cargo run -p ingest -- --law-check --full
 ```
 
+### Local CI, before you push
+
+`scripts/ci-local.mjs` runs the checks GitHub runs (`.github/workflows/`), on your machine:
+format, clippy with warnings as errors, build, tests (with the agent eval replays), the API
+smoke and stability run, the frontend build, `npm audit`, `cargo audit`, `cargo deny`, and the
+gitleaks secret scan of this branch's new commits. Green here means green there, except CodeQL
+and macOS, which only run on GitHub.
+
+```bash
+node scripts/ci-local.mjs           # everything (Docker Desktop must be running for the scan)
+node scripts/ci-local.mjs --list    # what each check mirrors
+node scripts/ci-local.mjs --linux   # also fmt, clippy and test in a Linux container
+node scripts/ci-local.mjs --push    # push only if everything passed
+```
+
+A check whose tool is missing says so and fails the run, with the install command. Logs are in
+`target/ci-local/logs/`. The script's own tests: `node --test scripts/ci-local.test.mjs`.
+
 ### As an MCP tool
 
 Another agent can call HouseCheck directly and get the same card the website serves —

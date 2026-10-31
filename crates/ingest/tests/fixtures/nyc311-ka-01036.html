@@ -169,7 +169,7 @@
                 portalProductionOrTrialType: 'Production',
                 isTelemetryEnabled: 'True',
                 InstrumentationSettings: {
-                    instrumentationKey: '197418c5cb8c4426b201f9db2e87b914-87887378-2790-49b0-9295-51f43b6204b1-7172',
+                    instrumentationKey: 'redacted',
                     collectorEndpoint: 'https://us-mobile.events.data.microsoft.com/OneCollector/1.0/'
                 },
                 timerProfileForBatching: 'NEAR_REAL_TIME',
@@ -1466,7 +1466,7 @@ $(function(){
 <script>
 "use strict";
 var kaFeedbackCaptchaEnabled = true;
-var kaFeedbackCaptchaSiteKey = "6Le_5u4tAAAAAN7sdvSn0j32slCebaTPU-du_MbR";
+var kaFeedbackCaptchaSiteKey = "redacted";
 var kaFeedbackSubmitting = false;
 
 function openPopupWidget() {
@@ -1564,7 +1564,7 @@ function submitKAFeedbackToApim(wasHelpful, feedbackText) {
             payload.n311_howcanweimprovethispage = feedbackText;
         }
         var headers = {
-        "Ocp-Apim-Subscription-Key": "070dc37b62044db0a219cea49c84e078",
+        "Ocp-Apim-Subscription-Key": "redacted",
         "Content-Type": "application/json"
         };
         if (kaFeedbackCaptchaEnabled && token) {
@@ -1995,7 +1995,7 @@ $(function () {
      var appInsights=window.appInsights||function(a){
          function b(a){c[a]=function(){var b=arguments;c.queue.push(function(){c[a].apply(c,b)})}}var c={config:a},d=document,e=window;setTimeout(function(){var b=d.createElement("script");b.src=a.url||"https://az416426.vo.msecnd.net/scripts/a/ai.0.js",d.getElementsByTagName("script")[0].parentNode.appendChild(b)});try{c.cookie=d.cookie}catch(a){}c.queue=[];for(var f=["Event","Exception","Metric","PageView","Trace","Dependency"];f.length;)b("track"+f.pop());if(b("setAuthenticatedUserContext"),b("clearAuthenticatedUserContext"),b("startTrackEvent"),b("stopTrackEvent"),b("startTrackPage"),b("stopTrackPage"),b("flush"),!a.disableExceptionTracking){f="onerror",b("_"+f);var g=e[f];e[f]=function(a,b,d,e,h){var i=g&&g(a,b,d,e,h);return!0!==i&&c["_"+f](a,b,d,e,h),i}}return c
      }({
-         instrumentationKey: "f0fbe3a3-5020-461f-a3b5-7c517b094831"
+         instrumentationKey: "redacted"
      });
 
      window.appInsights=appInsights,appInsights.queue&&0===appInsights.queue.length&&appInsights.trackPageView();

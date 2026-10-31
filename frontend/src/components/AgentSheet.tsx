@@ -176,7 +176,7 @@ const GENERAL_ANSWERS: Record<string, Msg> = {
     text: `Four things, weighted equally into one 0–100 score:
 
 - **Condition** — open HPD violations, weighted by class, plus 311 complaint history
-- **Legal** — DHCR rent-stabilization status and Good Cause eviction coverage
+- **Legal** — DHCR rent-stabilization status
 - **Neighborhood** — asking rent against the Census tract median
 - **Accessibility** — elevator on record, and distance to an ADA subway station
 
@@ -226,7 +226,7 @@ function answerChip(
       role: "agent",
       text:
         s === "likely"
-          ? `Public records point to rent stabilization${b.good_cause ? ", and Good Cause eviction coverage also applies" : ""}. Confirm with NYS DHCR before signing — ask for the rent history.`
+          ? "Public records point to rent stabilization. Confirm with NYS DHCR before signing — ask for the rent history."
           : s === "unverified"
             ? "We couldn't verify stabilization from public records. Ask the landlord directly and request the DHCR rent history — it's free."
             : "No stabilization on record for this building. Good Cause protections may still apply depending on the unit.",

@@ -69,6 +69,29 @@ export function asStabilization(x: unknown): Stabilization | null {
   return x === "likely" || x === "none_on_record" || x === "unverified" ? x : null;
 }
 
+/** Mirrors `GoodCauseStatus` in `crates/model/src/lib.rs`. Never "covered", by design. */
+export type GoodCauseStatus =
+  | "likely_not_covered"
+  | "partly_stabilized"
+  | "might_be_covered"
+  | "no_exemption_found";
+
+export interface GoodCause {
+  status: GoodCauseStatus;
+  message: string;
+}
+
+/** Narrow an unknown payload value to a known Good Cause signal, or null (shown as unverified). */
+export function asGoodCause(x: unknown): GoodCause | null {
+  const g = x as { status?: unknown; message?: unknown } | null | undefined;
+  const ok =
+    g?.status === "likely_not_covered" ||
+    g?.status === "partly_stabilized" ||
+    g?.status === "might_be_covered" ||
+    g?.status === "no_exemption_found";
+  return ok && typeof g?.message === "string" ? (g as GoodCause) : null;
+}
+
 export interface HudFmr {
   area?: string;
   fiscal_year?: number;
@@ -119,7 +142,7 @@ export interface BuildingCard {
   access_likelihood?: AccessLikelihood | null;
   stabilization?: Stabilization | null;
   stabilization_message?: string | null;
-  good_cause?: boolean | null;
+  good_cause?: GoodCause | null;
   rent?: RentContext | null;
 }
 

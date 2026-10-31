@@ -1,7 +1,7 @@
 # Design: serve the relevant passages of the law, keep the full text verified
 
-**Dated:** 2026-10-31 (New York time). **Status:** proposal for Aisling's review. Nothing here is
-built.
+**Dated:** 2026-10-31 (New York time). **Status:** reviewed by Aisling on 2026-10-31; her answers
+are at the end. Nothing here is built.
 
 **The question:** Phase B made the law table complete enough to be slow. `lookup_law` hands the
 model every current provision on a topic, whole. How should HouseCheck give the model, and the
@@ -93,12 +93,16 @@ For eviction this goes from 49,999 characters to at most 6,000, an 88% cut, befo
 
 ### 4. The verbosity toggle
 
-In the chat sheet: **Law detail: Brief | Full**, remembered in this browser (no accounts, as
-decided). Sent with each chat request as `law_detail`.
+In the chat sheet: **Law detail: Brief | More | Full**, remembered in this browser (no accounts,
+as decided). Sent with each chat request as `law_detail`.
 
-- **Brief** (default): passages as above.
-- **Full**: whole provisions, as today, up to 40,000 characters; anything over that is served as
-  passages with a note pointing at the full text link.
+- **Brief** (default): passages as above, up to 6,000 characters a lookup.
+- **More**: the same ranking, up to 10,000 characters.
+- **Full**: whole provisions, the complete text. When a lookup's full text is over 40,000
+  characters, the first answer uses a 40,000-character preview (passages in rank order) and the
+  app shows a warning with the size: the full text makes the answer slower. The reader has to
+  confirm explicitly ("Use the full text") before the question is asked again with every word.
+  The server enforces it: without the confirmation flag, it never sends more than 40,000.
 
 ### 5. Verification, at every step
 
@@ -133,10 +137,11 @@ lookup, and at least 19 of 21 live conversations pass.
 - Semantic (embedding) search. FTS5 is exact, explainable and already compiled in; revisit only if
   measured relevance is poor.
 
-## Questions for Aisling
+## Aisling's answers (2026-10-31)
 
-1. **Budget:** 6,000 characters a lookup in Brief (about 1,000 words)?
-2. **Default:** Brief, with Full one tap away?
-3. **Download format:** plain text with the verification header now, PDF later?
-4. **Toggle place:** in the chat sheet, remembered in this browser?
-5. **Full-mode cap:** 40,000 characters, falling back to passages above that?
+| Question | Answer |
+|---|---|
+| Budget | Three levels: Brief 6,000 characters, More 10,000, Full the complete text |
+| Default and place | Brief by default; the toggle in the chat sheet, remembered in this browser |
+| Download format | Plain text with the verification header now, PDF later |
+| Full-mode cap | 40,000 characters is a preview and a warning; the full text only after the reader explicitly confirms |

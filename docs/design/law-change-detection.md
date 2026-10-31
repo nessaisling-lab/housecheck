@@ -8,8 +8,9 @@ no longer matches its source, without letting a script decide what the law says?
 for Aisling to verify. It reports. It never changes served law.**
 
 **Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status:** reviewed by Aisling on
-2026-10-30. The shape is approved; the parts listed under "Revised after review" are being
-redesigned from research before final approval. Nothing here is built.
+2026-10-30. The shape is approved. The parts she sent back are revised from research under
+"Revised after review", which ends with what is still hers to decide. Awaiting her final
+approval. Nothing here is built.
 
 ---
 
@@ -37,14 +38,14 @@ The route is picked from the host of each provision's `url`. A host with no rout
 
 | Host | Rows on `main` (8d60d6d) | Route | Signal |
 |---|---|---|---|
-| `www.nysenate.gov` | `NY-RPL-235-B` (GOL §§ 7-107, 7-108 and RPL §§ 211, 216 captured 2026-10-30, not seeded) | Open Legislation API: `legislation.nysenate.gov/api/3/laws/{lawId}/{location}`, e.g. `RPP/235-B`, `GOB/7-108`, with Aisling's free key | revision date if exposed, then hash of the section text |
+| `www.nysenate.gov` | `NY-RPL-235-B` (GOL §§ 7-107, 7-108 and RPL §§ 211, 216 captured 2026-10-30, not seeded) | Open Legislation API with Aisling's free key: `laws/{lawId}/updates/{cursor}` once per law, then `laws/{lawId}/{location}` (e.g. `RPP/235-B`) only for sections it lists | `activeDate`, then hash of the section text |
 | `hcr.ny.gov` | `NYS-HCR-ORA`, `NYS-HCR-TENANT-RESOURCES` | plain GET; PDFs via `pdftotext -enc UTF-8` | passages present |
 | `portal.311.nyc.gov` | `NYC311-KA-01036` | plain GET | passages present |
-| `data.cityofnewyork.us` | `NYC-OPENDATA-WVXF-DWI5` | plain GET; exact endpoint unverified (see below) | passages present |
-| `rules.cityofnewyork.us` | none yet | plain GET | passages present |
-| `codelibrary.amlegal.com` | none yet (12 Admin Code sections captured 2026-10-30, not seeded) | manual | `verified_on` age |
-| `nycourts.gov` | none yet (the moved HP case pages, captured 2026-10-30, not seeded) | manual | `verified_on` age |
-| `nyc.gov` | none | manual (refuses scripted requests, per the `verified_by` comment in `law.rs`) | `verified_on` age |
+| `data.cityofnewyork.us` | `NYC-OPENDATA-WVXF-DWI5` | `/api/views/wvxf-dwi5.json`, compare `viewLastModified` first | the description |
+| `rules.cityofnewyork.us` | none yet | RSS `/feed/` with `If-None-Match`, HPD items only; codified rule text from amlegal's Rules bulk XML | new or changed HPD rule |
+| `codelibrary.amlegal.com` | none yet (12 Admin Code sections captured 2026-10-30, not seeded) | official bulk XML at `files.amlegal.com` (below), never the reader pages | `ETag`, then the entry's CRC, then each section's `version` and text |
+| `nycourts.gov` | none yet (the moved HP case pages, captured 2026-10-30, not seeded) | manual, monthly (Cloudflare challenges every path, `HEAD` and `robots.txt` included) | `verified_on` age |
+| `nyc.gov` | none | manual, monthly (refuses scripted requests, per the `verified_by` comment in `law.rs`) | `verified_on` age |
 
 Phase B adds 17 sources: 12 Admin Code sections, 4 state statutes and the NY Courts HP page,
 which has moved and is now two pages, so 18 texts in all.
@@ -55,21 +56,32 @@ at most one request a second per host.
 Notes per route:
 
 - **NY Senate API.** The survey got `401` without a key; nothing has been fetched with one yet.
-  The nysenate.gov section pages show a "most recent revision" date (seen: GOL § 7-107
-  2025-11-21, § 7-108 2022-03-04, RPL §§ 211 and 216 2024-05-03). If the API exposes it, store
-  it per provision as a cheap first check: a newer date is a finding on its own and dates the
-  amendment. Whether the API has that field, and its name, is **unverified**; confirm against the
-  API docs, don't assume it. `NY-RPL-235-B` is a hand copy of the web page, so the first run also
-  shows whether the API's text normalizes to the same hash.
-- **hcr.ny.gov PDFs.** Phase B's two PDF rows (unmerged branch) need `poppler-utils` on the
-  runner; whether `ubuntu-latest` has it is unverified.
+  Each section carries `activeDate`, "the date that particular document was updated"
+  ([Laws API](https://legislation.nysenate.gov/static/docs/html/laws.html)); the first keyed
+  call confirms it equals the web pages' "most recent revision" (seen: GOL § 7-107 2025-11-21,
+  § 7-108 2022-03-04, RPL §§ 211 and 216 2024-05-03). Law text arrives in a weekly batch, so a
+  Monday run sees the previous week. The docs state no rate limit and no `ETag`; the update
+  routes are the cheap signal instead. `NY-RPL-235-B` is a hand copy of the web page, so the
+  first run also shows whether the API's text normalizes to the same hash.
+- **hcr.ny.gov.** `If-Modified-Since` gets a `304`, but `Last-Modified` there is a cache date,
+  so a `200` only means "compare the passages". Phase B's two PDF rows (unmerged branch) need
+  `pdftotext`; the ubuntu-24.04 runner lacks `poppler-utils`, so the job installs it.
 - **data.cityofnewyork.us.** The stored text joins the dataset description and one column
   description; the URL Phase A read them from isn't recorded. The Socrata metadata endpoint
-  `/api/views/wvxf-dwi5.json` is the likely candidate; unverified.
-- **amlegal and nycourts.gov.** amlegal's landing page states "Current through Local Law
-  YYYY/NNN, enacted <date>"; a human re-check records that line for the next one to compare.
-  Whether anything on either host (a feed, a sitemap named in `robots.txt`, a `HEAD`) answers a
-  script without a challenge is **untested**. If nothing does, they are manual only.
+  `/api/views/wvxf-dwi5.json` (about 85 KB, no `ETag`) carries the description and a
+  `viewLastModified` date for the metadata; whether its text matches the stored row is checked
+  on the first run.
+- **amlegal.** The reader site (`codelibrary.amlegal.com`) answers scripts with `403`, and the
+  job never touches it. The same publisher posts the official bulk XML of the Admin Code, Charter
+  and Rules at `files.amlegal.com/pdffiles/NewYorkCity/{Admin,Charter,Rules}/XML.zip`, plain
+  nginx with no challenge. Admin Code § 7-111 requires the city to publish these codes for bulk
+  download in machine-readable form and refresh them within four weeks of a change
+  ([LL 2020/82](https://intro.nyc/local-laws/2020-82)). The Admin zip is 65.5 MB, but the job
+  reads only pieces of it (see "Change-only checks"). Checked 2026-10-31: `If-None-Match` with
+  the last `ETag` returns `304` and 0 bytes.
+- **nycourts.gov.** Every path, including `robots.txt`, `sitemap.xml` and a `HEAD`, returns
+  `403` with `cf-mitigated: challenge`. A dead page and a live one look the same to a script, so
+  these rows are manual only.
 - **robots.txt.** Before the first scheduled run, confirm each fetched host's `robots.txt` allows
   the paths used. A disallowed path moves to the manual route.
 
@@ -93,12 +105,14 @@ Outcomes, one per current provision (superseded rows are never served, so never 
 | `unchanged` | hash equal, or every passage found |
 | `changed` | hash differs, or some passages are missing |
 | `page_mismatch` | no passage found at all: more likely a different page or a broken extractor than a new law |
-| `moved` | `3xx`; redirects are not followed, and the `Location` is reported |
+| `moved` | `3xx`; the `Location` is reported and followed up to 5 hops on the same site (see "Dead or moved pages") |
 | `dead` | `404` or `410` |
 | `blocked` | a bot-protection page came back; not parsed |
 | `unreachable` | timeout, `5xx` or `429` after one retry |
 | `not_checked` | manual route, or the API key is missing |
-| `due_for_recheck` | manual route and `verified_on` older than 90 days |
+| `due_for_recheck` | manual route and `verified_on` older than 30 days, or a watch named the row |
+| `pending` | a bill or local law that amends this provision has advanced (passed a house, approved by the Council) |
+| `imminent` | it was delivered to the Governor or Mayor, or signed with a later effective date |
 
 The HTML-to-text step strips tags, drops `script` and `style`, and decodes entities. `normalize`
 does not fold curly quotes or entities (`New York City’s` in the HPD row), so the extractor must
@@ -111,7 +125,10 @@ produce the same characters the original copy had. Unverified until the dry run.
 ```yaml
 on:
   schedule:
-    - cron: "0 7 * * 1"   # weekly Monday 07:00 UTC, after security.yml's 06:00
+    - cron: "17 6 * * *"   # daily 06:17 New York: bill and local-law watch
+      timezone: "America/New_York"
+    - cron: "17 7 * * 1"   # Monday 07:17 New York: text check after the Senate's Friday batch
+      timezone: "America/New_York"
   workflow_dispatch:
     inputs:
       dry_run: { type: boolean, default: true }
@@ -206,9 +223,9 @@ intact still replays, against turns written for the old wording: **her call**.
 | Failure | Behaviour |
 |---|---|
 | API or site down | one retry, then `unreachable`; listed under "Not checked", never as unchanged |
-| Rate limit (`429`) | wait once, honouring `Retry-After` up to 60 s, then `unreachable`. The API's limits are unverified; the load is one request per fetched row a week, a few dozen at most |
+| Rate limit (`429`) | wait once, honouring `Retry-After` up to 60 s, then `unreachable`. The Senate API documents no limit; the load is one request per fetched row a week, a few dozen at most |
 | `404` / `410` | `dead`, with the URL for a browser re-check |
-| Redirect | `moved`, with the `Location`; not followed |
+| Redirect | `moved`, with the `Location`; followed on the same site only, then the passage check |
 | Cloudflare page instead of content | `blocked`; not parsed, not retried with other headers. Markers to confirm against a real response: `server: cloudflare` with `403`/`503`, a `cf-mitigated` header, a "Just a moment..." title. A protected host may serve the challenge in place of a `404`, so a dead page there is found only by the human re-check |
 | Extractor drift (site redesign, new `pdftotext`) | shows as `page_mismatch`, not `changed` |
 | Schedule silently stops | GitHub disables scheduled workflows in a public repo after 60 days with no repository activity. No issue then means no run, not no change. Re-enable it from the Actions tab |
@@ -228,6 +245,11 @@ House rule: every fix ships with a check that fails without it.
   `blocked` and never reach the comparison.
 - **Every row has a route.** A test maps each `url` in `data/law.json` to a route and fails on an
   unknown host. A row from a new site fails CI until someone picks its route.
+- **Cursor miss.** A planted change that the cursor path skips must be reported by the monthly
+  full pass.
+- **amlegal pieces.** A small fixture zip: the job reads its directory and one entry by byte
+  range, finds a changed section `version`, and never reads the rest of the file.
+- **New York dates.** A run at 01:30 UTC on a summer night is dated the previous day.
 - **The key never leaks.** A request with key `SECRET-TEST` to an unroutable address. The printed
   error must not contain it.
 - **Dry run.** `workflow_dispatch` with `dry_run: true` writes the body to the step summary and
@@ -240,10 +262,14 @@ House rule: every fix ships with a check that fails without it.
 3. Aisling runs it locally once, free, with the key read the way she reads her other keys. On
    today's seed the expected result is no `changed` rows. Anything else is an extractor bug,
    fixed before step 5.
-4. Check `robots.txt` on each fetched host, and the API docs for a revision-date field.
-5. She adds `NYSENATE_API_KEY`. Merge the workflow with `workflow_dispatch` only, run it once
-   with `dry_run: true`, and confirm the log shows ids and hosts only. Then turn on the cron.
-6. After four runs, review false positives and adjust the extractor, not the comparison.
+4. Check `robots.txt` on each fetched host. On the first keyed call, confirm `activeDate`
+   matches the revision dates in the captures. Compare the bulk XML's 12 Admin Code sections
+   with the captured texts (open item 5 below).
+5. She adds `NYSENATE_API_KEY` (and the Legistar token, if she requests one). Merge the workflow
+   with `workflow_dispatch` only, run it once with `dry_run: true`, and confirm the log shows ids
+   and hosts only, the `timezone` key is accepted, and the measured traffic. Then turn on the
+   schedules.
+6. After four weekly runs, review false positives and adjust the extractor, not the comparison.
 
 ## Aisling's answers (2026-10-30)
 
@@ -280,24 +306,172 @@ A change Aisling confirms is an ordinary PR that edits `data/law.json`:
    date it was confirmed (New York time), who confirmed it, and the check-issue link. A test
    fails if a superseded row has no changelog entry.
 
-## Revised after review
+## Revised after review: the research (2026-10-31)
 
-Research under way, results in this section before final approval:
+Three questions went back for research after her review. Sources are linked inline. Figures
+marked "measured" were read from live responses on 2026-10-31; the rest come from the sources'
+own docs.
 
-1. **Cadence.** Set from the enactment-to-effect lag of NYC local laws, NY state laws and agency
-   rules, and from the tenant deadlines in the stored law, with the worst-case warning a tenant
-   gets after paperwork lag.
-2. **Change-only checks, in the style of a cursor-based delta sync.** Each source keeps a cursor:
-   the source's own change feed where one exists, otherwise HTTP `ETag` / `Last-Modified`. A
-   quiet week costs one small request per source, not one page per row. Only rows whose source
-   reports a change are fetched and compared. A periodic full pass compares everything, and a
-   planted change the cursor path misses must be caught by it, the way a broken cursor fails
-   its test.
-3. **Dead or moved pages.** Follow the redirect or find the replacement page, record the last
-   good archived copy, and report both for a person to confirm. A challenge page means
-   "unknown", never "dead".
-4. **Paid full-text services.** Whether any service sells the relevant law as a downloadable
-   corpus with change tracking, at a price that fits a nonprofit.
-5. **New York time** for the schedule and every date the job writes.
-6. **Licence.** Open Legislation's CC BY-NC-ND 3.0 notice, read for a nonprofit, donation-funded,
-   Apache-2.0 project. A question for a lawyer; the design only records it.
+### Cadence: watch bills daily, check text weekly
+
+**The shortest gap between a law passing and taking effect is zero days, at both levels.** The
+2019 Housing Stability and Tenant Protection Act and the 2024 Good Cause Eviction law took effect
+on signing; so did NYC Local Laws 144/2025 and 23/2026. The official text lags behind the law:
+nysenate.gov publishes statute text in a weekly batch, 6 to 14 days after each change took
+effect, and on 2026-10-30 amlegal was about 6 days and 7 local laws behind the Council. So a check
+of law text can never warn ahead of a change. **Warning has to come from watching bills.**
+
+| Watch | Cadence | Signal |
+|---|---|---|
+| NY bills that amend a tracked section ([bills API](https://legislation.nysenate.gov/static/docs/html/bills.html), `bills/updates/{cursor}`) | daily | passed a house → `pending`; delivered to the Governor or signed with a later date → `imminent`; signed with immediate effect → "changed, verify" |
+| NYC Council matters whose text cites Title 27 Chapter 2 or a tracked section ([Legistar Web API](https://council.nyc.gov/legislation/api), free token) | daily | approved → `pending`; enacted → `imminent` or "changed, verify" |
+| NY statute text (Open Legislation `laws/updates`) | weekly, Monday | `activeDate` and hash |
+| NYC Admin Code and Rules text (amlegal bulk XML), HPD rules feed, HCR, 311 and Open Data pages | weekly, Monday | see "Change-only checks" |
+| nycourts.gov and nyc.gov (manual) | every 30 days, and whenever a watch names the row | a person opens the URL |
+| Calendar | fixed dates | re-check the named rows before Oct 1 (heat season, rent-stabilized leases under the new Rent Guidelines Board order), before Aug 1 (the Good Cause rent figure) and before Jan 1 (lead-paint and window-guard notices) |
+
+The 90-day manual interval becomes 30 days, plus an event trigger from the daily watches.
+
+**Worst case for a tenant.** Her paperwork lag is about 10 calendar days (3 days to gather, 5
+business days to process). Assuming she verifies a finding within 3 days:
+
+| Kind of change | Warning before it takes effect |
+|---|---|
+| State law with a delayed date (shortest found: the 30th day after signing) | at least 26 days |
+| City law with a delayed date (shortest found: 180 days) | months |
+| Law effective on signing | none; flagged the next morning. That leaves 13 days on a 14-day clock (rent demand, marshal's notice) and 9 days on the 10-day clock to answer a petition, about one day short |
+| The same, with a weekly signal instead of daily | 7 days left on a 14-day clock, which fails |
+
+The tenant deadlines behind these numbers include HPD's correction periods (class A 90 days,
+B 30, C 24 hours, but 21 days for lead paint, window guards, mold and pests; heat and hot water
+at once) ([HPD](https://www.nyc.gov/site/hpd/services-and-information/clear-violations.page)),
+the 14-day deposit statement (GOL § 7-108 (1-a)(e); § 7-107 (6) for rent-stabilized leases from
+2025-11-15), the 14-day rent demand ([RPAPL § 711](https://www.nysenate.gov/legislation/laws/RPA/711)),
+10 days to answer a petition ([RPAPL § 732](https://www.nysenate.gov/legislation/laws/RPA/732))
+and the 14-day marshal's notice ([RPAPL § 749](https://www.nysenate.gov/legislation/laws/RPA/749)).
+
+### Change-only checks: one cursor per source
+
+Each source keeps a cursor: its own change feed where it has one, otherwise the HTTP validator
+from the last answer. A quiet week costs one small request per source, not one page per row. Only
+rows whose source reports a change are fetched and compared.
+
+| Source | Cursor | Quiet week | On a change |
+|---|---|---|---|
+| NY statutes | `processedDateTime` from `GET /api/3/laws/{GOB,RPP}/updates/{cursor}?type=processed` | 2 small calls | fetch only the listed tracked sections; compare `activeDate`, then the hash |
+| NY bills | last `bills/updates` time | 1 call a day | read the bill's law sections; set `pending` or `imminent` |
+| NYC Admin Code | the Admin zip's `ETag` | 1 conditional `HEAD`; measured `304`, 0 bytes | one `Range` request for the zip's directory (about 130 KB) gives a CRC per entry. Read the 944-byte entry holding "Current through Local Law …". If the Housing Maintenance Code entry's CRC changed, range-fetch that one entry (178 KB) and compare each tracked section's `version` and text. Never the 65.5 MB file |
+| NYC Council | last `MatterLastModifiedUtc` | 1 call a day | read the matter's text for Title 27 Chapter 2 and tracked sections |
+| HPD rules | the feed's `ETag` | 1 conditional GET; `304` measured | keep items with `agency_name` HPD; codified text from the Rules zip, as above |
+| hcr.ny.gov | `Last-Modified` | 1 conditional GET per page | compare passages (the date is a cache date, so a `200` alone proves nothing) |
+| portal.311.nyc.gov | none (no validators) | 1 GET, about 195 KB | compare passages |
+| data.cityofnewyork.us | `viewLastModified` from `/api/views/wvxf-dwi5.json` | 1 GET, about 85 KB | compare the description |
+
+The amlegal entries embed a per-build token, so an entry's CRC may change on every rebuild with
+no text change. The CRC therefore only says "look"; the decision is the section's `version` and
+text. Whether `version` is a true per-section change counter is unverified until two builds can
+be compared.
+
+**The safety net.** On the first Monday of each month the job compares every fetchable row,
+whatever the cursors say. A test plants a change that the cursor path misses, and requires the
+monthly pass to report it, the same way a broken cursor must fail its test in a delta sync.
+
+**Where the cursors live.** In a small `law-check-state.json`, uploaded as a workflow artifact
+each run and downloaded by the next with `gh run download` (artifacts are kept 90 days). The job
+writes nothing to the repo, so it keeps `contents: read`. If the state is lost, the next run is a
+full pass, the way a stale cursor gets everything again.
+
+**Traffic rules.**
+
+1. Ask before fetching: a cursor or validator first, a body only on change.
+2. Byte ranges for big files.
+3. One request a second per host; one retry; honour `Retry-After` up to 60 seconds.
+4. Redirects: at most 5 hops, same site only.
+5. The comparison uses `normalize` and `text_sha256`, as ingest does.
+6. Expected load on a quiet week: under 0.5 MB, most of it the two pages that send no validators.
+   This is an estimate until the dry run measures it.
+
+### Dead or moved pages: find the replacement
+
+The row keeps being served until Aisling changes it; the job attaches evidence.
+
+1. Fetch with redirects off. Check for a bot challenge first: a challenge is `blocked`
+   (unknown), never `dead`, and is not retried.
+2. On a `3xx`, record the `Location` and whether the move is permanent. Follow up to 5 hops on
+   the same site and run the passage check on the end page. A match is reported as "moved, same
+   text"; a miss as "moved, text differs".
+3. On a `404` or `410`, look for the replacement: the last good capture and any captured
+   redirect in the Wayback Machine's
+   [CDX API](https://github.com/internetarchive/wayback/tree/master/wayback-cdx-server), and the
+   new entries in the host's `sitemap.xml` since last week where one exists (hcr.ny.gov,
+   rules.cityofnewyork.us). Each candidate is scored with the same passage check.
+4. When a fetchable row comes back `unchanged`, archive it with the Wayback Machine's
+   Save Page Now (free without a key, a few requests a minute), so a dead page later has a dated
+   copy. Protected hosts are left out: the archive stores their challenge page, not the text.
+
+A person confirms the replacement (same publisher, same provision, the text in a browser) and
+changes the URL by PR. Paid permanent-link services (Perma.cc) are not needed for this.
+
+### New York time
+
+- **Schedule.** GitHub Actions takes an IANA time zone next to `cron` since March 2026
+  ([changelog](https://github.blog/changelog/2026-03-26-github-actions-late-march-2026-updates),
+  [syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)),
+  as in "Job flow" above. Minute 17 avoids the top-of-hour queue delays GitHub warns about. The
+  dry run confirms the key works before the schedule is turned on.
+- **Dates the job writes** (the issue, the changelog, `verified_on`): `YYYY-MM-DD` in New York.
+  In Rust, [`jiff`](https://docs.rs/jiff) 0.2 (MIT or Unlicense, current tz data, bundled on
+  Windows, system data on the Linux runner), in `ingest` only. `chrono-tz` was rejected: no
+  release since 2025-07, so its zone data is stale. The API's own dates (its UTC `today_iso()`)
+  are a separate fix.
+
+### Paid law services: not needed
+
+Bill trackers (LegiScan, Plural, FiscalNote, Quorum) cover bills, which Open Legislation and
+Legistar give free. Only Lexis, Westlaw and vLex sell codified New York text, all by sales
+contact, with terms aimed at research rather than republishing, and none confirmed to carry the
+NYC Admin Code. The free official sources above give a change signal for every row. Revisit only
+for other states or case law.
+
+### Compression: not needed for law text
+
+The law corpus is about 56 KB (14 KB gzipped). Compression pays elsewhere: the citywide
+branch already stores violation descriptions as zstd blocks with a trained dictionary (2.3 µs to
+read one building's block), and the release download is 160.9 MB zstd'd against 479.1 MB.
+
+### Licence: questions for a lawyer
+
+Statute text is likely not copyrightable
+([*Georgia v. Public.Resource.Org*](https://www.law.cornell.edu/supremecourt/text/18-1150)).
+legislation.nysenate.gov's footer says CC BY-NC-ND 3.0; nysenate.gov's
+[copyright policy](https://www.nysenate.gov/copyright-policy) adds "CC+" permissions that allow
+derivatives and commercial use except political fundraising. HouseCheck is a nonprofit funded by
+donations, and verbatim excerpts fit "NoDerivatives". Questions:
+
+1. Does CC BY-NC-ND bind statute text fetched through Open Legislation, or only the Senate's own
+   material and compilation?
+2. Does the CC+ grant cover the API's data?
+3. Apache-2.0 lets others use the project commercially. Does the law database need its own data
+   licence notice?
+4. amlegal's history notes are privately written. Can they be stored, or only the code text?
+
+### Still open for Aisling
+
+1. **A "may have changed" warning in answers.** While a row is `pending` or `imminent`, the agent
+   says "this may have changed on <date> (<bill>); confirm with Legal Aid" instead of stating the
+   old rule flatly. This changes the prompt, so it changes `agent_version` and needs a billed
+   re-record, batched with other prompt changes.
+2. **A free Legistar token**, requested with a name and email at
+   [council.nyc.gov/legislation/api](https://council.nyc.gov/legislation/api). Without it the
+   Council watch can only use an unofficial mirror, as a lead.
+3. **Her turnaround.** The numbers above assume she verifies within 3 days, and same day for a
+   law effective on signing.
+4. **More tracked sections.** The tightest tenant clocks are in sections not stored yet: RPAPL
+   §§ 711, 732 and 749, and RPL §§ 226-c and 231-c (Good Cause notices). Add them to Phase B's
+   list?
+5. **Which "current through" line is right.** The capture on 2026-10-30 read Local Law 2026/153;
+   the bulk XML, rebuilt that day, reads 2026/160 (both enacted 2026-10-24). The first build
+   compares the XML's 12 sections with the captured texts, which settles it and checks the
+   captures at the same time.
+6. **Hot water hours.** § 27-2031 says hot water is required between 6 a.m. and midnight; the 311
+   row says 365 days a year with no hours. For her or a lawyer to reconcile before either is served.

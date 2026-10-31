@@ -1,6 +1,24 @@
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
 
+use model::{UnknownViolationClass, ViolationClass};
+
+/// Read a `class` column into [`ViolationClass`].
+///
+/// `model` deliberately depends on exactly one crate and must not learn about SQLite, so the
+/// conversion lives here — at the edge that actually touches a database — rather than as a
+/// `FromSql` impl on the type.
+///
+/// An unmodelled letter becomes a rusqlite error carrying the offending value. That is louder
+/// than the behaviour it replaces, where an unknown class flowed through as a `String` and was
+/// then priced at zero by `scoring` and counted as nothing by `ViolationCounts`.
+fn parse_class(row: &rusqlite::Row<'_>, column: &str) -> rusqlite::Result<ViolationClass> {
+    let raw: String = row.get(column)?;
+    raw.parse().map_err(|e: UnknownViolationClass| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })
+}
+
 /// Open the serving artifact **read-only**, for the API.
 ///
 /// `open_db` below is read-write with create-if-missing, which is correct for `ingest` — it
@@ -309,7 +327,13 @@ pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation
     let rows = stmt.query_map([bbl], |row| {
         let ord: Option<i64> = row.get("desc_ord")?;
         Ok(Violation {
-            class: row.get("class")?,
+            // The schema is `class TEXT NOT NULL` with no CHECK, so the column can hold any
+            // string; the invariant is upheld by `ingest`, which counts and skips anything
+            // outside A/B/C. Parsing here is where that promise is checked rather than assumed.
+            // A failure means the artifact was built by something that did not uphold it, which
+            // is worth surfacing as an error instead of quietly scoring the row at zero — the
+            // behaviour this whole change exists to remove.
+            class: parse_class(row, "class")?,
             open: row.get::<_, i64>("open")? != 0,
             year: row.get("year")?,
             description: ord
@@ -403,9 +427,11 @@ pub fn insert_violations(conn: &Connection, bbl: &str, vs: &[Violation]) -> Resu
         conn.execute(
             "INSERT INTO violations (bbl,class,open,year,desc_ord,issued_on,closed_on) \
              VALUES (?1,?2,?3,?4,?5,?6,?7)",
+            // `as_str`, so the column keeps holding exactly the letter HPD issued and an
+            // existing artifact stays readable by an older build.
             rusqlite::params![
                 bbl,
-                v.class,
+                v.class.as_str(),
                 v.open as i64,
                 v.year,
                 ord,
@@ -947,8 +973,8 @@ mod tests {
     fn descriptions_round_trip_through_compression() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         migrate(&conn)?;
-        let v = |class: &str, d: Option<&str>| Violation {
-            class: class.into(),
+        let v = |class: ViolationClass, d: Option<&str>| Violation {
+            class,
             open: true,
             year: 2026,
             description: d.map(str::to_string),
@@ -956,16 +982,16 @@ mod tests {
         };
         let vs = vec![
             v(
-                "C",
+                ViolationClass::C,
                 Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT KITCHEN"),
             ),
             // A gap in the middle: desc_ord must skip, not shift everything after it.
-            v("A", None),
+            v(ViolationClass::A, None),
             // A notice containing a newline is exactly why records are joined with
             // \x1e rather than \n.
-            v("B", Some("LINE ONE\nLINE TWO")),
+            v(ViolationClass::B, Some("LINE ONE\nLINE TWO")),
             v(
-                "C",
+                ViolationClass::C,
                 Some("§ 27-2005 ADM CODE ABATE THE NUISANCE AT BATHROOM"),
             ),
         ];
@@ -979,7 +1005,7 @@ mod tests {
         assert_eq!(got[3].description.as_deref(), vs[3].description.as_deref());
 
         // A building with no descriptions stores no block and still reads back clean.
-        insert_violations(&conn, "3000010002", &[v("A", None)])?;
+        insert_violations(&conn, "3000010002", &[v(ViolationClass::A, None)])?;
         let none = get_open_violations(&conn, "3000010002")?;
         assert_eq!(none.len(), 1);
         assert_eq!(none[0].description, None);
@@ -1100,7 +1126,7 @@ mod tests {
             &conn,
             "3018420001",
             &Violation {
-                class: "C".into(),
+                class: ViolationClass::C,
                 open: true,
                 year: 2025,
                 ..Default::default()
@@ -1118,6 +1144,28 @@ mod tests {
         migrate(&conn)?;
         set_snapshot_year(&conn, 2026)?;
         assert_eq!(get_snapshot_year(&conn)?, Some(2026));
+        Ok(())
+    }
+
+    /// REVIEW-NOTES M4 at the read. Before `ViolationClass`, a stored class this code did not
+    /// model came back as a `String` and `scoring` priced it at 0. Measured on `main` at
+    /// `03dfae6`: a building whose only open violation was class "X" scored condition 100, the
+    /// same as a building with none. `ingest` can no longer write such a row, so one here means
+    /// an artifact built by something else, and the read refuses it by name.
+    #[test]
+    fn an_unmodelled_class_is_an_error_not_a_clean_building() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        migrate(&conn)?;
+        conn.execute(
+            "INSERT INTO violations (bbl,class,open,year) VALUES ('3000010009','X',1,2026)",
+            [],
+        )?;
+        let err = get_open_violations(&conn, "3000010009")
+            .expect_err("an unmodelled class must not read back as a violation");
+        assert!(
+            format!("{err:#}").contains("\"X\""),
+            "the error should name the letter: {err:#}"
+        );
         Ok(())
     }
 }

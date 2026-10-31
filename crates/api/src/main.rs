@@ -259,43 +259,7 @@ fn today_iso() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-/// The New York calendar date at `utc_secs`: US Eastern time, daylight time from 2 a.m. on
-/// the second Sunday of March to 2 a.m. on the first Sunday of November (the rule since 2007).
-///
-/// ponytail: the rule is written out, not read from a tz database. If it changes (permanent
-/// daylight time keeps being proposed), switch to `jiff`, as Phase C plans for ingest.
-fn new_york_ymd(utc_secs: i64) -> (i64, u32, u32) {
-    let est = utc_secs - 5 * 3600;
-    let (y, _, _) = civil_ymd(est.div_euclid(86_400));
-    let sunday = |m: i64, n: i64| {
-        let first = model::urgency::days_from_civil(y, m, 1);
-        first + (4 - first).rem_euclid(7) + 7 * (n - 1)
-    };
-    // In standard-time seconds: starts at 2:00 EST, ends at 2:00 EDT, which is 1:00 EST.
-    let dst = sunday(3, 2) * 86_400 + 2 * 3600..sunday(11, 1) * 86_400 + 3600;
-    let local = if dst.contains(&est) { est + 3600 } else { est };
-    civil_ymd(local.div_euclid(86_400))
-}
-
-/// Civil date from days since the epoch. Howard Hinnant's algorithm.
-///
-/// This returns the day as well as the month, which the older `civil_from_days` did not —
-/// it existed only to name a month for the provenance line. Building an ISO date on top of
-/// it produced `2026-00-08`: an invalid month, silently rejected downstream, so every
-/// violation reported an unknown age. The unit test did not catch it because it hands the
-/// date in as a literal, which tests the arithmetic and not its caller.
-fn civil_ymd(z: i64) -> (i64, u32, u32) {
-    let z = z + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
-}
+use model::urgency::{civil_ymd, new_york_ymd};
 
 fn civil_from_days(z: i64) -> (i64, u32) {
     let (y, m, _) = civil_ymd(z);

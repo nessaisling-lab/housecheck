@@ -13,3 +13,8 @@ reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls", "gzi
 serde = { workspace = true }
 serde_json = { workspace = true }
 duckdb = { version = "1.20000.1", default-features = false, features = ["bundled"] }
+# Law check: one entry of amlegal's bulk zip is inflated after a byte-range read. Already in
+# the tree through reqwest's gzip.
+flate2 = "1"
+# Law check: the bulk Admin Code XML. Small, no dependencies of its own.
+roxmltree = "0.21"

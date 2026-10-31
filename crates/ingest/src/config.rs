@@ -17,6 +17,9 @@ pub enum Mode {
     /// Reload only the law tables of an existing artifact, from `data/law.json`. A law fix
     /// should not need a fresh pull of every building.
     Law,
+    /// Re-read every law source and report what changed. Writes a report, never the artifact,
+    /// so it takes no `--out`. Its own flags are in `lawcheck::Opts`.
+    LawCheck,
 }
 
 impl Config {
@@ -29,13 +32,16 @@ impl Config {
             Mode::Fixture
         } else if args.iter().any(|a| a == "--law") {
             Mode::Law
+        } else if args.iter().any(|a| a == "--law-check") {
+            Mode::LawCheck
         } else {
-            return Err("must pass --fixture, --real or --law".into());
+            return Err("must pass --fixture, --real, --law or --law-check".into());
         };
-        let out = flag("--out")
-            .flatten()
-            .cloned()
-            .ok_or("missing --out <path>")?;
+        let out = match flag("--out").flatten().cloned() {
+            Some(out) => out,
+            None if mode == Mode::LawCheck => String::new(),
+            None => return Err("missing --out <path>".into()),
+        };
         let community_district = flag("--cd")
             .flatten()
             .map(|s| s.parse().map_err(|_| "bad --cd".to_string()))
@@ -92,6 +98,12 @@ mod tests {
     fn parses_law_mode() {
         let args = ["--law", "--out", "data/hc.db"].map(String::from);
         assert_eq!(Config::parse(&args).unwrap().mode, Mode::Law);
+    }
+
+    #[test]
+    fn parses_law_check_mode_without_out() {
+        let args = ["--law-check", "--full"].map(String::from);
+        assert_eq!(Config::parse(&args).unwrap().mode, Mode::LawCheck);
     }
 
     #[test]

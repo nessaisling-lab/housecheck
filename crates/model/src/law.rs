@@ -310,9 +310,181 @@ pub fn passages(text: &str) -> Vec<Passage> {
         .collect()
 }
 
+/// A stored excerpt cut at each line holding only `…`: the passages that sit together on the
+/// page. Empty pieces are dropped.
+pub fn excerpt_parts(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let (mut start, mut at) = (0, 0);
+    for line in text.split_inclusive('\n') {
+        if line.trim() == "…" {
+            out.push(&text[start..at]);
+            start = at + line.len();
+        }
+        at += line.len();
+    }
+    out.push(&text[start..]);
+    out.retain(|p| !p.trim().is_empty());
+    out
+}
+
+/// `text` normalized and cut after each `.`, `?`, `!` or `;` that ends a word: the units a
+/// change report names. A subdivision marker like `a.` comes out as its own short piece.
+pub fn sentences(text: &str) -> Vec<String> {
+    let t = normalize(text);
+    let mut out = Vec::new();
+    let mut start = 0;
+    for (i, c) in t.char_indices() {
+        if matches!(c, '.' | '?' | '!' | ';') && t[i + 1..].starts_with(' ') {
+            out.push(t[start..=i].to_string());
+            start = i + 2;
+        }
+    }
+    if start < t.len() {
+        out.push(t[start..].to_string());
+    }
+    out
+}
+
+/// What re-reading a source found, for one stored text.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Compared {
+    Unchanged,
+    /// Some of the stored text is no longer there: the stored sentences that are missing.
+    /// Empty when nothing stored is missing but the whole text still differs (words added).
+    Changed {
+        missing: Vec<String>,
+    },
+    /// Not one run of eight stored words is there: more likely a different page or a broken
+    /// extractor than a new law.
+    PageMismatch,
+}
+
+fn missing_or_mismatch(stored: &str, fetched_norm: &str) -> Compared {
+    let parts: Vec<String> = excerpt_parts(stored).iter().map(|p| normalize(p)).collect();
+    let any_run = parts.iter().any(|p| {
+        let words: Vec<&str> = p.split(' ').collect();
+        words
+            .windows(words.len().clamp(1, 8))
+            .any(|w| fetched_norm.contains(&w.join(" ")))
+    });
+    if !any_run {
+        return Compared::PageMismatch;
+    }
+    let missing = parts
+        .iter()
+        .flat_map(|p| sentences(p))
+        .filter(|s| !fetched_norm.contains(s.as_str()))
+        .collect();
+    Compared::Changed { missing }
+}
+
+/// A stored excerpt against the text of the page it came from: unchanged when each passage
+/// (see [`excerpt_parts`]) appears on the page whole, after [`normalize`]. The rule
+/// `insert_law` applies to fact quotes, applied to the passages.
+pub fn compare_excerpt(stored: &str, page: &str) -> Compared {
+    let page = normalize(page);
+    if excerpt_parts(stored)
+        .iter()
+        .all(|p| page.contains(&normalize(p)))
+    {
+        return Compared::Unchanged;
+    }
+    missing_or_mismatch(stored, &page)
+}
+
+/// A stored whole section against a fetched whole section: unchanged when they normalize to
+/// the same text, which is the [`text_sha256`] comparison.
+pub fn compare_whole(stored: &str, fetched: &str) -> Compared {
+    let fetched = normalize(fetched);
+    if normalize(stored) == fetched {
+        return Compared::Unchanged;
+    }
+    missing_or_mismatch(stored, &fetched)
+}
+
+/// The facts whose quote is no longer in `fetched`: a changed value is likely, and recordings
+/// that state it would fail replay.
+pub fn facts_missing<'a>(facts: &'a [LawFact], fetched: &str) -> Vec<&'a LawFact> {
+    let fetched = normalize(fetched);
+    facts
+        .iter()
+        .filter(|f| !fetched.contains(&normalize(&f.quote)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const NIGHT: &str = "Between 10 PM and 6 AM, the inside temperature must be at least 62 \
+                         degrees Fahrenheit at all times.";
+
+    #[test]
+    fn excerpt_check_ignores_reflow_and_names_what_changed() {
+        let stored = format!("Heat season runs October 1 through May 31.\n…\n{NIGHT}\n");
+        let page = format!(
+            "<menu> Heat season runs   October 1\nthrough May 31. Other text. {} Footer.",
+            NIGHT.replace(' ', "\n")
+        );
+        assert_eq!(compare_excerpt(&stored, &page), Compared::Unchanged);
+        // One number in one passage: changed, and the sentence that is gone is named.
+        let altered = page.replace("62", "64");
+        assert_eq!(
+            compare_excerpt(&stored, &altered),
+            Compared::Changed {
+                missing: vec![NIGHT.to_string()]
+            }
+        );
+        // A single-passage excerpt with one word changed is still `changed`, not a mismatch.
+        assert!(matches!(
+            compare_excerpt(NIGHT, &altered),
+            Compared::Changed { .. }
+        ));
+        assert_eq!(
+            compare_excerpt(&stored, "A page about something else."),
+            Compared::PageMismatch
+        );
+        // Passages must each be whole: two sentences present but no longer adjacent.
+        let split = "Heat season runs October 1 through May 31. NEW SENTENCE. Between 10 PM";
+        assert!(matches!(
+            compare_excerpt(
+                "Heat season runs October 1 through May 31. Between 10 PM",
+                split
+            ),
+            Compared::Changed { .. }
+        ));
+    }
+
+    #[test]
+    fn whole_check_is_the_hash_comparison() {
+        let stored = format!("§ 1. Title.\n{NIGHT}");
+        assert_eq!(
+            compare_whole(&stored, &format!("  § 1. Title. {NIGHT}\n")),
+            Compared::Unchanged
+        );
+        // An added sentence: nothing stored is missing, but the section differs.
+        assert_eq!(
+            compare_whole(&stored, &format!("§ 1. Title. {NIGHT} New rule.")),
+            Compared::Changed { missing: vec![] }
+        );
+        let fact = LawFact {
+            key: "heat.night.min_f".into(),
+            value: "62".into(),
+            condition: String::new(),
+            quote: "at least 62 degrees Fahrenheit".into(),
+        };
+        let facts = [fact];
+        assert_eq!(facts_missing(&facts, &stored).len(), 0);
+        assert_eq!(
+            facts_missing(&facts, &stored.replace("62", "64"))[0].key,
+            "heat.night.min_f"
+        );
+    }
+
+    #[test]
+    fn excerpt_parts_cut_only_at_ellipsis_lines() {
+        assert_eq!(excerpt_parts("a … b\n  …  \nc\n…\n"), ["a … b\n", "c\n"]);
+    }
 
     #[test]
     fn passages_rejoin_exactly_and_label_their_markers() {

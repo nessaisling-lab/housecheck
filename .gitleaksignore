@@ -2,3 +2,14 @@
 # model::export::tests::the_published_key_is_the_one_the_signature_carries.
 # Published in the RFC, signs nothing real. Not a credential.
 d24a02877632c131478ba9b150da884a81460c1c:crates/model/src/export.rs:generic-api-key:453
+
+# NYC's own client-side keys, served in the page to every visitor of
+# https://portal.311.nyc.gov/article/?kanumber=KA-01036 and caught in the saved copy that
+# lawcheck's planted-change test reads: two Application Insights instrumentation keys, a
+# reCAPTCHA site key and an API Management subscription key. Not HouseCheck's, and not
+# secret. Blanked out of the fixture in the commit after this one; these are the findings
+# in the commit that first added it.
+e34d23f6bb297ebdaed8eaec21c185fdd9b11835:crates/ingest/tests/fixtures/nyc311-ka-01036.html:generic-api-key:172
+e34d23f6bb297ebdaed8eaec21c185fdd9b11835:crates/ingest/tests/fixtures/nyc311-ka-01036.html:generic-api-key:1469
+e34d23f6bb297ebdaed8eaec21c185fdd9b11835:crates/ingest/tests/fixtures/nyc311-ka-01036.html:generic-api-key:1567
+e34d23f6bb297ebdaed8eaec21c185fdd9b11835:crates/ingest/tests/fixtures/nyc311-ka-01036.html:generic-api-key:1998

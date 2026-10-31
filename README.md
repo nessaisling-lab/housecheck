@@ -117,6 +117,13 @@ reload only the law into an existing artifact:
 cargo run -p ingest -- --law --out data/housecheck.db
 ```
 
+Check every law source for changes. It writes a report (`law-check.md`) for a person to verify
+and never edits the law. The NY statutes need a free Open Legislation key in `NYSENATE_API_KEY`;
+without one they are listed as not checked. See `docs/design/law-change-detection.md`.
+```bash
+cargo run -p ingest -- --law-check --full
+```
+
 ### As an MCP tool
 
 Another agent can call HouseCheck directly and get the same card the website serves —

@@ -30,3 +30,8 @@ crates/api/evals/live-failures.json
 /law-check.md
 /law-check/
 /law-check-state.json
+# scripts/pr-visuals' own install (playwright-core).
+/scripts/pr-visuals/node_modules/
+
+# A design plugin's local cache, written next to files it checks.
+.impeccable/

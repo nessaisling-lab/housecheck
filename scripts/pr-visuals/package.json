@@ -1,0 +1,13 @@
+{
+  "name": "housecheck-pr-visuals",
+  "private": true,
+  "description": "Annotated before/after frames and diagrams for HouseCheck pull requests. See README.md.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "node --test kit.test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  }
+}

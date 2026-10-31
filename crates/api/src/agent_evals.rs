@@ -1142,20 +1142,6 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     }
 }
 
-/// `http(s)://` links in `s`, cut at whitespace or a closing bracket or quote, with trailing
-/// sentence punctuation dropped.
-fn links(s: &str) -> Vec<String> {
-    s.match_indices("http")
-        .filter(|(i, _)| s[*i..].starts_with("https://") || s[*i..].starts_with("http://"))
-        .map(|(i, _)| {
-            let end = s[i..]
-                .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '>' | '"' | '\''))
-                .map_or(s.len(), |e| i + e);
-            s[i..end].trim_end_matches(['.', ',', ';', ':']).to_string()
-        })
-        .collect()
-}
-
 /// Whether `answer` names an organisation from the legal-help directory: its name before any
 /// " — ", without a leading "The ", or one of its phone numbers in any formatting. NYC 311 is a
 /// complaint line, not legal help, so it does not count.
@@ -1409,12 +1395,24 @@ async fn each_check_fails_on_the_defect_it_names() {
         "names no free legal-help",
     );
 
+    // Since the link guard, the server removes a link the model was never shown, on both
+    // endpoints; the check stays as the backstop if the guard ever lets one through.
     let mut made_up_link = base.clone();
     made_up_link.upstream[answer_at] = json!({ "answer": "See https://data.cityofnewyork.us/d/a2nx-4u46 \
         for this building. Housing Court Answers can help." });
+    for ep in ENDPOINTS {
+        let out = run(&made_up_link, ep, None).await;
+        assert!(
+            !out.answer.contains("a2nx-4u46") && out.answer.contains("link removed"),
+            "{ep}: {}",
+            out.answer
+        );
+    }
+    let mut out = run(&made_up_link, "/agent/chat", None).await;
+    out.answer = "See https://data.cityofnewyork.us/d/a2nx-4u46 for this building.".into();
     fires(
         &made_up_link,
-        &run(&made_up_link, "/agent/chat", None).await,
+        &out,
         "link https://data.cityofnewyork.us/d/a2nx-4u46 appears in no",
     );
 

@@ -3202,6 +3202,125 @@ fn cited_sections(s: &str) -> Vec<String> {
     out
 }
 
+/// `http(s)://` links in `s`, cut at whitespace or a closing bracket or quote, with trailing
+/// sentence punctuation dropped.
+#[cfg(test)]
+fn links(s: &str) -> Vec<String> {
+    s.match_indices("http")
+        .filter(|(i, _)| s[*i..].starts_with("https://") || s[*i..].starts_with("http://"))
+        .map(|(i, _)| {
+            let end = s[i..]
+                .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '>' | '"' | '\''))
+                .map_or(s.len(), |e| i + e);
+            s[i..end].trim_end_matches(['.', ',', ';', ':']).to_string()
+        })
+        .collect()
+}
+
+/// What replaces a bare address the model was never shown.
+const LINK_REMOVED: &str = "(link removed: not from a verified source)";
+
+/// Everything the model has been sent so far, as one string: the prompt, the facts, the reader's
+/// turns and every tool result. A link is shown when it appears in here. The model's own earlier
+/// turns are left out, so a link it made up once cannot vouch for itself.
+fn shown_to_model(msgs: &[serde_json::Value]) -> String {
+    msgs.iter()
+        .filter(|m| m["role"] != "assistant")
+        .filter_map(|m| m["content"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `text` with every link the model was not shown taken out.
+///
+/// Live runs 4, 4b, 8 and 8b sent readers to pages from the model's memory: an ECB dataset, HPD's
+/// home page, an Open Data endpoint. The prompt forbids it and the evals catch it, but neither
+/// kept it from a reader. A markdown link keeps its words and loses the address; a bare address
+/// becomes `LINK_REMOVED`.
+fn clean_links(text: &str, shown: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("http") {
+        let at = &rest[i..];
+        if !(at.starts_with("https://") || at.starts_with("http://")) {
+            out.push_str(&rest[..i + 4]);
+            rest = &rest[i + 4..];
+            continue;
+        }
+        let end = at
+            .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '>' | '"' | '\''))
+            .unwrap_or(at.len());
+        let url = at[..end].trim_end_matches(['.', ',', ';', ':']);
+        let (before, after) = (&rest[..i], &rest[i + url.len()..]);
+        if shown.contains(url) {
+            out.push_str(&rest[..i + url.len()]);
+        } else if let (Some(label), Some(after)) = (
+            before
+                .strip_suffix("](")
+                .and_then(|b| b.rfind('[').map(|o| (b, o))),
+            after.strip_prefix(')'),
+        ) {
+            // `[words](address)`: keep the words.
+            let (b, open) = label;
+            out.push_str(&b[..open]);
+            out.push_str(&b[open + 1..]);
+            rest = after;
+            continue;
+        } else {
+            out.push_str(before);
+            out.push_str(LINK_REMOVED);
+        }
+        rest = &rest[i + url.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Where the part of a streamed answer that could still turn into a link begins: the word being
+/// written (an address ends only at whitespace), or an unclosed `[words](` up to the `)` that
+/// ends its address. Everything before this point can be cleaned and sent.
+fn hold_from(s: &str) -> usize {
+    let mut cut = s
+        .char_indices()
+        .rev()
+        .find(|(_, c)| c.is_whitespace())
+        .map_or(0, |(i, c)| i + c.len_utf8());
+    if let Some(open) = s.rfind('[') {
+        let tail = &s[open..];
+        let closed = match tail.find(']') {
+            None => false,
+            Some(j) => match tail[j + 1..].chars().next() {
+                None => false,
+                Some('(') => tail[j + 1..].contains(')'),
+                Some(_) => true,
+            },
+        };
+        if !closed && !tail.contains('\n') && tail.len() < 500 {
+            cut = cut.min(open);
+        }
+    }
+    cut
+}
+
+/// Cleans a streamed answer as it arrives, holding back only what could still become a link.
+#[derive(Default)]
+struct LinkGuard {
+    pending: String,
+}
+
+impl LinkGuard {
+    fn push(&mut self, t: &str, shown: &str) -> String {
+        self.pending.push_str(t);
+        let cut = hold_from(&self.pending);
+        let ready: String = self.pending.drain(..cut).collect();
+        clean_links(&ready, shown)
+    }
+
+    fn finish(&mut self, shown: &str) -> String {
+        clean_links(&std::mem::take(&mut self.pending), shown)
+    }
+}
+
 /// Whether a tool result handed the model law: from then on it must finish through a tool, so
 /// the answer comes back through `write_answer` rather than as free prose.
 fn serves_law(result: &serde_json::Value) -> bool {
@@ -3616,13 +3735,22 @@ async fn run_agent_stream(
             })
         };
         let mut needs_break = shown_text;
+        let shown = shown_to_model(&msgs);
+        let mut guard = LinkGuard::default();
         let round = openrouter_stream_round(&state, &api_key, &payload, call_timeout, |t| {
             if std::mem::take(&mut needs_break) {
                 let _ = tok_tx.send("\n\n".to_string());
             }
-            let _ = tok_tx.send(t.to_string());
+            let ready = guard.push(t, &shown);
+            if !ready.is_empty() {
+                let _ = tok_tx.send(ready);
+            }
         })
         .await;
+        let rest = guard.finish(&shown);
+        if !rest.is_empty() {
+            let _ = tok_tx.send(rest);
+        }
         drop(tok_tx);
         let _ = pump.await;
 
@@ -3727,6 +3855,7 @@ async fn run_agent_stream(
             if shown_text {
                 send(Event::default().event("token").data("\n\n")).await;
             }
+            let text = clean_links(&text, &shown_to_model(&msgs));
             send(Event::default().event("token").data(text)).await;
             citations.dedup();
             send(
@@ -3957,6 +4086,7 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
                 return (StatusCode::BAD_GATEWAY, "agent upstream failed").into_response();
             }
             answer.insert_str(0, &earlier);
+            let answer = clean_links(&answer, &shown_to_model(&msgs));
             citations.dedup();
             return Json(ChatResp {
                 bbl: card.building.bbl.clone(),
@@ -4010,7 +4140,7 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
             citations.dedup();
             return Json(ChatResp {
                 bbl: card.building.bbl.clone(),
-                answer: format!("{earlier}{text}"),
+                answer: clean_links(&format!("{earlier}{text}"), &shown_to_model(&msgs)),
                 citations,
                 laws,
                 urgency: ctx.urgency(),
@@ -4252,6 +4382,49 @@ mod tests {
                 .expect_failure()
                 .await
                 .assert_status_not_found();
+        }
+    }
+
+    /// A link the model was shown stays; one it wasn't loses its address, in a markdown link or
+    /// bare, and trailing punctuation stays where it was.
+    #[test]
+    fn links_the_model_was_not_shown_are_removed() {
+        let shown = "the source is https://hcr.ny.gov/rent-connect and nothing else";
+        let text = "Ask [HCR](https://hcr.ny.gov/rent-connect). Or see [HPD](https://www1.nyc.gov/site/hpd/) \
+                    and https://data.cityofnewyork.us/resource/wvxf-dwi5.json, today.";
+        assert_eq!(
+            clean_links(text, shown),
+            format!(
+                "Ask [HCR](https://hcr.ny.gov/rent-connect). Or see HPD and {LINK_REMOVED}, today."
+            )
+        );
+        assert_eq!(
+            clean_links("no links, just http and https", shown),
+            "no links, just http and https"
+        );
+    }
+
+    /// Streamed, the answer comes out exactly as the whole answer cleaned at once, wherever the
+    /// model's pieces happen to split: every split point of every sample, so no part of a made-up
+    /// link can reach the reader before the guard decides.
+    #[test]
+    fn link_guard_streams_the_same_as_cleaning_the_whole() {
+        let shown = "see https://hcr.ny.gov/a";
+        for text in [
+            "Ask [HCR](https://hcr.ny.gov/a). Or [HPD](https://www1.nyc.gov/site/hpd/) now.",
+            "Bare https://made.up/x, then https://hcr.ny.gov/a and [1] footnote [two words] end",
+            "Unclosed [link text that never closes\nnext line https://made.up/y",
+            "Ünïcode — [café](https://made.up/é) ok",
+        ] {
+            let whole = clean_links(text, shown);
+            for (cut, _) in text.char_indices().skip(1) {
+                let mut g = LinkGuard::default();
+                let mut out = g.push(&text[..cut], shown);
+                assert!(!out.contains("made.up"), "leaked at {cut}: {out:?}");
+                out.push_str(&g.push(&text[cut..], shown));
+                out.push_str(&g.finish(shown));
+                assert_eq!(out, whole, "split at {cut}");
+            }
         }
     }
 

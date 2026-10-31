@@ -89,7 +89,10 @@ Applied to every conversation, on both endpoints:
 - **Served law is current.** Every provision `lookup_law` handed back is `current`, with a
   `verified_on` date.
 - **Links were shown.** Every `http(s)://` link in the answer appears in the facts or a tool
-  result.
+  result. Since 2026-10-31 the server enforces it before the reader sees anything: a link the
+  model wasn't shown loses its address (`clean_links`), and while an answer streams only the word
+  being written, or an unclosed `[words](`, is held back (`LinkGuard`). This check stays as the
+  backstop.
 - **Law comes with a referral.** If `lookup_law` served law, the answer names an organisation
   from the legal-help directory, by name or by phone number. NYC 311 doesn't count.
 - **Answers that use law come through `write_answer`.** Once a tool result has served law,

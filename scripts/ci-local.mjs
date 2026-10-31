@@ -193,7 +193,9 @@ async function secrets(log, root) {
   const head = git("rev-parse", "HEAD");
   const base = git("merge-base", "origin/main", "HEAD");
   const expected = Number(git("rev-list", "--count", "--no-merges", "--first-parent", `${base}..${head}`));
-  if (expected === 0) return { ok: true, why: "no commits beyond origin/main" };
+  // Merge commits are skipped, as GitHub's scan skips them; their contents were scanned on
+  // their own branches.
+  if (expected === 0) return { ok: true, why: "no new non-merge commits beyond origin/main (merges are skipped, as on GitHub)" };
   // Mount the repository that owns the git directory, not the worktree: a worktree's .git is a
   // file naming a Windows path the container cannot follow. Commits and refs are shared, so
   // the SHA range reads the same either way.

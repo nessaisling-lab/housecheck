@@ -34,7 +34,8 @@ function main() {
     console.error("usage: node scripts/pr-visuals/pr-media.mjs <pr-number> <folder> [--push]");
     process.exit(2);
   }
-  const git = (...a) => execFileSync("git", a, { encoding: "utf8" }).trim();
+  // stderr kept quiet: a first publish has no pr-media on origin yet, and git says so.
+  const git = (...a) => execFileSync("git", a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const root = git("rev-parse", "--show-toplevel");
   const wt = join(root, "target", "pr-visuals", "pr-media-worktree");
   const has = (ref) => {

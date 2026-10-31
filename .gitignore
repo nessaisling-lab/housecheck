@@ -25,3 +25,6 @@ HouseCheck_Data_Integrity_Review.pptx
 
 # Local triage output of a billed live_eval run (see crates/api/evals/README.md).
 crates/api/evals/live-failures.json
+
+# scripts/pr-visuals' own install (playwright-core).
+/scripts/pr-visuals/node_modules/

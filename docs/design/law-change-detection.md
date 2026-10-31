@@ -7,7 +7,9 @@ no longer matches its source, without letting a script decide what the law says?
 **Answer: a weekly GitHub Actions job that re-reads each source, compares, and opens an issue
 for Aisling to verify. It reports. It never changes served law.**
 
-**Dated:** 2026-10-30. **Status:** proposal, not approved. Nothing here is built.
+**Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status:** reviewed by Aisling on
+2026-10-30. The shape is approved; the parts listed under "Revised after review" are being
+redesigned from research before final approval. Nothing here is built.
 
 ---
 
@@ -22,7 +24,8 @@ changed, moved, died or are overdue for a hand re-check, with the evidence and t
   question for a person.
 - **No bypassing bot protection.** No browser user agents, no headless browsers, no unblocking
   services, no retrying with different headers. A protected site is a manual route.
-- **No LLM and no paid calls.** Free GitHub Actions minutes on a public repo and free APIs only.
+- **No LLM.** Free GitHub Actions minutes on a public repo and free APIs, unless Aisling chooses a
+  paid law-data service (she is open to one if it fits; see "Revised after review").
 - **Not a check of what Fly serves.** It checks `main`'s `data/law.json`. The deployed artifact
   can be ahead of or behind that until the next deploy.
 - **Not a search for new law.** It checks rows that exist. Adding rows stays a hand process.
@@ -34,14 +37,17 @@ The route is picked from the host of each provision's `url`. A host with no rout
 
 | Host | Rows on `main` (8d60d6d) | Route | Signal |
 |---|---|---|---|
-| `www.nysenate.gov` | `NY-RPL-235-B` | Open Legislation API: `legislation.nysenate.gov/api/3/laws/{lawId}/{location}`, e.g. `RPP/235-B`, `GOB/7-108`, with Aisling's free key | revision date if exposed, then hash of the section text |
+| `www.nysenate.gov` | `NY-RPL-235-B` (GOL §§ 7-107, 7-108 and RPL §§ 211, 216 captured 2026-10-30, not seeded) | Open Legislation API: `legislation.nysenate.gov/api/3/laws/{lawId}/{location}`, e.g. `RPP/235-B`, `GOB/7-108`, with Aisling's free key | revision date if exposed, then hash of the section text |
 | `hcr.ny.gov` | `NYS-HCR-ORA`, `NYS-HCR-TENANT-RESOURCES` | plain GET; PDFs via `pdftotext -enc UTF-8` | passages present |
 | `portal.311.nyc.gov` | `NYC311-KA-01036` | plain GET | passages present |
 | `data.cityofnewyork.us` | `NYC-OPENDATA-WVXF-DWI5` | plain GET; exact endpoint unverified (see below) | passages present |
 | `rules.cityofnewyork.us` | none yet | plain GET | passages present |
-| `codelibrary.amlegal.com` | none yet (12 Admin Code sections await hand copy) | manual | `verified_on` age |
-| `nycourts.gov` | none yet (HP Actions awaits hand copy) | manual | `verified_on` age |
+| `codelibrary.amlegal.com` | none yet (12 Admin Code sections captured 2026-10-30, not seeded) | manual | `verified_on` age |
+| `nycourts.gov` | none yet (the moved HP case pages, captured 2026-10-30, not seeded) | manual | `verified_on` age |
 | `nyc.gov` | none | manual (refuses scripted requests, per the `verified_by` comment in `law.rs`) | `verified_on` age |
+
+Phase B adds 17 sources: 12 Admin Code sections, 4 state statutes and the NY Courts HP page,
+which has moved and is now two pages, so 18 texts in all.
 
 Every request sends `HouseCheck-law-check/0.2 (+https://github.com/nessaisling-lab/housecheck)`,
 at most one request a second per host.
@@ -133,7 +139,7 @@ permissions:
 
 An issue, not a PR. An issue changes nothing in the repo, and a bot-written PR invites merging
 fetched text without the check this job exists to prompt. Aisling's fix for a real change is an
-ordinary PR that edits `data/law.json` (open question 3). Illustrative body: the "Changed" item is
+ordinary PR that edits `data/law.json` (see "Applying a confirmed change"). Illustrative body: the "Changed" item is
 what the planted fixture in Testing must produce; the rest shows the format, with placeholders.
 
 ```markdown
@@ -229,7 +235,7 @@ House rule: every fix ships with a check that fails without it.
 
 ## Rollout steps
 
-1. Aisling approves this doc and answers the open questions.
+1. Aisling approves the revised doc (her first answers are below).
 2. Build `--law-check` and its tests. One PR, CI green, no workflow yet.
 3. Aisling runs it locally once, free, with the key read the way she reads her other keys. On
    today's seed the expected result is no `changed` rows. Anything else is an extractor bug,
@@ -239,18 +245,59 @@ House rule: every fix ships with a check that fails without it.
    with `dry_run: true`, and confirm the log shows ids and hosts only. Then turn on the cron.
 6. After four runs, review false positives and adjust the extractor, not the comparison.
 
-## Open questions for Aisling
+## Aisling's answers (2026-10-30)
 
-1. **Issue or PR?** This proposes one rolling issue labelled `law-check`.
-2. **Re-check interval** for manual rows: 90 days?
-3. **Applying a confirmed change.** Edit the row in place, with git history keeping the old text?
-   Or add a new row and mark the old one `superseded`? Note `law_fact.key` is a primary key across
-   all provisions, so a superseded row can't keep facts under the same keys as its replacement.
-4. **NY statute text.** Once the API text matches her hand copy, should those rows switch to API
-   text with `verified_by: fetch`, or keep her copy as the served text and use the API only to
-   check it?
-5. **New optional fields in `law.json`:** a per-provision revision date (if the API has one) and a
-   per-source "current through" line for amlegal. OK to add? They would not be served.
-6. **Legal-help directory.** Phase B (unmerged) checks each phone number and hours string against
-   a fetched excerpt. Should this job re-check those weekly too?
-7. **Schedule:** Monday 07:00 UTC, or another time?
+HouseCheck is a nonprofit, donation-supported project. Every date the job writes, and its
+schedule, is in New York time (America/New_York).
+
+| # | Question | Answer |
+|---|---|---|
+| — | Report, never auto-apply | Approved |
+| — | NY statutes through the Senate API, key kept out of logs | Approved, with the least data and traffic possible (see "Revised after review") |
+| — | Plain re-reads of pages that answer simple requests | Approved |
+| — | amlegal and nycourts.gov as manual re-checks | Acceptable for testing only. Wanted: change-only detection that asks "what changed since last time?" instead of re-reading pages |
+| — | Dead and moved pages reported | Not enough: the job must look for the replacement or newer version, never just drop a source |
+| 1 | Issue or PR? | One rolling issue |
+| 2 | Re-check every 90 days? | **No.** The cadence must come from how fast these laws take effect and how fast tenants must act, allowing for paperwork lag (a few days to gather, about five business days to process) |
+| 3 | Edit in place or supersede? | Add a new row and mark the old one superseded. Keep **at most two** superseded versions per provision, so a change can be reverted one or two steps. Keep a **permanent changelog** of every change |
+| 4 | Serve the API's statute text? | Yes. Text that visibly comes from the official source is part of the proof |
+| 5 | Revision date and amlegal "current through" fields | Yes |
+| 6 | Re-check the legal-help numbers and hours weekly | Yes |
+| 7 | Monday 07:00 UTC | A fixed New York time instead |
+
+## Applying a confirmed change
+
+A change Aisling confirms is an ordinary PR that edits `data/law.json`:
+
+1. The new text becomes a new provision row with its own `verified_on`, and its facts move to it.
+2. The old row gets `superseded_by` and stays in the file, unserved, so a revert is a one-line
+   change. `law_fact.key` is a primary key across all provisions, so the old row's facts are
+   dropped from the current set rather than kept under the same keys.
+3. A provision keeps at most two superseded versions. Adding a third removes the oldest from
+   `law.json`; its text stays in git history and its entry stays in the changelog.
+4. `data/law-changelog.json` is append-only and never pruned. One entry per change: provision
+   id, old and new `text_sha256`, the source's revision date or "current through" line, the
+   date it was confirmed (New York time), who confirmed it, and the check-issue link. A test
+   fails if a superseded row has no changelog entry.
+
+## Revised after review
+
+Research under way, results in this section before final approval:
+
+1. **Cadence.** Set from the enactment-to-effect lag of NYC local laws, NY state laws and agency
+   rules, and from the tenant deadlines in the stored law, with the worst-case warning a tenant
+   gets after paperwork lag.
+2. **Change-only checks, in the style of a cursor-based delta sync.** Each source keeps a cursor:
+   the source's own change feed where one exists, otherwise HTTP `ETag` / `Last-Modified`. A
+   quiet week costs one small request per source, not one page per row. Only rows whose source
+   reports a change are fetched and compared. A periodic full pass compares everything, and a
+   planted change the cursor path misses must be caught by it, the way a broken cursor fails
+   its test.
+3. **Dead or moved pages.** Follow the redirect or find the replacement page, record the last
+   good archived copy, and report both for a person to confirm. A challenge page means
+   "unknown", never "dead".
+4. **Paid full-text services.** Whether any service sells the relevant law as a downloadable
+   corpus with change tracking, at a price that fits a nonprofit.
+5. **New York time** for the schedule and every date the job writes.
+6. **Licence.** Open Legislation's CC BY-NC-ND 3.0 notice, read for a nonprofit, donation-funded,
+   Apache-2.0 project. A question for a lawyer; the design only records it.

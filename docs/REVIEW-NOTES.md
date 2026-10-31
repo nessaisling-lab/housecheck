@@ -18,7 +18,7 @@ Independent review of the backend-core implementation (commits `ee3a5a3..78d93c3
 | I2 | Rate-limiting (spec §4b/§7) was dropped from the plan | Add `tower_governor` or `ConcurrencyLimitLayer` before launch; add to roadmap D8 |
 | I4 | Single `Arc<Mutex<Connection>>` serializes reads; lock held across CPU-bound scoring | Acceptable for curated MVP. Scale path: `r2d2_sqlite`/`deadpool-sqlite` + `PRAGMA journal_mode=WAL`; pull the `Building`/`Vec<Violation>` out of the lock before scoring |
 | M3 | Dead `app()` helper builds a throwaway fixture DB | Remove or use in the `/health` test |
-| M4 | Unknown violation classes silently score 0 | At ingest (Plan 2): count/log unrecognized HPD classes instead of dropping |
+| M4 | Unknown violation classes silently score 0 | ✅ **Fixed 2026-10-30** with `enum ViolationClass`: no `_ => 0` arm left; ingest skips and counts unmodelled classes by letter (`/meta`, card); `store` refuses one by name. Measured before the fix on `main` at `03dfae6`: an open class-X violation scored condition 100, the same as none. |
 | M5 | `SELECT *` + positional fixture INSERTs couple to column order | Enumerate columns explicitly |
 | M6 | `SCORING_YEAR = 2026` frozen; recency window drifts as calendar advances | Derive from the ingest snapshot date in Plan 2 |
 | M7 | Score weights live only in code; spec §4d wants "show the math" surfaced | Return weights / per-axis contributions in the `/building` payload for the frontend |

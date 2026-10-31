@@ -260,7 +260,7 @@ fn stage_violations(
         for v in page {
             let Some(viol) = parse_hpd_violation(v) else {
                 if let Some(letter) = hpd_excluded_class(v) {
-                    if hpd_row_bbl(v, bbl_set).is_some_and(|b| bbl_set.contains(&b)) {
+                    if hpd_row_bbl(v).is_some_and(|b| bbl_set.contains(&b)) {
                         *excluded.entry(letter).or_default() += 1;
                     }
                 }
@@ -269,7 +269,7 @@ fn stage_violations(
             app.append_row(duckdb::params![
                 seq,
                 v.get(":id").and_then(Value::as_str),
-                hpd_row_bbl(v, bbl_set).and_then(|b| b.parse::<i64>().ok()),
+                hpd_row_bbl(v).and_then(|b| b.parse::<i64>().ok()),
                 viol.class.as_str(),
                 viol.open,
                 viol.year,

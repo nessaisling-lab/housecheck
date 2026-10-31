@@ -52,7 +52,8 @@ struct HouseCheck {
     data_month: String,
     sources: String,
     excluded: String,
-    building_count: i64,
+    /// What the artifact covers, e.g. "767563 residential buildings across all five boroughs".
+    coverage: String,
     /// HouseCheck's published Ed25519 public key, hex, from somewhere *other* than the
     /// document being checked. Without it `verify_export` can only report that a document
     /// is self-consistent, which a forger can also arrange — so it says that instead of
@@ -87,22 +88,20 @@ impl HouseCheck {
     /// The line every response ends with.
     ///
     /// An agent will happily present "27 of 100" as a fact about New York. It is a fact
-    /// about 250 buildings in one community district, from a dated snapshot, excluding one
-    /// violation class. Saying so costs one line and is the difference between a citation
-    /// and a rumour.
+    /// about the buildings this artifact holds, from a dated snapshot, excluding one violation
+    /// class. Saying so costs one line and is the difference between a citation and a rumour.
     fn provenance(&self) -> String {
         format!(
-            "\n---\nSources: {}\nSnapshot {} · data from {}. Coverage: {} buildings in one \
-             Brooklyn community district (~0.1% of the city). Excluded: {}. \
+            "\n---\nSources: {}\nSnapshot {} · data from {}. Coverage: {}. Excluded: {}. \
              A signal, not a legal ruling, and not legal advice.",
-            self.sources, self.snapshot_year, self.data_month, self.building_count, self.excluded
+            self.sources, self.snapshot_year, self.data_month, self.coverage, self.excluded
         )
     }
 
     #[tool(
         description = "Find covered NYC buildings by partial street address. Returns BBL \
-                       identifiers to pass to get_building_card. Only searches the 250 \
-                       buildings in the covered community district."
+                       identifiers to pass to get_building_card. Only searches the buildings \
+                       this artifact covers; every response states that coverage."
     )]
     fn search_building(
         &self,
@@ -363,8 +362,8 @@ impl ServerHandler for HouseCheck {
         );
         info.server_info = Implementation::new("housecheck", env!("CARGO_PKG_VERSION"));
         info.instructions = Some(
-            "Look up NYC building conditions from public city data. Coverage is 250 buildings \
-             in one Brooklyn community district. Every figure comes with its source and its \
+            "Look up NYC building conditions from public city data. Every response states which \
+             buildings this artifact covers. Every figure comes with its source and its \
              limits; present them together or not at all. A rendered card is easier to read \
              but is not a verified one — verification means checking an exported document \
              against the public key at /meta. This is a signal, not a legal ruling, and it is \
@@ -505,6 +504,15 @@ async fn main() -> Result<()> {
     let excluded = store::get_meta(&conn, "violation_classes_excluded")?
         .unwrap_or_else(|| "see the repository".into());
     let building_count = store::building_count(&conn)?;
+    // Read from the `coverage` row the ingest writes, so the pilot and the citywide artifact
+    // each describe themselves. An artifact from before that row is the pilot.
+    let coverage = match store::get_meta(&conn, "coverage")?.as_deref() {
+        Some("city") => format!("{building_count} residential buildings across all five boroughs"),
+        Some(scope) => format!("{building_count} buildings in {scope}"),
+        None => format!(
+            "{building_count} buildings in one Brooklyn community district (~0.1% of the city)"
+        ),
+    };
 
     // Prefer a key published independently of this process. Deriving it from the signing
     // key is a development convenience only -- if the same process both signs and vouches
@@ -531,7 +539,7 @@ async fn main() -> Result<()> {
         data_month,
         sources,
         excluded,
-        building_count,
+        coverage,
         published_key,
         tool_router: HouseCheck::tool_router(),
     };

@@ -7,9 +7,9 @@
 // Field names here reflect the datasets' *actual* live schemas, which differ from the original
 // plan sketch: PLUTO ships `bbl` as a float string ("3015990007.00000000") and carries the 2020
 // tract in `bct2020` (borough digit + 6-digit tract), and HPD violations (wvxf-dwi5) carry an
-// `Open`/`Close` `violationstatus`. HPD gained a `bbl` column after 2026-07-22; 9,757 of its
-// 10.5M A/B/C rows still lack one (2026-10-30), so `hpd_row_bbl` falls back to rebuilding it
-// from `boroid`/`block`/`lot`. The parsers below normalize all of that.
+// `Open`/`Close` `violationstatus`. HPD gained a `bbl` column after 2026-07-22, but the BBL is
+// still rebuilt from `boroid`/`block`/`lot` (see `hpd_row_bbl` for the building that decided
+// it). The parsers below normalize all of that.
 
 use anyhow::{Context, Result};
 use model::{Building, Violation, ViolationClass};
@@ -182,9 +182,8 @@ pub fn excluded_classes_note(counts: &BTreeMap<String, usize>) -> String {
         .join(", ")
 }
 
-/// The pilot's violation filter: one borough's tax blocks. Matching by block rather than by
-/// `bbl` keeps the rows whose `bbl` is blank, which `hpd_row_bbl` rebuilds from the block and
-/// lot.
+/// The pilot's violation filter: one borough's tax blocks, matching the block/lot that
+/// `hpd_row_bbl` attributes rows by.
 pub fn hpd_where_blocks(boroid: u32, blocks: &[u32]) -> String {
     let list = blocks
         .iter()
@@ -206,29 +205,26 @@ pub fn hpd_bbl(v: &Value) -> Option<String> {
     Some(format!("{boro}{block:05}{lot:04}"))
 }
 
-/// A violation's BBL, given the buildings we hold. HPD carries two answers, its `bbl` column
-/// and the borough/block/lot it rebuilds from, and each is stale somewhere. Measured on the
-/// pilot (2026-10-30): after a tax-lot merger, 55 rows for 88 Tompkins Ave still name the old
-/// lots in block/lot while `bbl` has the current one; at a condo conversion, 9 rows for 21
-/// Prescott Pl name the vanished pre-condo lot in `bbl` while block/lot has the current one.
+/// A violation's BBL: rebuilt from HPD's borough/block/lot, as the ingest always has, with
+/// HPD's `bbl` column only where those fields are blank.
 ///
-/// So: whichever of the two is one of our buildings, the `bbl` column first; otherwise the
-/// column, or the rebuild where the column is blank (9,757 rows citywide). Each row still
-/// lands on exactly one BBL.
-pub fn hpd_row_bbl(v: &Value, ours: &HashSet<String>) -> Option<String> {
-    let column = s(v, "bbl")
-        .as_deref()
-        .and_then(norm_bbl)
-        .filter(|b| b.len() == 10);
-    let rebuilt = hpd_bbl(v);
-    let pick = [&column, &rebuilt]
-        .into_iter()
-        .flatten()
-        .find(|b| ours.contains(*b))
-        .or(column.as_ref())
-        .or(rebuilt.as_ref())
-        .cloned();
-    pick
+/// **Not the `bbl` column first, and the reason is a building.** HPD rewrites that column to
+/// the current tax lot after a merger. 88 Tompkins Ave was built in 2019 on lot 30, merged
+/// from lots 30, 33 and 131; preferring the column handed it 55 violations from the demolished
+/// buildings on lots 33 and 131 (different HPD `buildingid`s), issued in 2007 and closed
+/// administratively in 2025. Its card then read "median 6,533 days to close" for a
+/// six-year-old building. Block/lot keeps each row on the lot it was written against.
+///
+/// ponytail: misses violations re-lotted with no change of building (21 Prescott Pl has 9 rows
+/// whose `bbl` names its pre-condo lot); joining on HPD's `buildingid` would catch those
+/// without importing a predecessor's history.
+pub fn hpd_row_bbl(v: &Value) -> Option<String> {
+    hpd_bbl(v).or_else(|| {
+        s(v, "bbl")
+            .as_deref()
+            .and_then(norm_bbl)
+            .filter(|b| b.len() == 10)
+    })
 }
 
 pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
@@ -597,20 +593,15 @@ mod tests {
     }
 
     #[test]
-    fn hpd_row_bbl_takes_whichever_answer_is_ours() {
-        let ours: HashSet<String> = ["3017470030", "3015577501"].map(String::from).into();
-        // Lot merger: block/lot still says lot 33, the column has the merged lot 30.
+    fn hpd_row_bbl_keeps_a_row_on_the_lot_it_was_written_against() {
+        // A demolished building's violation on old lot 33, which HPD's bbl column has since
+        // rewritten to the merged lot 30: it must not land on the 2019 building now there.
         let merged = json!({"bbl": "3017470030", "boroid": "3", "block": "1747", "lot": "33"});
-        assert_eq!(hpd_row_bbl(&merged, &ours).as_deref(), Some("3017470030"));
-        // Condo conversion: the column still says pre-condo lot 38, block/lot has 7501.
-        let condo = json!({"bbl": "3015570038", "boroid": "3", "block": "1557", "lot": "7501"});
-        assert_eq!(hpd_row_bbl(&condo, &ours).as_deref(), Some("3015577501"));
-        // Neither is ours: the column, so the row is reported against the lot HPD names.
-        let neither = json!({"bbl": "3015990007", "boroid": "3", "block": "1", "lot": "1"});
-        assert_eq!(hpd_row_bbl(&neither, &ours).as_deref(), Some("3015990007"));
-        // 9,757 rows carry no bbl; rebuilding it keeps them rather than dropping them.
-        let blank = json!({"boroid": "3", "block": "1599", "lot": "7"});
-        assert_eq!(hpd_row_bbl(&blank, &ours).as_deref(), Some("3015990007"));
+        assert_eq!(hpd_row_bbl(&merged).as_deref(), Some("3017470033"));
+        // Block/lot blank: the column is all there is.
+        let column_only = json!({"bbl": "3015990007"});
+        assert_eq!(hpd_row_bbl(&column_only).as_deref(), Some("3015990007"));
+        assert_eq!(hpd_row_bbl(&json!({})), None);
     }
 
     #[test]

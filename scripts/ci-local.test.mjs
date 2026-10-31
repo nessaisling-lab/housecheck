@@ -1,7 +1,7 @@
 // node --test scripts/ci-local.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { commitsScanned, parseArgs, secretVerdict } from "./ci-local.mjs";
+import { commitsScanned, parseArgs, pushArgs, secretVerdict } from "./ci-local.mjs";
 
 test("every default check runs; linux only when asked", () => {
   const all = parseArgs([]).selected;
@@ -26,4 +26,10 @@ test("a scan that read no commits is a failure, not a pass", () => {
   assert.equal(secretVerdict({ code: 0, output: "INF 3 commits scanned.", expected: 3 }).ok, true);
   assert.equal(secretVerdict({ code: 1, output: "WRN leaks found: 4", expected: 3 }).why, "leaks found");
   assert.equal(secretVerdict({ code: 0, output: "", expected: 0 }).ok, true);
+});
+
+test("--push goes to the branch's own name, never to the main it was cut from", () => {
+  assert.deepEqual(pushArgs("claude/ci-local", "origin/claude/ci-local"), ["push"]);
+  assert.deepEqual(pushArgs("claude/ci-local", "origin/main"), ["push", "-u", "origin", "HEAD"]);
+  assert.deepEqual(pushArgs("claude/ci-local", null), ["push", "-u", "origin", "HEAD"]);
 });

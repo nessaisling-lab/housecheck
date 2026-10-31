@@ -58,6 +58,15 @@ export function parseArgs(argv) {
   return { selected, list: flags.has("--list"), push: flags.has("--push") };
 }
 
+/**
+ * The `git push` arguments for `--push`. The upstream is used only when it is this branch's
+ * namesake: a branch cut from origin/main tracks origin/main, and a plain push would refuse
+ * (or, configured differently, go to main).
+ */
+export function pushArgs(branch, upstream) {
+  return upstream === `origin/${branch}` ? ["push"] : ["push", "-u", "origin", "HEAD"];
+}
+
 /** The number gitleaks reports in "N commits scanned.", or null when it says nothing. */
 export function commitsScanned(output) {
   const m = /(\d+) commits? scanned/.exec(output);
@@ -315,8 +324,13 @@ async function main() {
   console.log(`\n${passed} of ${results.length} passed${green ? "" : " -- not green"}. GitHub-only: ${GITHUB_ONLY.join("; ")}.`);
   if (!green) process.exit(1);
   if (opts.push) {
-    const upstream = spawnSync("git", ["rev-parse", "--abbrev-ref", "@{u}"], { encoding: "utf8" }).status === 0;
-    const r = spawnSync("git", upstream ? ["push"] : ["push", "-u", "origin", "HEAD"], { stdio: "inherit" });
+    const up = spawnSync("git", ["rev-parse", "--abbrev-ref", "@{u}"], { encoding: "utf8" });
+    const branch = git("branch", "--show-current");
+    if (!branch || branch === "main") {
+      console.error("--push is for a branch of your own, not main or a detached HEAD.");
+      process.exit(2);
+    }
+    const r = spawnSync("git", pushArgs(branch, up.status === 0 ? up.stdout.trim() : null), { stdio: "inherit" });
     process.exit(r.status ?? 1);
   }
 }

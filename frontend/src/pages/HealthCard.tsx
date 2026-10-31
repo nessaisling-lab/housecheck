@@ -473,13 +473,27 @@ export default function HealthCard() {
               ["Class B — hazardous", v.b ?? "—"],
               ["Class A — non-hazardous", v.a ?? "—"],
               ["Open since", v.open_since ?? "—"],
-              ["311 complaints (12 mo)", building.complaints_311 ?? "—"],
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
                 <dd className="text-[0.9375rem] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>{val}</dd>
               </div>
             ))}
+            {/* An area figure, not this building's: say so on the row itself. */}
+            <div className="grid grid-cols-[1fr_auto] gap-x-3">
+              <dt className="hc-row-label">
+                311 requests per 1,000 homes{building.zip ? ` · ZIP ${building.zip}` : ""}
+              </dt>
+              <dd className="text-[0.9375rem] font-medium tabular-nums" style={{ color: "var(--hc-ink)" }}>
+                {building.complaints_311_per_1k_homes?.toLocaleString() ?? "—"}
+              </dd>
+              <dd className="col-span-2 mt-0.5 text-[0.8125rem]" style={{ color: "var(--hc-ink-3, var(--hc-ink-2))" }}>
+                {building.neighborhood && <>{building.neighborhood}. </>}
+                {building.complaints_311_per_1k_homes == null
+                  ? "No area figure for this building's ZIP."
+                  : "An area figure, counted since January 2024: the same for every building in this ZIP."}
+              </dd>
+            </div>
           </dl>
         </>
       ),

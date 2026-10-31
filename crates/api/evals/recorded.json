@@ -1354,6 +1354,237 @@
     }
   },
   {
+    "id": "is-this-building-safe",
+    "kind": "recorded",
+    "why": "A safety question gets the record, not a verdict the data cannot support.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "Is this building safe?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I'll get the specific violations for this building so you can see what safety issues are recorded.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"bbl\": \"3000020002\"}",
+                      "name": "get_open_violations"
+                    },
+                    "id": "toolu_bdrk_01D6yF8DRV3tNyKuPp3q5UR3",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793448215,
+          "id": "gen-1793448215-E8yWmMcWsaggLrm4r0a0",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 79,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004587,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.000395,
+              "upstream_inference_cost": 0.004587,
+              "upstream_inference_prompt_cost": 0.004192
+            },
+            "is_byok": false,
+            "prompt_tokens": 4192,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4271
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"lead_paint\", \"about\": \"Class C lead paint violation\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_01DMvJr2iY2KuSPEm4J7Xn4v",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"mold\", \"about\": \"Class B mold violation\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_012FN74UmKEFCK9BpU34rYgW",
+                    "index": 1,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_013qktJbVuuyrTQznkJJXA3X",
+                    "index": 2,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793448217,
+          "id": "gen-1793448217-6laexCS2a4n9XOJQmlBt",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 140,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.006639,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.0007,
+              "upstream_inference_cost": 0.006639,
+              "upstream_inference_prompt_cost": 0.005939
+            },
+            "is_byok": false,
+            "prompt_tokens": 5939,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 6079
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"record\": \"**What the record shows:**\\n\\nThis building has 2 open violations:\\n- 1 class-C violation (issued 2026): Peeling lead-based paint on the ceiling in the first room from north, with presumed lead paint. HPD cited § 27-2056.6 (source: HPD Housing Maintenance Code Violations, NYC Open Data).\\n- 1 class-B violation (issued 2025): Mold at the south wall, approximately 10 sq ft, in the kitchen. HPD cited § 27-2005 (source: HPD Housing Maintenance Code Violations, NYC Open Data).\\n\\nHPD classifies class C as \\\"immediately hazardous\\\" and class B as \\\"hazardous\\\" (source: HPD, Housing Maintenance Code Violations).\", \"law\": \"**What the law says:**\\n\\n**Lead-based paint:**\\nNYC Administrative Code § 27-2056.6 states: \\\"The existence of lead-based paint in any dwelling unit in a multiple dwelling where a child of applicable age resides shall constitute a class C immediately hazardous violation if such paint is peeling or is on a deteriorated subsurface.\\\" (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-210585)\\n\\nNYC Administrative Code § 27-2056.4 requires owners to investigate for peeling paint, chewable surfaces, deteriorated subsurfaces, friction surfaces and impact surfaces \\\"at least once a year and more often if necessary,\\\" and as of August 9, 2025, at least one such investigation must be conducted by a certified inspector or risk assessor (not the owner, agent, or contractor hired for remediation) using an x-ray fluorescence analyzer. (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-210583)\\n\\n**Mold:**\\nNYC Administrative Code § 27-2017.3 classifies visible mold by square footage:\\n- Less than 10 sq ft in a room: non-hazardous violation.\\n- 10–30 sq ft in a room: hazardous violation.\\n- 30+ sq ft in a room: immediately hazardous violation. (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-60262)\\n\\nThe mold in this building measures approximately 10 sq ft, which places it at the threshold between non-hazardous and hazardous; HPD issued it as a class-B (hazardous) violation.\\n\\nFor an immediately hazardous mold violation, the owner has 21 days after service of the notice to correct it. For a hazardous or non-hazardous violation, the date for correction is set in Administrative Code § 27-2115 (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-60262).\\n\\nNYC Administrative Code § 27-2005 requires owners to keep multiple dwellings in good repair and to be responsible for compliance with the Housing Code, except where responsibility is imposed on the tenant alone. (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-60147)\", \"inference\": \"Class C is the most serious class of violation. The lead-based paint violation is immediately hazardous and requires correction. It applies if a child of applicable age resides in the unit with the peeling paint; that is not stated in the violation record. The class-B mold violation is hazardous and requires correction within a deadline set by the Housing Code. An owner's duty to investigate for and repair lead-based paint hazards is ongoing, and from August 9, 2025 onward, one investigation per year must be by a certified inspector, not the owner or owner's contractor.\", \"question\": \"If a child lives in the unit with the peeling lead paint, what does § 27-2056.6 mean by \\\"lead-based paint in any dwelling unit where a child of applicable age resides\\\"—does the building's class-C violation require immediate correction?\", \"help\": \"Contact **Met Council on Housing — Tenants Rights Hotline** at 212-979-0611 (Monday & Wednesday 1:30pm-8pm & Friday 1:30pm-5pm). Before you call, note the HPD violation numbers and dates from the public record, the location of each hazard (the kitchen, the ceiling), and whether a child resides in the building. They can assess the violations against your lease and give you next steps.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01QFwhe7z8VriCrQFrH13sqB",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793448218,
+          "id": "gen-1793448218-vC4HFu0SLlpvXMl09WX4",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 1159,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.015843,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.005795,
+              "upstream_inference_cost": 0.015843,
+              "upstream_inference_prompt_cost": 0.010048
+            },
+            "is_byok": false,
+            "prompt_tokens": 10048,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 11207
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "get_open_violations",
+        "lookup_law",
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "upstream_calls": 3,
+      "answer_excludes": [
+        "this building is safe",
+        "perfectly safe"
+      ]
+    }
+  },
+  {
     "id": "lead-paint-law",
     "kind": "recorded",
     "why": "Lead paint is a Phase B topic (§§ 27-2056.4, 27-2056.6). The answer must state the class-C rule from the code text, never from memory.",
@@ -2677,7 +2908,7 @@
                       "arguments": "{\"bbl\": \"3000010001\", \"monthly_rent\": 3000}",
                       "name": "check_rent_fairness"
                     },
-                    "id": "toolu_bdrk_01Nt7qQYtziJVWUwRawrN5w1",
+                    "id": "toolu_bdrk_012vQWxdt1TB45TksBZBFMQD",
                     "index": 0,
                     "type": "function"
                   }
@@ -2686,8 +2917,8 @@
               "native_finish_reason": "tool_use"
             }
           ],
-          "created": 1793435634,
-          "id": "gen-1793435634-BMilZZfLqp4tWz9iOjNn",
+          "created": 1793448226,
+          "id": "gen-1793448226-bZfQ47Yv5FirZ346uDN9",
           "model": "anthropic/claude-haiku-4.5",
           "object": "chat.completion",
           "provider": "Amazon Bedrock",
@@ -2700,21 +2931,21 @@
               "image_tokens": 0,
               "reasoning_tokens": 0
             },
-            "cost": 0.004584,
+            "cost": 0.004628,
             "cost_details": {
               "upstream_inference_completions_cost": 0.000405,
-              "upstream_inference_cost": 0.004584,
-              "upstream_inference_prompt_cost": 0.004179
+              "upstream_inference_cost": 0.004628,
+              "upstream_inference_prompt_cost": 0.004223
             },
             "is_byok": false,
-            "prompt_tokens": 4179,
+            "prompt_tokens": 4223,
             "prompt_tokens_details": {
               "audio_tokens": 0,
               "cache_write_tokens": 0,
               "cached_tokens": 0,
               "video_tokens": 0
             },
-            "total_tokens": 4260
+            "total_tokens": 4304
           }
         },
         "status": 200
@@ -2727,7 +2958,7 @@
               "index": 0,
               "logprobs": null,
               "message": {
-                "content": "Your rent of $3,000/month is **20% above the neighborhood median** of $2,500/month — that's $500 more per month.\n\nFor comparison, the HUD Fair Market Rent for the area ranges by unit size:\n- Studio: $2,529/mo\n- 1-bedroom: $2,655/mo\n- 2-bedroom: $2,910/mo\n- 3-bedroom: $3,644/mo\n\nSo $3,000 is above median for this neighborhood, though it may align with the upper end for a 2-bedroom unit depending on the apartment size and condition.\n\nWhether this is \"fair\" also depends on what the lease terms are. If this building is rent-stabilized (the record shows a **likely rent-stabilized signal** — 12 units on the 2024 NYC DOF record), there may be legal limits on rent increases. I'd recommend confirming the building's actual rent-stabilization status with DHCR and reviewing your lease carefully for any terms about increases.",
+                "content": "At $3,000/month, you're being asked to pay **20% above the neighborhood median**. The Census tract median gross rent here is $2,500/month, so you'd be paying $500 more than what the neighborhood typical rent is.\n\nFor context, HUD's Fair Market Rent for the New York metro area in fiscal year 2027 is:\n- Studio: $2,593\n- 1-bedroom: $2,729\n- 2-bedroom: $2,971\n- 3-bedroom: $3,760\n\nSo depending on the unit size, $3,000 falls above median but may be within or below HUD's estimates. The key signal is that it's notably above what renters in this neighborhood are typically paying.\n\nWhether that's \"fair\" depends on the unit itself, the lease terms, and whether the building is rent-stabilized. This building has a rent-stabilization signal—12 units appear on the 2024 NYC DOF record—but that's a signal to confirm with DHCR, not a legal ruling. If units here are rent-stabilized, the increase would be limited by law. If not, the landlord can set any rent the market will bear, though it should reflect what the unit offers.",
                 "reasoning": null,
                 "refusal": null,
                 "role": "assistant"
@@ -2735,35 +2966,35 @@
               "native_finish_reason": "end_turn"
             }
           ],
-          "created": 1793435635,
-          "id": "gen-1793435635-mQrSwN2meWuQliB3zLOm",
+          "created": 1793448227,
+          "id": "gen-1793448227-bfB1XfVjrwbyGZTOVLGn",
           "model": "anthropic/claude-haiku-4.5",
           "object": "chat.completion",
           "provider": "Amazon Bedrock",
           "service_tier": "default",
           "system_fingerprint": null,
           "usage": {
-            "completion_tokens": 235,
+            "completion_tokens": 282,
             "completion_tokens_details": {
               "audio_tokens": 0,
               "image_tokens": 0,
               "reasoning_tokens": 0
             },
-            "cost": 0.005553,
+            "cost": 0.005832,
             "cost_details": {
-              "upstream_inference_completions_cost": 0.001175,
-              "upstream_inference_cost": 0.005553,
-              "upstream_inference_prompt_cost": 0.004378
+              "upstream_inference_completions_cost": 0.00141,
+              "upstream_inference_cost": 0.005832,
+              "upstream_inference_prompt_cost": 0.004422
             },
             "is_byok": false,
-            "prompt_tokens": 4378,
+            "prompt_tokens": 4422,
             "prompt_tokens_details": {
               "audio_tokens": 0,
               "cache_write_tokens": 0,
               "cached_tokens": 0,
               "video_tokens": 0
             },
-            "total_tokens": 4613
+            "total_tokens": 4704
           }
         },
         "status": 200

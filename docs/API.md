@@ -198,11 +198,11 @@ curl -s -X POST http://127.0.0.1:8787/rent-fairness \
   "verdict": "16% above neighborhood median",
   "hud_fmr": {
     "area": "New York, NY HUD Metro FMR Area",
-    "fiscal_year": 2026,
-    "studio": 2529,
-    "one_br": 2655,
-    "two_br": 2910,
-    "three_br": 3644
+    "fiscal_year": 2027,
+    "studio": 2593,
+    "one_br": 2729,
+    "two_br": 2971,
+    "three_br": 3760
   }
 }
 ```

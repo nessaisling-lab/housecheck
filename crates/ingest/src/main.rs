@@ -11,7 +11,7 @@ fn main() -> Result<()> {
     let cfg = Config::parse(&args).map_err(|e| anyhow::anyhow!(e))?;
     match cfg.mode {
         Mode::Fixture => {
-            let _ = std::fs::remove_file(&cfg.out);
+            run::remove_old(&cfg.out)?;
             let conn = store::open_db(&cfg.out)?;
             store::migrate(&conn)?;
             store::insert_fixture(&conn)?;

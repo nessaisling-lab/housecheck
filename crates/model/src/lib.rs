@@ -512,20 +512,20 @@ pub struct HudFmr {
 }
 
 impl HudFmr {
-    /// FY2026 HUD Fair Market Rents for the New York, NY HUD Metro FMR Area (covers Kings
-    /// County / Brooklyn, our curated set), effective Oct 1, 2025 through Sep 30, 2026.
-    /// Source: HUD USER FY2026 Fair Market Rent Documentation System
+    /// FY2027 HUD Fair Market Rents for the New York, NY HUD Metro FMR Area
+    /// (METRO35620MM5600, which covers all five boroughs), effective
+    /// Oct 1, 2026 (91 FR 56156); New York is not on HUD's FY2027 reevaluation list.
+    /// Source: HUD USER FMR Documentation System
     /// (https://www.huduser.gov/portal/datasets/fmr.html). No HUD API key required — the four
-    /// area-wide figures are embedded as constants. FY2025 was 2406/2511/2780/3465; the FY2026
-    /// step up is consistent with HUD's published revision.
-    pub fn ny_metro_fy2026() -> Self {
+    /// area-wide figures are embedded as constants. FY2026 was 2529/2655/2910/3644.
+    pub fn ny_metro_fy2027() -> Self {
         HudFmr {
             area: "New York, NY HUD Metro FMR Area".into(),
-            fiscal_year: 2026,
-            studio: 2529,
-            one_br: 2655,
-            two_br: 2910,
-            three_br: 3644,
+            fiscal_year: 2027,
+            studio: 2593,
+            one_br: 2729,
+            two_br: 2971,
+            three_br: 3760,
         }
     }
 }

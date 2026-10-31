@@ -415,6 +415,19 @@ fn pilot_buildings(c: &Client, cfg: &Config) -> Result<Vec<Value>> {
     Ok(rows)
 }
 
+/// Deletes the previous artifact so the next one starts from an empty schema. A file that
+/// is still there afterwards means something has it open (on Windows, a running API), and
+/// writing into it would mix the old schema with the new rows: a pilot rebuild failed with
+/// "table buildings has no column named zip" that way.
+pub(crate) fn remove_old(path: &str) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e).with_context(|| {
+            format!("could not replace {path}; stop the API (or anything else using it) and rerun")
+        }),
+        _ => Ok(()),
+    }
+}
+
 pub fn run_real(cfg: &Config) -> Result<()> {
     let census_key = std::env::var("CENSUS_API_KEY")
         .context("set CENSUS_API_KEY (https://api.census.gov/data/key_signup.html)")?;
@@ -591,7 +604,7 @@ pub fn run_real(cfg: &Config) -> Result<()> {
 
     // 8. The serving artifact. Rebuilt from scratch every run, so a crash means rerun: no
     //    rollback journal and no syncs, which is most of the cost of 10.5M inserts.
-    let _ = std::fs::remove_file(&cfg.out);
+    remove_old(&cfg.out)?;
     let conn = store::open_db(&cfg.out)?;
     conn.execute_batch("PRAGMA journal_mode = OFF; PRAGMA synchronous = OFF;")?;
     store::migrate(&conn)?;
@@ -742,6 +755,33 @@ pub fn run_real(cfg: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// No old artifact is fine; one that cannot be deleted stops the run with what to do.
+    #[test]
+    fn remove_old_refuses_a_file_still_in_use() {
+        let path = std::env::temp_dir().join(format!("hc-remove-old-{}.db", std::process::id()));
+        let path = path.to_str().unwrap();
+        remove_old(path).expect("nothing there");
+        std::fs::write(path, b"old").unwrap();
+        remove_old(path).expect("not in use");
+        assert!(!std::path::Path::new(path).exists());
+        // Windows refuses to delete a file another handle has open without share-delete, as
+        // SQLite opens it; other systems allow it.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            std::fs::write(path, b"old").unwrap();
+            let held = std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(1 | 2) // FILE_SHARE_READ | FILE_SHARE_WRITE, no delete
+                .open(path)
+                .unwrap();
+            let err = remove_old(path).expect_err("in use");
+            assert!(format!("{err:#}").contains("stop the API"), "{err:#}");
+            drop(held);
+            remove_old(path).unwrap();
+        }
+    }
 
     /// The two guards that keep a broken source from becoming a quietly thinner or flatter
     /// city: a pull outside Socrata's counts, and ZIP rates missing for many buildings.

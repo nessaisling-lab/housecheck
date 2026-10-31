@@ -414,7 +414,7 @@
     ] },
     "upstream": [
       { "tools": [["check_rent_fairness", { "bbl": "3000010001", "monthly_rent": 3000 }]] },
-      { "answer": "$3,000 is $500, or 20%, above this neighborhood's Census tract median of $2,500. For comparison, HUD's 2026 Fair Market Rent for the area is $2,655 for a one-bedroom and $2,910 for a two-bedroom. That is a benchmark, not a ruling on whether the rent is legal." }
+      { "answer": "$3,000 is $500, or 20%, above this neighborhood's Census tract median of $2,500. For comparison, HUD's 2027 Fair Market Rent for the area is $2,729 for a one-bedroom and $2,971 for a two-bedroom. That is a benchmark, not a ruling on whether the rent is legal." }
     ],
     "expect": {
       "status": 200,

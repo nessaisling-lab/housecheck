@@ -93,7 +93,9 @@ export interface BuildingCard {
   units_res?: number | null;
   has_elevator?: boolean | null;
   near_ada_subway_m?: number | null;
-  complaints_311?: number | null;
+  zip?: string | null;
+  /** 311 requests since 2024-01-01 per 1,000 homes in the building's ZIP: an area figure. */
+  complaints_311_per_1k_homes?: number | null;
   lat?: number | null;
   long?: number | null;
   score: number | null;

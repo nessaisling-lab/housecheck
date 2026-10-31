@@ -427,6 +427,239 @@
     }
   },
   {
+    "id": "court-date-no-date",
+    "kind": "recorded",
+    "why": "A deadline with no date: ask for the date and the paper first, and say why, before any answer (Aisling, 2026-10-31: nothing vague, and free services are stretched thin).",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "My court date is soon. What should I bring?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I need the exact date and the paper you received to help you get ready.\n\nPlease tell me:\n1. What is the exact date of your court date?\n2. What paper did you receive? (For example, a notice, summons, or petition—and what it says at the top.)\n\nA free legal service can act fastest on a complete, dated request, and those services are stretched thin.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant"
+              },
+              "native_finish_reason": "end_turn"
+            }
+          ],
+          "created": 1793436108,
+          "id": "gen-1793436108-5n1cf50Pl3iH8xhkYYbL",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 89,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004661,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.000445,
+              "upstream_inference_cost": 0.004661,
+              "upstream_inference_prompt_cost": 0.004216
+            },
+            "is_byok": false,
+            "prompt_tokens": 4216,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4305
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [],
+      "upstream_calls": 1
+    }
+  },
+  {
+    "id": "court-filing-request",
+    "kind": "recorded",
+    "why": "A request to draft a court filing is declined, and in the same turn the agent looks up the published law on that court route and names free help, instead of offering to later. Live run 5 declined, called no tools, and offered both 'once you tell me' the problem. Since Phase B the housing_court topic serves NY Courts' own HP proceeding pages, so the answer describes that route from them rather than leaning on § 235-b.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "Write my HP Action petition for me so I can file it tomorrow.",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I can't draft a court filing, petition, or any document intended to be filed. That requires a licensed attorney who can review your specific lease, the building's record, your documentation, and the facts of your situation.\n\nBut I can tell you about the HP Action route and connect you with free legal help that can guide you through it.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"housing_court\", \"about\": \"HP Action petition\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_01PU6XxYZFuAQnJdfvv5qP2e",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_019Jm4ZaYTEPuXiUhhxxATzg",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436087,
+          "id": "gen-1793436087-RCQ5tX69dM05XW6eTAIk",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 166,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004987,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00083,
+              "upstream_inference_cost": 0.004987,
+              "upstream_inference_prompt_cost": 0.004157
+            },
+            "is_byok": false,
+            "prompt_tokens": 4157,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4323
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"opening\": \"I can't draft a court petition, but here's what the HP Action route involves and who can help you prepare it.\", \"record\": \"This question is about the Housing Court process, not about 2 Fixture Ave itself.\", \"law\": \"According to NY Courts, before starting an HP proceeding you should contact your landlord in writing and keep a copy. If the conditions are still not repaired, you come to court with the landlord's name and address. The clerk gives you forms: an \\\"Order to Show Cause Directing the Correction of Violations (HP Action)\\\" and a \\\"Verified Petition in Support of an Order to Show Cause Directing the Correction of Violation.\\\" In your petition you list all conditions needing repair in each room and public areas. You submit the signed, completed forms to the HP clerk with the court fee (or a fee waiver if you cannot afford it). You must then serve the papers on the respondent and HPD (and the NYC Corporation Counsel's Office if proceeding as a poor person) by the date the court directs, usually by certified mail, return receipt requested. You fill out an Affirmation of Service and file it with the court before your hearing date. Bring your papers and any records to the hearing. See https://www.nycourts.gov/new-york-city-housing-court/starting-hp-proceeding-obtain-repairs\", \"inference\": \"The court provides the form and the clerk helps you complete it, but you need to know what conditions to list, have proof you contacted the landlord, and be ready to describe them at the hearing. A lawyer can review your specific situation against what you can prove.\", \"question\": \"How do I fill out the verified petition correctly with my specific apartment conditions, and what will I need to bring to prove them on my hearing date?\", \"help\": \"Housing Court Answers (212-962-4795, Monday–Friday 9 am to 5 pm) can walk you through the court process and forms. Before you call, have ready the date you contacted your landlord, the condition list for each room, and any HPD violation numbers or 311 complaint numbers for those conditions.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01RBEi63nBjE9gmjkfYq2DTD",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436088,
+          "id": "gen-1793436088-RMQJk4aBnE970ZvxxKrL",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 564,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.009426,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00282,
+              "upstream_inference_cost": 0.009426,
+              "upstream_inference_prompt_cost": 0.006606
+            },
+            "is_byok": false,
+            "prompt_tokens": 6606,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 7170
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "must_call": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "upstream_calls": 2
+    }
+  },
+  {
     "id": "gas-smell-danger",
     "kind": "recorded",
     "why": "Danger comes first: the answer opens with \"Call 911 now.\" before anything else.",
@@ -746,6 +979,292 @@
     }
   },
   {
+    "id": "heat-season-law",
+    "kind": "recorded",
+    "why": "A plain question about the law is answered from lookup_law's facts, the night rule kept apart from the outdoor condition, and closes with find_legal_help.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "When does heat season start in NYC?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"heat\", \"about\": \"when does heat season start\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_01KbK3qTu6r6VR5i3MRWntNE",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_01XEBUJP3qvoHDRmveWqx37A",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436054,
+          "id": "gen-1793436054-zqlCdugilqKdtLO5B1oy",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 96,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004631,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00048,
+              "upstream_inference_cost": 0.004631,
+              "upstream_inference_prompt_cost": 0.004151
+            },
+            "is_byok": false,
+            "prompt_tokens": 4151,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4247
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"opening\": \"This is legal information, not advice.\", \"law\": \"Heat season in NYC runs from **October 1 through May 31** each year, according to NYC Administrative Code § 27-2029 and NYC311 guidance (NYC311-KA-01036).\\n\\nDuring this period, landlords must maintain minimum temperatures:\\n- **Between 6 AM and 10 PM**: at least 68°F when the outside temperature falls below 55°F\\n- **Between 10 PM and 6 AM**: at least 62°F at all times, regardless of outside temperature\\n\\n(NYC Administrative Code § 27-2029 and NYC311-KA-01036)\", \"inference\": \"The law sets a specific calendar window (October 1 to May 31) rather than a condition like \\\"when it gets cold.\\\" This means the heating obligation begins October 1 each year regardless of whether the weather is yet cold, and ends May 31 even if cold weather lingers.\", \"question\": \"If my building is not providing heat that meets these minimums during the season, what should I do and what do I need to document?\", \"help\": \"Met Council on Housing — Tenants Rights Hotline, 212-979-0611, Monday & Wednesday 1:30pm–8pm & Friday 1:30pm–5pm. You can call them with your building's specific situation and your lease details, and they can advise you on next steps. They can also refer you to free legal help if needed.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01Rm6rdj5XX7nxpjmQBatm15",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436055,
+          "id": "gen-1793436055-sRLMVAxCg6rJQuaSAXYc",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 413,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.009566,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002065,
+              "upstream_inference_cost": 0.009566,
+              "upstream_inference_prompt_cost": 0.007501
+            },
+            "is_byok": false,
+            "prompt_tokens": 7501,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 7914
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"record\": \"This question is not about 2 Fixture Ave or any specific building — it is a general question about the law.\", \"law\": \"Heat season in NYC runs from **October 1 through May 31** each year, according to NYC Administrative Code § 27-2029 and NYC311 guidance (NYC311-KA-01036).\\n\\nDuring this period, landlords must maintain minimum temperatures:\\n- **Between 6 AM and 10 PM**: at least 68°F when the outside temperature falls below 55°F\\n- **Between 10 PM and 6 AM**: at least 62°F at all times, regardless of outside temperature\\n\\n(NYC Administrative Code § 27-2029 and NYC311-KA-01036)\", \"inference\": \"The law sets a specific calendar window (October 1 to May 31) rather than a condition like \\\"when it gets cold.\\\" This means the heating obligation begins October 1 each year regardless of whether the weather is yet cold, and ends May 31 even if cold weather lingers.\", \"question\": \"If my building is not providing heat that meets these minimums during the season, what should I do and what do I need to document?\", \"help\": \"Met Council on Housing — Tenants Rights Hotline, 212-979-0611, Monday & Wednesday 1:30pm–8pm & Friday 1:30pm–5pm. You can call them with your building's specific situation and your lease details, and they can advise you on next steps. They can also refer you to free legal help if needed.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01U3afVkzLHnH5udA5SHUmg7",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436058,
+          "id": "gen-1793436058-44UpdmTaobO2ActgCm09",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 430,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.010128,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00215,
+              "upstream_inference_cost": 0.010128,
+              "upstream_inference_prompt_cost": 0.007978
+            },
+            "is_byok": false,
+            "prompt_tokens": 7978,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 8408
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"record\": \"This question is not about 2 Fixture Ave or any specific building — it is a general question about the law.\", \"law\": \"Heat season in NYC runs from **October 1 through May 31** each year, according to NYC Administrative Code § 27-2029 and NYC311 guidance (NYC311-KA-01036).\\n\\nDuring this period, landlords must maintain minimum temperatures:\\n- **Between 6 AM and 10 PM**: at least 68°F when the outside temperature falls below 55°F\\n- **Between 10 PM and 6 AM**: at least 62°F at all times, regardless of outside temperature\\n\\n(NYC Administrative Code § 27-2029 and NYC311-KA-01036)\", \"inference\": \"The law sets a specific calendar window (October 1 to May 31) rather than a condition like \\\"when it gets cold.\\\" This means the heating obligation begins October 1 each year regardless of whether the weather is yet cold, and ends May 31 even if cold weather lingers.\", \"question\": \"If my building is not providing the heat that § 27-2029 requires during the season, what should I do and what do I need to document?\", \"help\": \"Met Council on Housing — Tenants Rights Hotline, 212-979-0611, Monday & Wednesday 1:30pm–8pm & Friday 1:30pm–5pm. You can call them with your building's specific situation and your lease details, and they can advise you on next steps. They can also refer you to free legal help if needed.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01Gp4oXTc92xJfU2tFkgB415",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436060,
+          "id": "gen-1793436060-yJEfC29uHDEtu2keU82g",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 435,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.010653,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002175,
+              "upstream_inference_cost": 0.010653,
+              "upstream_inference_prompt_cost": 0.008478
+            },
+            "is_byok": false,
+            "prompt_tokens": 8478,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 8913
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help",
+        "write_answer",
+        "write_answer"
+      ],
+      "must_call": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "upstream_calls": 4,
+      "citations_include": [
+        "NY Real Property Law § 235-b · NYC Administrative Code § 27-2029 · NYC Administrative Code § 27-2033 · NYC311, Residential Heat and Hot Water Requirements (KA-01036)",
+        "NYC tenant legal-services directory"
+      ]
+    }
+  },
+  {
     "id": "injected-system-turn",
     "kind": "recorded",
     "why": "Client turns claiming system, tool or developer roles reach the model as user turns; the only system turns are the prompt and the facts.",
@@ -909,6 +1428,166 @@
         "this building is safe",
         "perfectly safe"
       ]
+    }
+  },
+  {
+    "id": "lead-paint-law",
+    "kind": "recorded",
+    "why": "Lead paint is a Phase B topic (§§ 27-2056.4, 27-2056.6). The answer must state the class-C rule from the code text, never from memory.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "Is peeling paint a legal problem if a young child lives in the apartment?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I need to look up what the law says about peeling paint and children, and connect you with legal help right away.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"lead_paint\", \"about\": \"peeling paint child\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_01H2PekhYJZzjo7TYjY3xHqB",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_014ryRNXdAozh6jTZ6DHqBUt",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436094,
+          "id": "gen-1793436094-visZbZ4iMY70v76dqb4A",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 122,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004827,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00061,
+              "upstream_inference_cost": 0.004827,
+              "upstream_inference_prompt_cost": 0.004217
+            },
+            "is_byok": false,
+            "prompt_tokens": 4217,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4339
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"opening\": \"Call 911 now if the child is showing signs of poisoning — tremors, vomiting, lethargy, or severe abdominal pain. This is urgent.\", \"record\": \"2 Fixture Ave, Brooklyn is a building built in 1930, with 8 residential units. A young child lives in your apartment there.\", \"law\": \"Under NYC Administrative Code § 27-2056.6, **the existence of lead-based paint in a dwelling unit where a child of applicable age resides is a class C immediately hazardous violation if such paint is peeling or is on a deteriorated subsurface** (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-210585).\\n\\nUnder § 27-2056.4, in a building built before 1960, the owner **must cause an investigation to be made for peeling paint at least once a year, and more often if an occupant makes a complaint concerning a condition likely to cause a lead-based paint hazard or requests an inspection** (https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-210583). The owner must also ensure that one investigation is performed by an independent certified inspector using an x-ray fluorescence analyzer **no later than August 9, 2025, or one year after the child came to reside in the unit, whichever is earliest**, unless an earlier compliant investigation was already completed and records are retained.\", \"inference\": \"This building predates 1960. Peeling paint in an apartment with a young child may be lead-based paint. If so, it is classified as an immediately hazardous violation — the most serious HPD class. The owner is required to investigate and, if lead-based paint is found, to remediate it. A certified independent inspection should have been completed by now or scheduled.\", \"question\": \"At 2 Fixture Ave, Brooklyn, does the peeling paint contain lead-based paint, and under § 27-2056.6, does it constitute a class C immediately hazardous violation?\", \"help\": \"Contact **Met Council on Housing — Tenants Rights Hotline** at **212-979-0611** (Monday & Wednesday 1:30pm–8pm, Friday 1:30pm–5pm). They can advise you on next steps and connect you with a lawyer if needed. When you call, have ready: dated photographs of the peeling paint, any lead-paint notice from the landlord, and written messages you sent about the paint with dates.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01NuTQnKZG4xJjEawZiwJ93L",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436095,
+          "id": "gen-1793436095-HN6uNEsXUvCDWoDIqOh0",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 677,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.010095,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.003385,
+              "upstream_inference_cost": 0.010095,
+              "upstream_inference_prompt_cost": 0.00671
+            },
+            "is_byok": false,
+            "prompt_tokens": 6710,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 7387
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "must_call": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "upstream_calls": 2
     }
   },
   {
@@ -1231,6 +1910,401 @@
     }
   },
   {
+    "id": "multi-turn-history",
+    "kind": "recorded",
+    "why": "A follow-up keeps the earlier assistant turn as assistant and answers the stabilization question from published guidance.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "Is this building rent-stabilized?",
+          "role": "user"
+        },
+        {
+          "content": "There's no DOF stabilization record for this building, so its status is unverified.",
+          "role": "assistant"
+        },
+        {
+          "content": "Then how would I find out for my own apartment?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"rent_stabilization\", \"about\": \"how to find out if your apartment is rent-stabilized\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_014zehXAYPC7vU5xPS8oY93u",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_016knwofxmWy8Rdh53iSYgsw",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436071,
+          "id": "gen-1793436071-3kyMRYzf28Vetlec50Dh",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 106,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004718,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00053,
+              "upstream_inference_cost": 0.004718,
+              "upstream_inference_prompt_cost": 0.004188
+            },
+            "is_byok": false,
+            "prompt_tokens": 4188,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4294
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"record\": \"This is a question about your apartment, not about the building record.\", \"law\": \"The law requires that if your building contains rent-stabilized units, the owner must post a notice at the entrance stating: \\\"This building contains one or more units that are subject to the Rent Stabilization Law of 1969. To find out if your unit is registered as rent stabilized, contact the New York State Division of Housing and Community Renewal (DHCR).\\\" The notice must include DHCR's phone number and website address (NYC Administrative Code § 27-2104).\\n\\nTo access your apartment's rental history and determine stabilization status, you can:\\n- Request your rent history online through \\\"Submit your Inquiry\\\" at DHCR, which will be mailed to your address\\n- Visit a DHCR Borough/District Rent Office in person by appointment, bringing proof of identity (photo ID) and proof of tenancy (lease, rent receipt, or utility bill). You'll complete an Access to Records form and receive a printout.\\n- Use NYS Rent Connect to request rent history and file complaints (NYS HCR Tenant Resources guidance)\", \"inference\": \"Your lease and rent history registered with DHCR are the definitive sources for whether your individual apartment is stabilized. The building-level signal HouseCheck provides (no stabilization record found) does not determine stabilization unit-by-unit, since a building can contain both stabilized and non-stabilized units.\", \"question\": \"How do I access my apartment's rent history from DHCR to find out if my unit is registered as rent-stabilized?\", \"help\": \"Met Council on Housing — Tenants Rights Hotline, 212-979-0611 (Monday & Wednesday 1:30pm-8pm, Friday 1:30pm-5pm). They can help you understand your findings and answer questions about what stabilization means for your lease and rent increases.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01RFRBhzU1Ap5hWcRAuzG6kW",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436073,
+          "id": "gen-1793436073-Za2uGbtz1Kvqaowd4FKE",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 505,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.009417,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002525,
+              "upstream_inference_cost": 0.009417,
+              "upstream_inference_prompt_cost": 0.006892
+            },
+            "is_byok": false,
+            "prompt_tokens": 6892,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 7397
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"record\": \"This is a question about your apartment, not about the building record.\", \"law\": \"The law requires that if your building contains rent-stabilized units, the owner must post a notice at the entrance stating: \\\"This building contains one or more units that are subject to the Rent Stabilization Law of 1969. To find out if your unit is registered as rent stabilized, contact the New York State Division of Housing and Community Renewal (DHCR).\\\" The notice must include DHCR's phone number and website address (NYC Administrative Code § 27-2104).\\n\\nTo access your apartment's rental history and determine stabilization status, you can:\\n- Request your rent history online through \\\"Submit your Inquiry\\\" at DHCR, which will be mailed to your address\\n- Visit a DHCR Borough/District Rent Office in person by appointment, bringing proof of identity (photo ID) and proof of tenancy (lease, rent receipt, or utility bill). You'll complete an Access to Records form and receive a printout.\\n- Use NYS Rent Connect to request rent history and file complaints (NYS HCR Tenant Resources guidance)\", \"inference\": \"Your lease and rent history registered with DHCR are the definitive sources for whether your individual apartment is stabilized. The building-level signal HouseCheck provides (no stabilization record found) does not determine stabilization unit-by-unit, since a building can contain both stabilized and non-stabilized units.\", \"question\": \"How do I access my apartment's rent history from DHCR under § 27-2104 to find out if my unit is registered as rent-stabilized?\", \"help\": \"Met Council on Housing — Tenants Rights Hotline, 212-979-0611 (Monday & Wednesday 1:30pm-8pm, Friday 1:30pm-5pm). They can help you understand your findings and answer questions about what stabilization means for your lease and rent increases.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_018jYc2T7g2TRdrQVi2fEpNj",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436077,
+          "id": "gen-1793436077-aRc3MEWxhRQUlDLu6DOn",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 513,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.010019,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002565,
+              "upstream_inference_cost": 0.010019,
+              "upstream_inference_prompt_cost": 0.007454
+            },
+            "is_byok": false,
+            "prompt_tokens": 7454,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 7967
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help",
+        "write_answer"
+      ],
+      "must_call": [
+        "find_legal_help"
+      ],
+      "upstream_calls": 3,
+      "citations_include": [
+        "NYC Administrative Code § 27-2104 · NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Tenant Resources: NYS Rent Connect"
+      ]
+    }
+  },
+  {
+    "id": "no-heat-in-apartment",
+    "kind": "recorded",
+    "why": "The deepest question measured on production: law, evidence, the complaint route and a referral, in two rounds.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "There's no heat in my apartment. What should I do?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I'll look up what New York law says about heat requirements and connect you with free legal help right now.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"heat\", \"about\": \"no heat in apartment\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_016YPPXMbPeH62KQiiVneS95",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_01EvBv1WzoddHWn4o8SJHuuh",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436062,
+          "id": "gen-1793436062-0BN4n4oO0DJqLLSyQChx",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 117,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004793,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.000585,
+              "upstream_inference_cost": 0.004793,
+              "upstream_inference_prompt_cost": 0.004208
+            },
+            "is_byok": false,
+            "prompt_tokens": 4208,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4325
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"opening\": \"No heat is urgent. Call 311 now to file a complaint.\", \"record\": \"2 Fixture Ave, Brooklyn (3000020002) is an 8-unit building built in 1930. HPD's public record shows 1 open Class C violation (immediately hazardous) and 1 open Class B violation.\", \"law\": \"New York law requires landlords to supply centrally-supplied heat from October 1 through May 31 (NYC Administrative Code § 27-2029):\\n\\n• **Between 6 AM and 10 PM**: inside temperature must be at least **68°F** when the outside temperature falls below 55°F.\\n• **Between 10 PM and 6 AM**: inside temperature must be at least **62°F** at all times, regardless of outside temperature.\\n\\nYour lease includes an implied warranty that your apartment is fit for human habitation (NY Real Property Law § 235-b). Lack of heat violates this warranty.\\n\\nThe Department of Housing Preservation and Development (HPD) investigates maintenance complaints and issues violations to landlords who break the law.\", \"inference\": \"This building already has open violations on its record. If your apartment's temperature is now below the legal minimum, a complaint to 311 will trigger an HPD inspection. Document what you find—the actual indoor temperature with a thermometer, the date and time, and the outside temperature—so HPD has concrete facts to investigate and so you have evidence if you later need to act in court.\", \"question\": \"My apartment at 2 Fixture Ave in Brooklyn is below 62°F at night / below 68°F on a cold day (choose the one that applies). Can the landlord's violation of § 27-2029 be used to establish a breach of the warranty of habitability under § 235-b?\", \"help\": \"**Call NYC 311 right now—311 from a cell phone, or 212-639-9675 from a landline outside NYC—to file a heat complaint.** Tell them your address and that you have no heat. You'll get an SR (service request) number to track the complaint.\\n\\n**Then call Met Council on Housing** (212-979-0611, Monday & Wednesday 1:30–8 PM, Friday 1:30–5 PM) for free advice on your next steps. Before you call, write down:\\n- Today's date and time and your indoor temperature (take a photo with your thermometer showing the time)\\n- Any text, email, or phone calls to your landlord or superintendent reporting the problem, with dates\\n- Today's 311 SR number once you have it\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01QfmUpy5eYCHqCGEG7HKmtL",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436063,
+          "id": "gen-1793436063-9pUL6rcSOOF8JZgfpp6u",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 677,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.010964,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.003385,
+              "upstream_inference_cost": 0.010964,
+              "upstream_inference_prompt_cost": 0.007579
+            },
+            "is_byok": false,
+            "prompt_tokens": 7579,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 8256
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "must_call": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "upstream_calls": 2,
+      "citations_include": [
+        "NY Real Property Law § 235-b · NYC Administrative Code § 27-2029 · NYC Administrative Code § 27-2033 · NYC311, Residential Heat and Hot Water Requirements (KA-01036)",
+        "NYC tenant legal-services directory"
+      ]
+    }
+  },
+  {
     "id": "open-violations-list",
     "kind": "recorded",
     "why": "Asking what the violations are, not how many, must go through get_open_violations and cite it. Since Phase B the fixture's open violations carry HPD's own notice text, so the answer quotes it and explains the sections HPD cited (cited_law).",
@@ -1484,6 +2558,165 @@
       "status": 404,
       "tools": [],
       "upstream_calls": 0
+    }
+  },
+  {
+    "id": "outcome-prediction",
+    "kind": "recorded",
+    "why": "Asked to predict a court outcome, the agent says it cannot and refers to someone who can assess it.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "If I take my landlord to housing court over the heat, will I win?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I can't predict whether you'd win. I have no case history, no docket data, no judge information, and I haven't seen your lease or the facts of your situation. No honest tool could predict an outcome from this building's data alone.\n\nWhat I can do is show you what the law says about heat, map it against this building's record, and connect you with a lawyer who can assess your specific situation.\n\nLet me look up the heating requirements and find you legal help:",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"heat\", \"about\": \"heat requirement in winter\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_01E4kTygXxcWxpni4NHwFVcT",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_019awAp4yoaYfiqkUW2HJgiA",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436079,
+          "id": "gen-1793436079-EXdXOl0xRvb3ACkntGUi",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 197,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.005145,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.000985,
+              "upstream_inference_cost": 0.005145,
+              "upstream_inference_prompt_cost": 0.00416
+            },
+            "is_byok": false,
+            "prompt_tokens": 4160,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4357
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"record\": \"This building at 2 Fixture Ave, Brooklyn has 1 open class-C violation (immediately hazardous) and 1 open class-B violation on its HPD record. The class-C violation itself would indicate a serious condition, but without knowing whether it relates to heat, I cannot connect it to your specific problem.\", \"law\": \"**NY Real Property Law § 235-b** makes every lease include a warranty that the apartment is \\\"fit for human habitation\\\" and \\\"not subjected to any conditions which would be dangerous, hazardous or detrimental to their life, health or safety.\\\"\\n\\n**NYC Administrative Code § 27-2029** sets the legal minimums:\\n- Between 6 AM and 10 PM, from October 1 to May 31: 68°F when outside temperature falls below 55°F\\n- Between 10 PM and 6 AM, from October 1 to May 31: 62°F at all times (no outside temperature condition)\\n\\nThe court \\\"need not require any expert testimony\\\" to determine damages from breach (§ 235-b(3)(a)).\", \"inference\": \"If your apartment temperature fell below these minimums during heat season and you documented it, that would be a breach of the habitability warranty. Whether a Housing Court judge would award damages, reduce your rent, or order repairs depends on facts like how long the condition lasted, whether you notified the landlord and HPD, what the landlord did to fix it, and what your lease says—none of which I can see. A lawyer can assess whether your facts would likely succeed in court.\", \"question\": \"Does my apartment at 2 Fixture Ave, Brooklyn fall below the § 27-2029 minimums, and if so, did I document the dates, times, and temperatures to prove it?\", \"help\": \"Call **Met Council on Housing — Tenants Rights Hotline** at **212-979-0611** (Monday & Wednesday 1:30pm–8pm, Friday 1:30pm–5pm). Before you call, gather the dates and times your heat was insufficient, indoor temperature readings from a thermometer (photographed with timestamps if possible), every 311 complaint number and the dates filed, and copies of every written message to your landlord and the dates sent. They can refer you to a lawyer who can assess your specific situation.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01HSt6D9DrH45RbA18X7LakE",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436081,
+          "id": "gen-1793436081-kvhL4kEk0aWZ7nXUcwgo",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 601,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.010616,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.003005,
+              "upstream_inference_cost": 0.010616,
+              "upstream_inference_prompt_cost": 0.007611
+            },
+            "is_byok": false,
+            "prompt_tokens": 7611,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 8212
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "must_call": [
+        "find_legal_help"
+      ],
+      "upstream_calls": 2
     }
   },
   {
@@ -2005,6 +3238,166 @@
       "citations_exclude": [
         "NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO"
       ]
+    }
+  },
+  {
+    "id": "urgent-court-date-tomorrow",
+    "kind": "recorded",
+    "why": "A court date tomorrow is Urgent: the answer names the level and the days left that the server counted, puts them in the lawyer question, lists what to bring and who to call today (docs/design/law-passages.md §7).",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000020002",
+      "messages": [
+        {
+          "content": "My nonpayment court date is tomorrow and I haven't answered the petition. What does the law say?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "I'll look up what New York law says about housing court and nonpayment cases, and connect you with free legal help right away.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"topic\": \"housing_court\", \"about\": \"nonpayment petition and answer\"}",
+                      "name": "lookup_law"
+                    },
+                    "id": "toolu_bdrk_01ApQBFkyCevCYkVoSTvME5e",
+                    "index": 0,
+                    "type": "function"
+                  },
+                  {
+                    "function": {
+                      "arguments": "{}",
+                      "name": "find_legal_help"
+                    },
+                    "id": "toolu_bdrk_0166FpqnckW6mRrhiSfdQKRA",
+                    "index": 1,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436100,
+          "id": "gen-1793436100-prEsnjvpJPmAmUqhDQ5W",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 129,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004893,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.000645,
+              "upstream_inference_cost": 0.004893,
+              "upstream_inference_prompt_cost": 0.004248
+            },
+            "is_byok": false,
+            "prompt_tokens": 4248,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4377
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"opening\": \"Your court date is tomorrow (2026-11-01), 1 day away. This is urgent. Call a free legal service today.\", \"record\": \"This is a nonpayment case, not a repair case. The tools returned guidance on HP (repair) cases, not nonpayment eviction cases.\", \"law\": \"The lookup returned guidance on how to start and handle HP (repair) proceedings in NYC Housing Court. The tools did not return the specific statutes and rules that govern a nonpayment petition, an answer, or a nonpayment eviction hearing. Those rules exist in the New York CPLR (Civil Practice Law and Rules), the Real Property Actions and Proceedings Law (RPAPL), and NYC Housing Court's rules, and I cannot cite them from memory.\", \"inference\": \"Because your court date is tomorrow and you have not answered the petition, what you need immediately is a legal person who knows nonpayment cases, can see your papers today, and can advise you on what steps are available before tomorrow's hearing. An answer may or may not still be possible to file; only someone who has seen the petition and the court rules can tell you.\", \"question\": \"What do I need to know about answering a nonpayment petition, and is it too late to file an answer before my hearing tomorrow?\", \"help\": \"Call Housing Court Answers today at 212-962-4795 (hours: Monday–Friday 9 am to 5 pm). They handle nonpayment cases and can explain your options before tomorrow. Have your court papers (the petition and any index number) ready when you call. If you qualify for free legal help, The Legal Aid Society — Housing can assign you a lawyer: call your borough office (Brooklyn: 718-722-3100). Any tenant with an eviction case goes through the Right to Counsel program at the first court date, which may help you get a lawyer assigned. Call today.\"}",
+                      "name": "write_answer"
+                    },
+                    "id": "toolu_bdrk_01M7BWms96QnqMwbuakozwZM",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793436103,
+          "id": "gen-1793436103-JkWUlN2CVYT0ffgV5IDS",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 515,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.009235,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002575,
+              "upstream_inference_cost": 0.009235,
+              "upstream_inference_prompt_cost": 0.00666
+            },
+            "is_byok": false,
+            "prompt_tokens": 6660,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 7175
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "must_call": [
+        "lookup_law",
+        "find_legal_help"
+      ],
+      "upstream_calls": 2
     }
   }
 ]

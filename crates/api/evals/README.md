@@ -14,9 +14,9 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 55: 40 synthetic, 15 recorded from live run 8 |
-| Replays per run | 109: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 4,907, all passing (2026-10-31) |
+| Conversations | 63: 40 synthetic, 23 recorded from live run 8 and its re-run |
+| Replays per run | 125: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 6,017, all passing (2026-10-31) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
@@ -49,8 +49,8 @@ live runs found" below.
 **Stale since law Phase B (2026-10-31).** Phase B added the `lead_paint` and `housing_court`
 topics, the four-part answer, the statute-over-guidance rule, law passages (`lookup_law`'s
 `about`), the urgency rules, `mark_urgent` and `write_answer`. The agent is now
-`a68e7833294c0fc1`; live run 8 recorded 15 of its 24 live conversations, and those are the
-recordings CI replays.
+`a68e7833294c0fc1`; live run 8 and its re-run recorded 23 of its 24 live conversations, and
+those are the recordings CI replays.
 
 ## Checks
 
@@ -138,7 +138,7 @@ free `GET /api/v1/key`, so a rejected key costs nothing.
 
 ## What the live runs found
 
-Nine billed runs, $1.4386 in all:
+Ten billed runs, $1.5869 in all:
 - **Run 1** (2026-10-29): old prompt, $0.1129, 10 of 17 passed.
 - **Re-run of the 7 failures:** $0.0451, 3 passed.
 - **Run 3:** new prompt (`db3fee8a55844c3e`), $0.1197, 14 of 17 passed.
@@ -169,6 +169,10 @@ Nine billed runs, $1.4386 in all:
   names no § section from the law served (three answers), and the urgency block reaches the model
   as sentences, not JSON (one answer asked a reader whose court date was "tomorrow" for the date).
   Still the model's: a link from memory in `violations-for-unheld-bbl`.
+- **Run 8b** (2026-10-31): the 9 that failed, same agent, after those fixes: $0.1483, 8 of 9
+  passed. 23 of the 24 live conversations are recorded. `violations-for-unheld-bbl` still links
+  from memory (HPD's site and the Open Data endpoint), as in runs 4, 4b and 8: the prompt alone
+  doesn't stop it.
 
 A fourth attempt sent a key OpenRouter rejected and cost nothing. That is why the key is now
 checked first.

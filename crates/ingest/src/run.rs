@@ -172,6 +172,11 @@ fn count_rows(c: &Client, dataset: &str, where_: &str) -> Result<usize> {
 /// depth, and the violation pull is ~211 pages deep. The order is still the total order that
 /// made offset paging well-defined (the half-dropped violation history it fixed is in the git
 /// log under `get_json_paged`).
+///
+/// **A short page is not proof the pull is complete**, so every caller gets the same check:
+/// Socrata's own count before and after, which the rows fetched must land between
+/// (`check_complete`). And a full page whose last `:id` is the one already seen means Socrata
+/// ignored the cursor, so that stops the run rather than looping on the same page.
 fn for_each_page(
     c: &Client,
     dataset: &str,
@@ -180,6 +185,7 @@ fn for_each_page(
     mut f: impl FnMut(&[Value]) -> Result<()>,
 ) -> Result<usize> {
     let base = format!("{SODA}/{dataset}.json");
+    let before = count_rows(c, dataset, where_)?;
     let mut last: Option<String> = None;
     let (mut n, mut pages) = (0usize, 0usize);
     loop {
@@ -207,31 +213,59 @@ fn for_each_page(
         if page.len() < PAGE {
             break;
         }
-        last = page
+        let next = page
             .last()
             .and_then(|v| v.get(":id"))
             .and_then(|v| v.as_str())
             .map(str::to_string);
         anyhow::ensure!(
-            last.is_some(),
+            next.is_some(),
             "{dataset}: a full page with no :id to continue from"
         );
+        anyhow::ensure!(
+            next != last,
+            "{dataset}: the :id cursor did not advance past {last:?}; Socrata returned the same \
+             page again, so the filter is being ignored"
+        );
+        last = next;
     }
     println!("  {dataset}: {n} rows over {pages} requests");
+    let after = count_rows(c, dataset, where_)?;
+    check_complete(dataset, n, before, after)?;
     Ok(n)
 }
 
-/// Stream every HPD violation matching `where_` into the DuckDB stage, then refuse the run if
-/// rows went missing. Returns the rows staged, and the rows skipped for an unmodelled class
-/// on our own buildings, by letter.
+/// Refuse a pull whose row count falls outside Socrata's own counts taken before and after it.
+/// A dataset can change while a long pull runs (HPD changes ~157,000 rows a week), so the
+/// fetched count must land between the two rather than equal either.
+fn check_complete(dataset: &str, fetched: usize, before: usize, after: usize) -> Result<()> {
+    anyhow::ensure!(
+        (before.min(after)..=before.max(after)).contains(&fetched),
+        "{dataset}: fetched {fetched} rows but Socrata counted {before} before the pull and \
+         {after} after. Rows went missing; refusing to build a thinner city."
+    );
+    Ok(())
+}
+
+/// Refuse the neighborhood figures if they are missing for more than 1% of buildings, which
+/// would put those buildings on the 70 fallback and change their scores without saying so.
+fn check_zip_rates(zips: usize, without_rate: usize, buildings: usize) -> Result<()> {
+    anyhow::ensure!(
+        zips > 0 && without_rate * 100 <= buildings,
+        "311 ZIP rates: {zips} ZIPs, {without_rate} of {buildings} buildings without a rate. \
+         The 311 or PLUTO count came back empty or malformed; refusing to score every \
+         building's neighborhood as unknown."
+    );
+    Ok(())
+}
+
+/// Stream every HPD violation matching `where_` into the DuckDB stage; `for_each_page` refuses
+/// the run if rows went missing. Returns the rows staged, and the rows skipped for an
+/// unmodelled class on our own buildings, by letter.
 ///
 /// Every class is fetched so the skip can be counted per building, as it always was: the
 /// count is printed on the card ("excluded: class I (753 records ...)"), and counting a whole
 /// tax block's class I rows instead put 12,079 there for the pilot.
-///
-/// The completeness check compares with Socrata's own count taken before and after the pull:
-/// HPD updates the dataset while a citywide pull runs (~157,000 rows change a week), so the
-/// fetched count must land between the two rather than equal either.
 fn stage_violations(
     c: &Client,
     stage: &duckdb::Connection,
@@ -252,11 +286,10 @@ fn stage_violations(
             description VARCHAR
          );",
     )?;
-    let before = count_rows(c, "wvxf-dwi5", where_)?;
     let mut app = stage.appender("hpd_violation")?;
     let mut seq: i64 = 0;
     let mut excluded: BTreeMap<String, usize> = BTreeMap::new();
-    let fetched = for_each_page(c, "wvxf-dwi5", HPD_SELECT, where_, |page| {
+    for_each_page(c, "wvxf-dwi5", HPD_SELECT, where_, |page| {
         for v in page {
             let Some(viol) = parse_hpd_violation(v) else {
                 if let Some(letter) = hpd_excluded_class(v) {
@@ -283,12 +316,6 @@ fn stage_violations(
     })?;
     app.flush()?;
     drop(app);
-    let after = count_rows(c, "wvxf-dwi5", where_)?;
-    anyhow::ensure!(
-        (before.min(after)..=before.max(after)).contains(&fetched),
-        "wvxf-dwi5: fetched {fetched} rows but Socrata counted {before} before the pull and \
-         {after} after. Rows went missing; refusing to build a thinner city."
-    );
     Ok((seq as usize, excluded))
 }
 
@@ -510,6 +537,14 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     let homes = parse_zip_counts(&get_json_complete(&c, &homes_by_zip_query())?, "zipcode");
     let rates = zip_rates(&complaints, &homes);
     let complaints_counted: i64 = rates.keys().filter_map(|z| complaints.get(z)).sum();
+    // A 200 with an empty body or an error object parses to no rates, and every building would
+    // score 70 without a word. Measured 2026-10-30: 213 of 767,563 buildings (0.03%) have no
+    // ZIP rate, all for want of a ZIP in PLUTO; more than 1% means the source broke.
+    let without_zip_rate = buildings
+        .iter()
+        .filter(|b| b.zip.as_ref().and_then(|z| rates.get(z)).is_none())
+        .count();
+    check_zip_rates(rates.len(), without_zip_rate, buildings.len())?;
     // Neighborhood names are a label only, so a failure here leaves them blank and carries on.
     let ntas = get_json_complete(&c, &nta_query())
         .map(|v| parse_nta(&v))
@@ -618,10 +653,6 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let without_zip_rate = buildings
-        .iter()
-        .filter(|b| b.complaints_311_per_1k_homes.is_none())
-        .count();
     for (k, v) in [
         ("ingested_at_unix", ingested_at.to_string()),
         ("coverage", scope.clone()),
@@ -696,6 +727,24 @@ pub fn run_real(cfg: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The two guards that keep a broken source from becoming a quietly thinner or flatter
+    /// city: a pull outside Socrata's counts, and ZIP rates missing for many buildings.
+    #[test]
+    fn incomplete_sources_stop_the_run() {
+        // Rows added during the pull: anything between the two counts is complete.
+        assert!(check_complete("x", 105, 100, 110).is_ok());
+        assert!(check_complete("x", 100, 100, 100).is_ok());
+        // A short page that ended the pull early, or a cursor that skipped rows.
+        assert!(check_complete("x", 50_000, 767_563, 767_563).is_err());
+
+        // Citywide on 2026-10-30: 184 ZIPs, 213 of 767,563 buildings without a rate.
+        assert!(check_zip_rates(184, 213, 767_563).is_ok());
+        // An empty 200 from Socrata: no ZIPs at all.
+        assert!(check_zip_rates(0, 767_563, 767_563).is_err());
+        // Rates for some ZIPs but missing for most buildings.
+        assert!(check_zip_rates(3, 700_000, 767_563).is_err());
+    }
 
     /// The stage → artifact path, without the network: rows staged out of order and across
     /// buildings must come out grouped per building, in HPD's order, with dates and

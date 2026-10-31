@@ -335,11 +335,18 @@ pub fn homes_by_zip_query() -> Query {
 /// `zip -> n` from a grouped Socrata result, merging rows whose ZIPs normalize to the same
 /// five digits (`11221` and `11221-1234`) and dropping the malformed ones.
 pub fn parse_zip_counts(rows: &Value, zip_field: &str) -> HashMap<String, i64> {
+    // Socrata sends grouped values as strings, but a JSON number must count too: dropping it
+    // would leave ZIPs without a rate and their buildings on the 70 fallback.
+    let text = |r: &Value, k: &str| match r.get(k) {
+        Some(Value::String(x)) => Some(x.clone()),
+        Some(Value::Number(x)) => Some(x.to_string()),
+        _ => None,
+    };
     let mut out = HashMap::new();
     for r in rows.as_array().map(Vec::as_slice).unwrap_or_default() {
         let (Some(z), Some(n)) = (
-            s(r, zip_field).as_deref().and_then(zip5),
-            s(r, "n").and_then(|n| n.trim().parse::<f64>().ok()),
+            text(r, zip_field).as_deref().and_then(zip5),
+            text(r, "n").and_then(|n| n.trim().parse::<f64>().ok()),
         ) else {
             continue;
         };
@@ -699,12 +706,14 @@ mod tests {
         let c311 = parse_zip_counts(
             &json!([
                 {"incident_zip": "11221", "n": "300"},
-                {"incident_zip": "11221-1234", "n": "100"},
+                {"incident_zip": "11221-1234", "n": 60},
+                {"incident_zip": 11221, "n": "40"},
                 {"incident_zip": "N/A", "n": "999"},
                 {"n": "5"}
             ]),
             "incident_zip",
         );
+        // A count or a ZIP sent as a JSON number counts like a string one.
         assert_eq!(c311, HashMap::from([("11221".to_string(), 400)]));
         let homes = parse_zip_counts(
             &json!([

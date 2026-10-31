@@ -63,33 +63,50 @@ pub fn open_db(path: &str) -> Result<Connection> {
 /// Create the serving schema. Idempotent (IF NOT EXISTS).
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS buildings (
-            bbl TEXT PRIMARY KEY,
+        "-- BBLs are stored as integers: ten digits as text cost 11 bytes a row, as an
+         -- integer 6, and the citywide artifact repeats them 10.5M times. Callers still pass
+         -- and receive the 10-digit string; SQLite's integer affinity converts on the way in.
+         CREATE TABLE IF NOT EXISTS buildings (
+            bbl INTEGER PRIMARY KEY,
             address TEXT NOT NULL,
             year_built INTEGER NOT NULL,
             num_floors INTEGER NOT NULL,
             units_res INTEGER NOT NULL,
             tract_geoid TEXT NOT NULL,
             rent_stabilized INTEGER,          -- NULL unknown / 0 no / 1 yes
+            -- Rent-stabilized units on the latest NYC DOF Statement-of-Account record
+            -- (JustFix nyc-doffer 2024). NULL = no DOF record found for the building.
+            rent_stab_units INTEGER,
             good_cause INTEGER NOT NULL,
             has_elevator INTEGER NOT NULL,
             near_ada_subway_m INTEGER,
-            complaints_311 INTEGER NOT NULL
+            zip TEXT,
+            neighborhood TEXT,
+            complaints_311_per_1k_homes INTEGER,
+            latitude REAL,
+            longitude REAL
          );
+         -- Clustered by building (WITHOUT ROWID, keyed on bbl then seq), so one building's
+         -- rows sit together on disk and no separate bbl index is needed. Measured on 115,273
+         -- real rows with the description blocks below: 105 bytes a row in the old layout
+         -- (text dates, rowid, bbl index, zlib), 36 in this one.
          CREATE TABLE IF NOT EXISTS violations (
-            id INTEGER PRIMARY KEY,
-            bbl TEXT NOT NULL,
+            bbl INTEGER NOT NULL,
+            seq INTEGER NOT NULL,             -- order within the building, as HPD listed them
             class TEXT NOT NULL,
             open INTEGER NOT NULL,
             year INTEGER NOT NULL,
             -- Index into this building's compressed description block, or NULL when the
             -- record carries no text. The text itself lives in violation_desc.
             desc_ord INTEGER,
-            -- ISO dates. issued_on is absent on ~7% of citywide rows, so a violation's
-            -- age is genuinely unknown for those rather than zero.
-            issued_on TEXT,
-            closed_on TEXT
-         );
+            -- Days since 1970-01-01, converted by SQLite on the way in and back to ISO dates
+            -- on the way out, so callers only ever see `YYYY-MM-DD`. issued_on is absent on
+            -- ~7% of citywide rows, so a violation's age is genuinely unknown for those
+            -- rather than zero.
+            issued_on INTEGER,
+            closed_on INTEGER,
+            PRIMARY KEY (bbl, seq)
+         ) WITHOUT ROWID;
          -- Violation descriptions, compressed one block per building.
          --
          -- Stored this way because the redundancy is BETWEEN notices -- every one opens
@@ -98,9 +115,21 @@ pub fn migrate(conn: &Connection) -> Result<()> {
          -- compressing a building's together. The block is the building because a card
          -- reads exactly one building, so a lookup decompresses exactly what it needs and
          -- no block index is required.
+         --
+         -- zstd against a dictionary trained on HPD's own wording. Alone, zstd measured the
+         -- same as zlib here (57.6 vs 58.4 bytes a row): a small building's block is too
+         -- short to learn the statute prefixes every notice repeats. The dictionary already
+         -- knows them, which took descriptions to 10.4 bytes a row.
          CREATE TABLE IF NOT EXISTS violation_desc (
-            bbl TEXT PRIMARY KEY,
+            bbl INTEGER PRIMARY KEY,
             z BLOB NOT NULL
+         );
+         -- The dictionary every violation_desc block was compressed with, versioned with
+         -- the artifact by living inside it. Absent when there was too little text to train
+         -- one (the fixture), in which case blocks are plain zstd.
+         CREATE TABLE IF NOT EXISTS desc_dict (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            dict BLOB NOT NULL
          );
          -- What each source actually gave us, and when.
          --
@@ -120,7 +149,6 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             row_count INTEGER NOT NULL,
             note TEXT
          );
-         CREATE INDEX IF NOT EXISTS idx_violations_bbl ON violations(bbl);
          CREATE TABLE IF NOT EXISTS acs_rent_by_tract (
             tract_geoid TEXT PRIMARY KEY,
             median_gross_rent INTEGER NOT NULL
@@ -166,28 +194,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             quote TEXT NOT NULL
          );",
     )?;
-    // Columns added after the original schema shipped. SQLite errors on re-adding an existing
-    // column, so each is guarded by a PRAGMA table_info check — keeping `migrate` idempotent
-    // across an existing DB and a fresh one alike.
-    add_column_if_missing(conn, "buildings", "latitude", "REAL")?;
-    add_column_if_missing(conn, "buildings", "longitude", "REAL")?;
-    add_column_if_missing(conn, "buildings", "restaurant_grade", "TEXT")?;
-    // Rent-stabilized unit count from the latest NYC DOF Statement-of-Account record
-    // (JustFix nyc-doffer 2024). NULL = no DOF record found for the building.
-    add_column_if_missing(conn, "buildings", "rent_stab_units", "INTEGER")?;
-    Ok(())
-}
-
-/// Add `col <decl>` to `table` only if it isn't already present (idempotent migration helper).
-fn add_column_if_missing(conn: &Connection, table: &str, col: &str, decl: &str) -> Result<()> {
-    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
-    let existing: Vec<String> = stmt
-        .query_map([], |r| r.get::<_, String>(1))? // column 1 = name
-        .collect::<rusqlite::Result<_>>()?;
-    if !existing.iter().any(|c| c == col) {
-        // Table/column names are internal constants here, never user input — safe to inline.
-        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"), [])?;
-    }
+    // ponytail: no column-by-column upgrades. Every artifact is rebuilt from scratch by
+    // `ingest`, so an older file is replaced rather than altered.
     Ok(())
 }
 
@@ -200,31 +208,32 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
         "INSERT INTO acs_rent_by_tract (tract_geoid, median_gross_rent) VALUES ('36047000100', 2500)",
         [],
     )?;
-    // Building 1: elevator, well-kept, stabilized. (Explicit column list because migrate now
-    // adds latitude/longitude/restaurant_grade — a bare VALUES(...) would mismatch arity.)
+    // Building 1: elevator, well-kept, stabilized. Both fixture ZIP rates sit under the curve's
+    // zero-penalty line (677), quieter than any real ZIP, so the fixture's neighborhood score
+    // stays 100 as it was under the old 311 count and its totals do not move.
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade,rent_stab_units)
-         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,5,40.6829,-73.9251,'A',12)",
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
+         VALUES ('3000010001','1 Fixture Ave, Brooklyn',1975,8,40,'36047000100',1,1,1,300,'11221','Bedford-Stuyvesant (East)',600,40.6829,-73.9251,12)",
         [],
     )?;
     // Building 2: walk-up, open violations, no protections.
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade,rent_stab_units)
-         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,40,40.6835,-73.9240,NULL,NULL)",
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
+         VALUES ('3000020002','2 Fixture Ave, Brooklyn',1930,4,8,'36047000100',NULL,0,0,NULL,'11221','Bedford-Stuyvesant (East)',600,40.6835,-73.9240,NULL)",
         [],
     )?;
     conn.execute(
-        "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','C',1,2026)",
+        "INSERT INTO violations (bbl,seq,class,open,year) VALUES ('3000020002',0,'C',1,2026)",
         [],
     )?;
     conn.execute(
-        "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','B',1,2025)",
+        "INSERT INTO violations (bbl,seq,class,open,year) VALUES ('3000020002',1,'B',1,2025)",
         [],
     )?;
     conn.execute(
-        "INSERT INTO violations (bbl,class,open,year) VALUES ('3000020002','A',0,2019)",
+        "INSERT INTO violations (bbl,seq,class,open,year) VALUES ('3000020002',2,'A',0,2019)",
         [],
     )?;
     // The real law, not a fixture of it: the evals check answers against these rows.
@@ -234,7 +243,7 @@ pub fn insert_fixture(conn: &Connection) -> Result<()> {
 
 fn row_to_building(row: &rusqlite::Row) -> rusqlite::Result<Building> {
     Ok(Building {
-        bbl: row.get("bbl")?,
+        bbl: row.get::<_, i64>("bbl")?.to_string(),
         address: row.get("address")?,
         year_built: row.get("year_built")?,
         num_floors: row.get("num_floors")?,
@@ -247,10 +256,11 @@ fn row_to_building(row: &rusqlite::Row) -> rusqlite::Result<Building> {
         good_cause: row.get::<_, i64>("good_cause")? != 0,
         has_elevator: row.get::<_, i64>("has_elevator")? != 0,
         near_ada_subway_m: row.get("near_ada_subway_m")?,
-        complaints_311: row.get("complaints_311")?,
+        zip: row.get("zip")?,
+        neighborhood: row.get("neighborhood")?,
+        complaints_311_per_1k_homes: row.get("complaints_311_per_1k_homes")?,
         latitude: row.get("latitude")?,
         longitude: row.get("longitude")?,
-        restaurant_grade: row.get("restaurant_grade")?,
     })
 }
 
@@ -280,8 +290,8 @@ pub fn get_building(conn: &Connection, bbl: &str) -> Result<Option<Building>> {
 /// is a pure function and can be tested without a database. This function's only job is to ask
 /// the right rows for them.
 ///
-/// `julianday` is SQLite's own date arithmetic over the `YYYY-MM-DD` strings the ingest stores,
-/// so no date parsing happens here. Rows missing either date are excluded by the `<> ''` tests:
+/// Dates are stored as days since 1970, so a duration is a subtraction and the cutoff is the
+/// same day number SQLite computes for `YYYY-01-01`. Rows missing either date are excluded:
 /// measured on the pilot, 21,173 of 21,175 closed violations carry both, so this discards two
 /// rows rather than skewing anything.
 pub fn closed_violation_durations(
@@ -290,24 +300,28 @@ pub fn closed_violation_durations(
     since_year: i32,
 ) -> Result<Vec<i64>> {
     let cutoff = format!("{since_year:04}-01-01");
-    let mut stmt = conn.prepare(
-        "SELECT CAST(julianday(closed_on) - julianday(issued_on) AS INTEGER)
+    let mut stmt = conn.prepare_cached(
+        "SELECT closed_on - issued_on
            FROM violations
           WHERE bbl = ?1
             AND open = 0
-            AND issued_on IS NOT NULL AND issued_on <> ''
-            AND closed_on IS NOT NULL AND closed_on <> ''
-            AND closed_on >= ?2",
+            AND issued_on IS NOT NULL
+            AND closed_on IS NOT NULL
+            AND closed_on >= unixepoch(?2) / 86400",
     )?;
     let rows = stmt.query_map(rusqlite::params![bbl, cutoff], |r| r.get::<_, i64>(0))?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
 pub fn get_open_violations(conn: &Connection, bbl: &str) -> Result<Vec<Violation>> {
-    let mut stmt =
-        conn.prepare(
-            "SELECT class, open, year, desc_ord, issued_on, closed_on              FROM violations WHERE bbl = ?1 AND open = 1",
-        )?;
+    // `date(n * 86400, 'unixepoch')` turns the stored day number back into the exact
+    // `YYYY-MM-DD` string the ingest was given, so nothing above the store sees the change.
+    let mut stmt = conn.prepare_cached(
+        "SELECT class, open, year, desc_ord,
+                date(issued_on * 86400, 'unixepoch') AS issued_on,
+                date(closed_on * 86400, 'unixepoch') AS closed_on
+           FROM violations WHERE bbl = ?1 AND open = 1 ORDER BY seq",
+    )?;
     // One decompress for the whole building, before the row loop rather than inside it.
     let descriptions = read_descriptions(conn, bbl)?;
     let rows = stmt.query_map([bbl], |row| {
@@ -353,20 +367,22 @@ pub fn get_tract_median(conn: &Connection, tract_geoid: &str) -> Result<Option<i
 pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
     conn.execute(
         "INSERT INTO buildings
-          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,restaurant_grade,rent_stab_units)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+          (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,good_cause,has_elevator,near_ada_subway_m,zip,neighborhood,complaints_311_per_1k_homes,latitude,longitude,rent_stab_units)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
          ON CONFLICT(bbl) DO UPDATE SET
           address=excluded.address, year_built=excluded.year_built, num_floors=excluded.num_floors,
           units_res=excluded.units_res, tract_geoid=excluded.tract_geoid, rent_stabilized=excluded.rent_stabilized,
           good_cause=excluded.good_cause, has_elevator=excluded.has_elevator,
-          near_ada_subway_m=excluded.near_ada_subway_m, complaints_311=excluded.complaints_311,
-          latitude=excluded.latitude, longitude=excluded.longitude, restaurant_grade=excluded.restaurant_grade,
+          near_ada_subway_m=excluded.near_ada_subway_m, zip=excluded.zip,
+          neighborhood=excluded.neighborhood,
+          complaints_311_per_1k_homes=excluded.complaints_311_per_1k_homes,
+          latitude=excluded.latitude, longitude=excluded.longitude,
           rent_stab_units=excluded.rent_stab_units",
         rusqlite::params![
             b.bbl, b.address, b.year_built, b.num_floors, b.units_res, b.tract_geoid,
             b.rent_stabilized.map(|v| v as i64), b.good_cause as i64, b.has_elevator as i64,
-            b.near_ada_subway_m, b.complaints_311, b.latitude, b.longitude, b.restaurant_grade,
-            b.rent_stab_units
+            b.near_ada_subway_m, b.zip, b.neighborhood, b.complaints_311_per_1k_homes,
+            b.latitude, b.longitude, b.rent_stab_units
         ],
     )?;
     Ok(())
@@ -376,7 +392,19 @@ pub fn upsert_building(conn: &Connection, b: &Building) -> Result<()> {
 /// unambiguous. A newline would not be safe -- a notice may contain one.
 const RECORD_SEP: char = '\u{1e}'; // ASCII record separator
 
+/// The artifact's description dictionary, if it has one.
+fn desc_dict(conn: &Connection) -> Result<Option<Vec<u8>>> {
+    use rusqlite::OptionalExtension;
+    Ok(conn
+        .query_row("SELECT dict FROM desc_dict WHERE id = 1", [], |r| r.get(0))
+        .optional()?)
+}
+
 /// Descriptions for one building, in `desc_ord` order. Empty when the building has none.
+///
+/// ponytail: reads and loads the 112 KB dictionary on every call. Decompressing a building's
+/// block measured 2.3 µs; if loading the dictionary ever shows in card latency, keep one
+/// `zstd::dict::DecoderDictionary` per connection instead.
 fn read_descriptions(conn: &Connection, bbl: &str) -> Result<Vec<String>> {
     use rusqlite::OptionalExtension;
     let z: Option<Vec<u8>> = conn
@@ -387,56 +415,99 @@ fn read_descriptions(conn: &Connection, bbl: &str) -> Result<Vec<String>> {
     let Some(z) = z else {
         return Ok(Vec::new());
     };
+    let dict = desc_dict(conn)?.unwrap_or_default();
     let mut out = String::new();
-    std::io::Read::read_to_string(&mut flate2::read::ZlibDecoder::new(&z[..]), &mut out)?;
+    std::io::Read::read_to_string(
+        &mut zstd::stream::read::Decoder::with_dictionary(&z[..], &dict)?,
+        &mut out,
+    )?;
     // split, not lines(): desc_ord indexes into this vector, so positions must be exact.
     Ok(out.split(RECORD_SEP).map(str::to_string).collect())
 }
 
-/// Write one building's violations, with their descriptions as one compressed block.
-///
-/// Per-building rather than per-row because the redundancy is BETWEEN notices -- every one
-/// opens with a housing-code statute reference -- not inside a single one. Measured on the
-/// pilot's 5,354 real open violations: 1.3x compressing each row alone, 7.0x compressing a
-/// building's together. The block is the building because a card reads exactly one
-/// building, so a lookup decompresses exactly what it needs and needs no block index.
-pub fn insert_violations(conn: &Connection, bbl: &str, vs: &[Violation]) -> Result<()> {
-    let mut texts: Vec<&str> = Vec::new();
-    for v in vs {
-        let ord = match v.description.as_deref() {
-            Some(d) if !d.is_empty() => {
-                texts.push(d);
-                Some(texts.len() as i64 - 1)
-            }
-            _ => None,
+/// zstd level for description blocks. Ingest-time cost only; reading is the same speed at
+/// any level.
+const DESC_LEVEL: i32 = 19;
+
+/// Train the description dictionary from sample notices. `None` when there is too little text
+/// to train one, which leaves blocks as plain zstd.
+pub fn train_desc_dict(samples: &[String]) -> Option<Vec<u8>> {
+    zstd::dict::from_samples(samples, 112 * 1024).ok()
+}
+
+/// Store the dictionary. Must happen before any [`ViolationWriter`] is made, since blocks are
+/// only readable with the dictionary they were written with.
+pub fn set_desc_dict(conn: &Connection, dict: &[u8]) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO desc_dict (id, dict) VALUES (1, ?1)",
+        [dict],
+    )?;
+    Ok(())
+}
+
+/// Writes violations, holding one zstd compressor with the artifact's dictionary loaded.
+/// Loading a dictionary is the slow part of compressing a small block, so the ingest makes
+/// one of these and reuses it for every building.
+pub struct ViolationWriter {
+    z: zstd::bulk::Compressor<'static>,
+}
+
+impl ViolationWriter {
+    pub fn new(conn: &Connection) -> Result<Self> {
+        let z = match desc_dict(conn)? {
+            Some(d) => zstd::bulk::Compressor::with_dictionary(DESC_LEVEL, &d)?,
+            None => zstd::bulk::Compressor::new(DESC_LEVEL)?,
         };
-        conn.execute(
-            "INSERT INTO violations (bbl,class,open,year,desc_ord,issued_on,closed_on) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7)",
-            // `as_str`, so the column keeps holding exactly the letter HPD issued and an
-            // existing artifact stays readable by an older build.
-            rusqlite::params![
+        Ok(Self { z })
+    }
+
+    /// Write one building's violations, with their descriptions as one compressed block.
+    ///
+    /// Per-building rather than per-row because the redundancy is BETWEEN notices -- every
+    /// one opens with a housing-code statute reference -- not inside a single one. The block
+    /// is the building because a card reads exactly one building, so a lookup decompresses
+    /// exactly what it needs and needs no block index.
+    pub fn insert(&mut self, conn: &Connection, bbl: &str, vs: &[Violation]) -> Result<()> {
+        let mut texts: Vec<&str> = Vec::new();
+        let mut stmt = conn.prepare_cached(
+            "INSERT INTO violations (bbl,seq,class,open,year,desc_ord,issued_on,closed_on) \
+             VALUES (?1,?2,?3,?4,?5,?6,unixepoch(?7) / 86400,unixepoch(?8) / 86400)",
+        )?;
+        for (seq, v) in vs.iter().enumerate() {
+            let ord = match v.description.as_deref() {
+                Some(d) if !d.is_empty() => {
+                    texts.push(d);
+                    Some(texts.len() as i64 - 1)
+                }
+                _ => None,
+            };
+            stmt.execute(rusqlite::params![
                 bbl,
+                seq as i64,
+                // `as_str`, so the column keeps holding exactly the letter HPD issued.
                 v.class.as_str(),
                 v.open as i64,
                 v.year,
                 ord,
                 v.issued_on,
                 v.closed_on
-            ],
-        )?;
+            ])?;
+        }
+        if !texts.is_empty() {
+            let z = self
+                .z
+                .compress(texts.join(&RECORD_SEP.to_string()).as_bytes())?;
+            conn.prepare_cached("INSERT OR REPLACE INTO violation_desc (bbl,z) VALUES (?1,?2)")?
+                .execute(rusqlite::params![bbl, z])?;
+        }
+        Ok(())
     }
-    if !texts.is_empty() {
-        let joined = texts.join(&RECORD_SEP.to_string());
-        let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
-        std::io::Write::write_all(&mut e, joined.as_bytes())?;
-        let z = e.finish()?;
-        conn.execute(
-            "INSERT OR REPLACE INTO violation_desc (bbl,z) VALUES (?1,?2)",
-            rusqlite::params![bbl, z],
-        )?;
-    }
-    Ok(())
+}
+
+/// Write one building's violations with a fresh [`ViolationWriter`]: the fixture's and the
+/// tests' path. The ingest keeps one writer for the whole run instead.
+pub fn insert_violations(conn: &Connection, bbl: &str, vs: &[Violation]) -> Result<()> {
+    ViolationWriter::new(conn)?.insert(conn, bbl, vs)
 }
 
 /// Single-row insert, kept for the fixture seed and for tests.
@@ -849,6 +920,108 @@ mod tests {
         Ok(())
     }
 
+    /// The same round trip with a trained dictionary, which is what the real artifact uses.
+    /// A block written with the dictionary must come back exactly, and must be smaller than
+    /// the same block without it, or the dictionary is dead weight.
+    #[test]
+    fn descriptions_round_trip_with_a_trained_dictionary() -> Result<()> {
+        let notice = |i: usize| {
+            format!(
+                "§ 27-20{:02} ADM CODE ABATE THE NUISANCE CONSISTING OF {} AT APT {}{} \
+                 LOCATED AT {} STORY",
+                i % 40,
+                ["BROKEN PLASTER", "MICE", "ROACHES", "WATER LEAK", "NO HEAT"][i % 5],
+                i % 9 + 1,
+                ["A", "B", "C", "D"][i % 4],
+                ["1ST", "2ND", "3RD"][i % 3]
+            )
+        };
+        let samples: Vec<String> = (0..2000).map(notice).collect();
+        let dict = train_desc_dict(&samples).expect("enough text to train a dictionary");
+
+        let vs: Vec<Violation> = (5000..5003)
+            .map(|i| Violation {
+                class: ViolationClass::B,
+                open: true,
+                year: 2026,
+                description: Some(notice(i)),
+                ..Default::default()
+            })
+            .collect();
+        let size_with = |dict: Option<&[u8]>| -> Result<(Connection, i64)> {
+            let conn = Connection::open_in_memory()?;
+            migrate(&conn)?;
+            if let Some(d) = dict {
+                set_desc_dict(&conn, d)?;
+            }
+            insert_violations(&conn, "3000010001", &vs)?;
+            let n = conn.query_row("SELECT length(z) FROM violation_desc", [], |r| r.get(0))?;
+            Ok((conn, n))
+        };
+        let (conn, with) = size_with(Some(&dict))?;
+        let (_, without) = size_with(None)?;
+        let got = get_open_violations(&conn, "3000010001")?;
+        for (g, v) in got.iter().zip(&vs) {
+            assert_eq!(g.description, v.description);
+        }
+        assert!(with < without, "dictionary {with} bytes vs plain {without}");
+        Ok(())
+    }
+
+    /// Dates are stored as day numbers and must come back as the exact strings that went in,
+    /// including before 1970 and across a leap day, because the export hashes them.
+    #[test]
+    fn dates_round_trip_as_iso_strings() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        migrate(&conn)?;
+        let dates = ["1965-07-04", "2000-02-29", "2014-01-06", "2026-10-30"];
+        let vs: Vec<Violation> = dates
+            .iter()
+            .map(|d| Violation {
+                class: ViolationClass::A,
+                open: true,
+                year: d[..4].parse().unwrap(),
+                issued_on: Some(d.to_string()),
+                closed_on: Some(d.to_string()),
+                ..Default::default()
+            })
+            .collect();
+        insert_violations(&conn, "3000010001", &vs)?;
+        let got = get_open_violations(&conn, "3000010001")?;
+        let issued: Vec<_> = got.iter().map(|v| v.issued_on.as_deref()).collect();
+        assert_eq!(issued, dates.map(Some));
+        Ok(())
+    }
+
+    /// Repair speed reads day differences off the stored day numbers. Same answers as the old
+    /// `julianday` over text, including the cutoff boundary.
+    #[test]
+    fn closed_durations_are_day_differences_since_the_cutoff() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        migrate(&conn)?;
+        let closed = |issued: &str, closed: &str| Violation {
+            class: ViolationClass::B,
+            open: false,
+            year: issued[..4].parse().unwrap(),
+            issued_on: Some(issued.into()),
+            closed_on: Some(closed.into()),
+            ..Default::default()
+        };
+        insert_violations(
+            &conn,
+            "3000010001",
+            &[
+                closed("2022-12-01", "2023-01-01"), // closed on the cutoff day: counts
+                closed("2022-06-01", "2022-12-31"), // closed the day before: does not
+                closed("2024-02-28", "2024-03-01"), // across a leap day: 2 days
+            ],
+        )?;
+        let mut d = closed_violation_durations(&conn, "3000010001", 2023)?;
+        d.sort();
+        assert_eq!(d, vec![2, 31]);
+        Ok(())
+    }
+
     #[test]
     fn open_violations_load_for_building() -> Result<()> {
         let conn = seeded()?;
@@ -898,10 +1071,11 @@ mod tests {
             good_cause: false,
             has_elevator: true,
             near_ada_subway_m: Some(420),
-            complaints_311: 7,
+            zip: Some("11216".into()),
+            neighborhood: Some("Bedford-Stuyvesant (West)".into()),
+            complaints_311_per_1k_homes: Some(2677),
             latitude: Some(40.6829),
             longitude: Some(-73.9251),
-            restaurant_grade: Some("B".into()),
         };
         upsert_building(&conn, &b)?;
         assert_eq!(get_building(&conn, "3018420001")?.unwrap(), b);
@@ -910,23 +1084,10 @@ mod tests {
 
     #[test]
     fn migrate_is_idempotent_on_existing_db() -> Result<()> {
-        // Running migrate twice must not error re-adding the latitude/longitude/restaurant_grade
-        // columns (SQLite has no ADD COLUMN IF NOT EXISTS — the PRAGMA guard is what saves us).
+        // `law --out` runs migrate against an artifact that already has every table.
         let conn = open_db(":memory:")?;
         migrate(&conn)?;
         migrate(&conn)?;
-        let cols: Vec<String> = conn
-            .prepare("PRAGMA table_info(buildings)")?
-            .query_map([], |r| r.get::<_, String>(1))?
-            .collect::<rusqlite::Result<_>>()?;
-        for c in [
-            "latitude",
-            "longitude",
-            "restaurant_grade",
-            "rent_stab_units",
-        ] {
-            assert!(cols.iter().any(|x| x == c), "missing column {c}");
-        }
         Ok(())
     }
 
@@ -935,9 +1096,10 @@ mod tests {
         let conn = seeded()?;
         let all = get_all_buildings(&conn)?;
         assert_eq!(all.len(), 2);
-        // Ordered by BBL; the first fixture carries stored coordinates + a restaurant grade.
+        // Ordered by BBL; the first fixture carries stored coordinates and its ZIP context.
         assert_eq!(all[0].bbl, "3000010001");
-        assert_eq!(all[0].restaurant_grade.as_deref(), Some("A"));
+        assert_eq!(all[0].zip.as_deref(), Some("11221"));
+        assert_eq!(all[0].complaints_311_per_1k_homes, Some(600));
         assert!(all[0].latitude.is_some() && all[0].longitude.is_some());
         Ok(())
     }
@@ -981,7 +1143,7 @@ mod tests {
         let conn = Connection::open_in_memory()?;
         migrate(&conn)?;
         conn.execute(
-            "INSERT INTO violations (bbl,class,open,year) VALUES ('3000010009','X',1,2026)",
+            "INSERT INTO violations (bbl,seq,class,open,year) VALUES ('3000010009',0,'X',1,2026)",
             [],
         )?;
         let err = get_open_violations(&conn, "3000010009")

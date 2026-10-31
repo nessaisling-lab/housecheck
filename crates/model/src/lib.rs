@@ -19,13 +19,18 @@ pub struct Building {
     pub good_cause: bool,
     pub has_elevator: bool,
     pub near_ada_subway_m: Option<i32>,
-    pub complaints_311: i32,
+    /// ZIP code (PLUTO `zipcode`): the area the neighborhood figures below are counted over.
+    pub zip: Option<String>,
+    /// Neighborhood name: the 2020 NTA the building's census tract falls in (DCP `hm78-6dwm`).
+    /// A label only; nothing is computed from it.
+    pub neighborhood: Option<String>,
+    /// 311 complaints since 2024-01-01 in this building's ZIP, per 1,000 homes in that ZIP
+    /// (PLUTO `unitsres`). The same figure for every building in the ZIP: it describes the
+    /// area, not the block. `None` when the ZIP is unknown or has no homes on record.
+    pub complaints_311_per_1k_homes: Option<i32>,
     /// Building centroid (from PLUTO), stored so the frontend map can plot the curated set.
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
-    /// Letter grade of the nearest DOHMH-graded restaurant within ~200 m. Neighborhood
-    /// context only — display, never folded into any score.
-    pub restaurant_grade: Option<String>,
 }
 
 /// HPD's hazard classes, as the city defines them.

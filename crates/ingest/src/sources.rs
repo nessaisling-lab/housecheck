@@ -4,11 +4,12 @@
 // string, so the caller hands them to `reqwest`'s `.query()` and lets it percent-encode the
 // SoQL `$where` clause (which contains spaces and `>` — invalid raw in a URL).
 //
-// Field names here reflect the datasets' *actual* live schemas (verified 2026-07-22), which
-// differ from the original plan sketch: PLUTO ships `bbl` as a float string
-// ("3015990007.00000000") and carries the 2020 tract in `bct2020` (borough digit + 6-digit
-// tract), and HPD violations (wvxf-dwi5) have no `bbl` column at all — only `boroid`/`block`/
-// `lot`, plus an `Open`/`Close` `violationstatus`. The parsers below normalize all of that.
+// Field names here reflect the datasets' *actual* live schemas, which differ from the original
+// plan sketch: PLUTO ships `bbl` as a float string ("3015990007.00000000") and carries the 2020
+// tract in `bct2020` (borough digit + 6-digit tract), and HPD violations (wvxf-dwi5) carry an
+// `Open`/`Close` `violationstatus`. HPD gained a `bbl` column after 2026-07-22; 9,757 of its
+// 10.5M A/B/C rows still lack one (2026-10-30), so `hpd_row_bbl` falls back to rebuilding it
+// from `boroid`/`block`/`lot`. The parsers below normalize all of that.
 
 use anyhow::{Context, Result};
 use model::{Building, Violation, ViolationClass};
@@ -16,9 +17,9 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 
-const SODA: &str = "https://data.cityofnewyork.us/resource";
-const PLUTO_SELECT: &str =
-    "bbl,address,yearbuilt,numfloors,unitsres,bldgclass,latitude,longitude,bct2020";
+pub const SODA: &str = "https://data.cityofnewyork.us/resource";
+pub const PLUTO_SELECT: &str =
+    "bbl,address,yearbuilt,numfloors,unitsres,bldgclass,latitude,longitude,bct2020,zipcode";
 
 /// A request as (base URL, query param pairs). Pass params straight to `reqwest`'s
 /// `RequestBuilder::query`, which URL-encodes keys and values correctly.
@@ -33,15 +34,6 @@ fn num(v: &Value, k: &str) -> i32 {
         .map(|f| f as i32)
         .unwrap_or(0)
 }
-/// Parse a numeric field that Socrata may ship as either a JSON string or a JSON number
-/// (311's `latitude`/`longitude` come back as numbers in some slices, strings in others).
-fn fnum(v: &Value, k: &str) -> Option<f64> {
-    match v.get(k) {
-        Some(Value::String(s)) => s.trim().parse().ok(),
-        Some(Value::Number(n)) => n.as_f64(),
-        _ => None,
-    }
-}
 
 /// Normalize a BBL to its canonical 10-digit form. PLUTO ships it as a float string
 /// ("3015990007.00000000"); DOB/our own records use the clean integer. Both round-trip
@@ -54,15 +46,33 @@ fn norm_bbl(raw: &str) -> Option<String> {
     Some((n as u64).to_string())
 }
 
+/// PLUTO's two-letter borough code for a borough digit (the first digit of a BBL or of a
+/// community district number: 303 is Brooklyn's CD 3).
+pub fn pluto_borough(boro: u32) -> Option<&'static str> {
+    ["MN", "BX", "BK", "QN", "SI"]
+        .get((boro as usize).checked_sub(1)?)
+        .copied()
+}
+
+/// The county FIPS code for a borough digit. Census tract GEOIDs are state + county + tract,
+/// and each borough is its own county: Manhattan is New York County (061), the Bronx 005,
+/// Brooklyn Kings (047), Queens 081, Staten Island Richmond (085).
+pub fn county_fips(boro: u32) -> Option<&'static str> {
+    ["061", "005", "047", "081", "085"]
+        .get((boro as usize).checked_sub(1)?)
+        .copied()
+}
+
 /// PLUTO residential buildings for one Community District. `$where` carries spaces and a
 /// `>` operator, so it MUST be sent through `reqwest`'s `.query()` — never interpolated raw.
 pub fn pluto_query(cd: u32, limit: u32, order: Option<&str>) -> Query {
     let base = format!("{SODA}/64uk-42ks.json");
+    let borough = pluto_borough(cd / 100).unwrap_or("??");
     let mut params = vec![
         ("$select".to_string(), PLUTO_SELECT.to_string()),
         (
             "$where".to_string(),
-            format!("borough='BK' AND cd={cd} AND unitsres>0"),
+            format!("borough='{borough}' AND cd={cd} AND unitsres>0"),
         ),
         ("$limit".to_string(), limit.to_string()),
     ];
@@ -75,16 +85,25 @@ pub fn pluto_query(cd: u32, limit: u32, order: Option<&str>) -> Query {
     (base, params)
 }
 
+/// A ZIP code as its five digits, or None for a blank, `N/A`, or anything else malformed.
+/// 311's `incident_zip` carries ZIP+4 and junk alongside the real thing.
+pub fn zip5(raw: &str) -> Option<String> {
+    let z = raw.trim().get(0..5)?;
+    z.bytes().all(|b| b.is_ascii_digit()).then(|| z.to_string())
+}
+
 pub fn parse_pluto(v: &Value) -> Option<Building> {
     let bbl = norm_bbl(&s(v, "bbl")?)?;
-    // bct2020 = borough digit + 6-digit 2020 census tract, e.g. "3025300". The tract GEOID
-    // is state(36) + county(047 = Kings) + the 6-digit tract (bct2020 minus its boro digit).
+    // bct2020 = borough digit + 6-digit 2020 census tract, e.g. "3025300". The tract GEOID is
+    // state(36) + the borough's county + the 6-digit tract (bct2020 minus its boro digit).
     let bct = s(v, "bct2020").unwrap_or_default();
-    let tract_geoid = if bct.len() == 7 {
-        format!("36047{}", &bct[1..])
-    } else {
-        String::new()
-    };
+    let tract_geoid = bct
+        .get(0..1)
+        .and_then(|b| b.parse().ok())
+        .and_then(county_fips)
+        .filter(|_| bct.len() == 7)
+        .map(|county| format!("36{county}{}", &bct[1..]))
+        .unwrap_or_default();
     Some(Building {
         bbl,
         address: s(v, "address").unwrap_or_default(),
@@ -97,10 +116,11 @@ pub fn parse_pluto(v: &Value) -> Option<Building> {
         good_cause: false,     // filled later
         has_elevator: false,   // filled from DOB
         near_ada_subway_m: None, // filled from MTA
-        complaints_311: 0,     // filled from 311 (Task 6)
-        latitude: None,        // filled from the PLUTO coords map in run_real
-        longitude: None,       // filled from the PLUTO coords map in run_real
-        restaurant_grade: None, // filled from DOHMH nearest-graded-restaurant in run_real
+        zip: s(v, "zipcode").as_deref().and_then(zip5),
+        neighborhood: None, // filled from the tract-to-NTA table in run_real
+        complaints_311_per_1k_homes: None, // filled from the ZIP rates in run_real
+        latitude: None,     // filled from the PLUTO coords map in run_real
+        longitude: None,    // filled from the PLUTO coords map in run_real
     })
 }
 
@@ -123,75 +143,12 @@ pub fn bbl_block(bbl: &str) -> Option<(u32, u32)> {
     Some((boro, block))
 }
 
-/// HPD violations for a borough + a set of tax blocks. wvxf-dwi5 has no BBL column, so we
-/// query by `boroid` + `block in(...)` and reconstruct the BBL per row via `hpd_bbl`.
-pub fn hpd_block_query(boroid: u32, blocks: &[u32]) -> Query {
-    let list = blocks
-        .iter()
-        .map(|b| b.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    let base = format!("{SODA}/wvxf-dwi5.json");
-    let params = vec![
-        (
-            "$select".to_string(),
-            // novdescription is the notice's own wording -- the difference between a
-            // count and a condition. currentstatusdate is when the status last changed,
-            // which for a closed violation is when it closed, and is what time-to-close
-            // is computed from.
-            "boroid,block,lot,class,violationstatus,novissueddate,novdescription,             currentstatusdate"
-                .to_string(),
-        ),
-        (
-            "$where".to_string(),
-            format!("boroid={boroid} AND block in({list})"),
-        ),
-        // `:id` is Socrata's stable system column. It is here so `$offset` paging in
-        // `get_json_paged` is well-defined — without a total order, pages may repeat or skip
-        // rows. `$limit` below is therefore a PAGE SIZE, not a ceiling on the result.
-        ("$order".to_string(), ":id".to_string()),
-        ("$limit".to_string(), "50000".to_string()),
-    ];
-    (base, params)
-}
-
-/// Reconstruct the 10-digit BBL from HPD's separate borough/block/lot fields:
-/// boro(1) + block(5, zero-padded) + lot(4, zero-padded).
-pub fn hpd_bbl(v: &Value) -> Option<String> {
-    let boro = s(v, "boroid")?.trim().parse::<u32>().ok()?;
-    let block = s(v, "block")?.trim().parse::<u32>().ok()?;
-    let lot = s(v, "lot")?.trim().parse::<u32>().ok()?;
-    if boro == 0 {
-        return None;
-    }
-    Some(format!("{boro}{block:05}{lot:04}"))
-}
-
-pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
-    // A class outside A/B/C now makes the row unusable rather than merely unusual, because
-    // every downstream site requires a modelled class. HPD also issues `I` (753 on the CD 303
-    // pilot), and that skip is the exclusion stated on the card and in `/meta` — so it has to
-    // stay countable, not silent. `run` counts it by letter through `hpd_excluded_class`.
-    let class: ViolationClass = s(v, "class")?.trim().parse().ok()?;
-    // wvxf-dwi5 `violationstatus` is exactly "Open" / "Close".
-    let status = s(v, "violationstatus").unwrap_or_default().to_lowercase();
-    let open = status.starts_with("open");
-    let year = s(v, "novissueddate")
-        .and_then(|d| d.get(0..4).map(|y| y.to_string()))
-        .and_then(|y| y.parse::<i32>().ok())
-        .unwrap_or(0);
-    // Dates arrive as "2014-01-06T00:00:00.000"; keep the ISO date and drop the time,
-    // which is always midnight and carries no information.
-    let date = |k: &str| s(v, k).map(|d| d.chars().take(10).collect::<String>());
-    Some(Violation {
-        class,
-        open,
-        year,
-        description: s(v, "novdescription"),
-        issued_on: date("novissueddate"),
-        closed_on: date("currentstatusdate"),
-    })
-}
+/// HPD violation columns the ingest reads. novdescription is the notice's own wording -- the
+/// difference between a count and a condition. currentstatusdate is when the status last
+/// changed, which for a closed violation is when it closed, and is what time-to-close is
+/// computed from.
+pub const HPD_SELECT: &str =
+    "bbl,boroid,block,lot,class,violationstatus,novissueddate,novdescription,currentstatusdate";
 
 /// The letter of a row whose class `ViolationClass` does not model, or `None` for a modelled
 /// class or a row with no class field.
@@ -225,21 +182,79 @@ pub fn excluded_classes_note(counts: &BTreeMap<String, usize>) -> String {
         .join(", ")
 }
 
-/// A `bbl in (...)` Socrata query (used for DOB, whose `bbl` is a clean 10-digit column).
-/// `$where` holds a space, so it goes through `.query()`. Chunk `bbls` upstream.
-pub fn bbl_in_query(id: &str, select: &str, bbls: &[String]) -> Query {
-    let list = bbls
+/// The pilot's violation filter: one borough's tax blocks. Matching by block rather than by
+/// `bbl` keeps the rows whose `bbl` is blank, which `hpd_row_bbl` rebuilds from the block and
+/// lot.
+pub fn hpd_where_blocks(boroid: u32, blocks: &[u32]) -> String {
+    let list = blocks
         .iter()
-        .map(|b| format!("'{b}'"))
+        .map(|b| b.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let base = format!("{SODA}/{id}.json");
-    let params = vec![
-        ("$select".to_string(), select.to_string()),
-        ("$where".to_string(), format!("bbl in({list})")),
-        ("$limit".to_string(), "50000".to_string()),
-    ];
-    (base, params)
+    format!("boroid={boroid} AND block in({list})")
+}
+
+/// Reconstruct the 10-digit BBL from HPD's separate borough/block/lot fields:
+/// boro(1) + block(5, zero-padded) + lot(4, zero-padded).
+pub fn hpd_bbl(v: &Value) -> Option<String> {
+    let boro = s(v, "boroid")?.trim().parse::<u32>().ok()?;
+    let block = s(v, "block")?.trim().parse::<u32>().ok()?;
+    let lot = s(v, "lot")?.trim().parse::<u32>().ok()?;
+    if boro == 0 {
+        return None;
+    }
+    Some(format!("{boro}{block:05}{lot:04}"))
+}
+
+/// A violation's BBL, given the buildings we hold. HPD carries two answers, its `bbl` column
+/// and the borough/block/lot it rebuilds from, and each is stale somewhere. Measured on the
+/// pilot (2026-10-30): after a tax-lot merger, 55 rows for 88 Tompkins Ave still name the old
+/// lots in block/lot while `bbl` has the current one; at a condo conversion, 9 rows for 21
+/// Prescott Pl name the vanished pre-condo lot in `bbl` while block/lot has the current one.
+///
+/// So: whichever of the two is one of our buildings, the `bbl` column first; otherwise the
+/// column, or the rebuild where the column is blank (9,757 rows citywide). Each row still
+/// lands on exactly one BBL.
+pub fn hpd_row_bbl(v: &Value, ours: &HashSet<String>) -> Option<String> {
+    let column = s(v, "bbl")
+        .as_deref()
+        .and_then(norm_bbl)
+        .filter(|b| b.len() == 10);
+    let rebuilt = hpd_bbl(v);
+    let pick = [&column, &rebuilt]
+        .into_iter()
+        .flatten()
+        .find(|b| ours.contains(*b))
+        .or(column.as_ref())
+        .or(rebuilt.as_ref())
+        .cloned();
+    pick
+}
+
+pub fn parse_hpd_violation(v: &Value) -> Option<Violation> {
+    // A class outside A/B/C now makes the row unusable rather than merely unusual, because
+    // every downstream site requires a modelled class. HPD also issues `I` (753 on the CD 303
+    // pilot), and that skip is the exclusion stated on the card and in `/meta` — so it has to
+    // stay countable, not silent. `run` counts it by letter through `hpd_excluded_class`.
+    let class: ViolationClass = s(v, "class")?.trim().parse().ok()?;
+    // wvxf-dwi5 `violationstatus` is exactly "Open" / "Close".
+    let status = s(v, "violationstatus").unwrap_or_default().to_lowercase();
+    let open = status.starts_with("open");
+    let year = s(v, "novissueddate")
+        .and_then(|d| d.get(0..4).map(|y| y.to_string()))
+        .and_then(|y| y.parse::<i32>().ok())
+        .unwrap_or(0);
+    // Dates arrive as "2014-01-06T00:00:00.000"; keep the ISO date and drop the time,
+    // which is always midnight and carries no information.
+    let date = |k: &str| s(v, k).map(|d| d.chars().take(10).collect::<String>());
+    Some(Violation {
+        class,
+        open,
+        year,
+        description: s(v, "novdescription"),
+        issued_on: date("novissueddate"),
+        closed_on: date("currentstatusdate"),
+    })
 }
 
 pub fn parse_dob_has_elevator(v: &Value) -> bool {
@@ -252,11 +267,12 @@ pub fn parse_dob_has_elevator(v: &Value) -> bool {
     is_elevator && active
 }
 
-/// Full Census ACS5 URL for all Kings County (Brooklyn) tract rent medians. Contains no
-/// spaces or `>` — only the `for=tract:*` / `in=state:36` colons the Census API expects
-/// literally — so it is safe to send as a whole URL string.
-pub fn census_url(key: &str) -> String {
-    format!("https://api.census.gov/data/2023/acs/acs5?get=B25064_001E&for=tract:*&in=state:36&in=county:047&key={key}")
+/// Full Census ACS5 URL for one county's tract rent medians. Contains no spaces or `>` — only
+/// the `for=tract:*` / `in=state:36` colons the Census API expects literally — so it is safe to
+/// send as a whole URL string. One request per county keeps to a URL shape already known to
+/// work.
+pub fn census_url(key: &str, county: &str) -> String {
+    format!("https://api.census.gov/data/2023/acs/acs5?get=B25064_001E&for=tract:*&in=state:36&in=county:{county}&key={key}")
 }
 
 pub fn parse_census_medians(v: &Value) -> std::collections::HashMap<String, i32> {
@@ -284,92 +300,95 @@ pub fn parse_census_medians(v: &Value) -> std::collections::HashMap<String, i32>
     out
 }
 
-/// 311 service requests (erm2-nwe9) inside a lat/long bounding box and since a recent cutoff.
-///
-/// The bbox + date cutoff do NOT bring this under one request, and the previous comment here
-/// said they did. Measured against the shipped bbox, the `$where` matches 219,199 rows and the
-/// `$limit` asked for 50,000 — so every `complaints_311` count in the artifact was computed
-/// from an arbitrary 23% of the data, in whatever order Socrata happened to return. Paged now;
-/// `limit` is the page size.
-///
-/// `$where` carries spaces and `>`, so it goes through `reqwest`'s `.query()` for encoding,
-/// same as the other Socrata builders.
-pub fn complaints_311_query(
-    min_lat: f64,
-    min_lon: f64,
-    max_lat: f64,
-    max_lon: f64,
-    limit: u32,
-) -> Query {
-    let base = format!("{SODA}/erm2-nwe9.json");
-    let params = vec![
-        ("$select".to_string(), "latitude,longitude".to_string()),
-        (
-            "$where".to_string(),
-            format!(
-                "created_date > '2024-01-01' \
-                 AND latitude >= {min_lat} AND latitude <= {max_lat} \
-                 AND longitude >= {min_lon} AND longitude <= {max_lon}"
+/// 311 requests since 2024 per ZIP, counted by Socrata. One request returns ~500 rows
+/// instead of downloading 10.4M complaint points.
+pub fn complaints_311_by_zip_query() -> Query {
+    (
+        format!("{SODA}/erm2-nwe9.json"),
+        vec![
+            (
+                "$select".to_string(),
+                "incident_zip, count(1) AS n".to_string(),
             ),
-        ),
-        // Stable total order so `$offset` paging is well-defined; see `hpd_block_query`.
-        // `limit` is the page size, not a ceiling — this bbox matches far more rows than
-        // any single request returns.
-        ("$order".to_string(), ":id".to_string()),
-        ("$limit".to_string(), limit.to_string()),
-    ];
-    (base, params)
-}
-
-/// (latitude, longitude) of a 311 record, or None if either coordinate is missing/unparseable.
-pub fn parse_311_point(v: &Value) -> Option<(f64, f64)> {
-    Some((fnum(v, "latitude")?, fnum(v, "longitude")?))
-}
-
-/// DOHMH restaurant inspections (43nn-pn8j) with a real letter grade inside a lat/long box.
-/// The box (built around the curated set) is what restricts this to Brooklyn. `$where` carries
-/// spaces + `>=`, so it goes through `reqwest`'s `.query()` for encoding like the other Socrata
-/// builders. `$order` newest-first so the most recent grade wins a nearest-point tie downstream.
-pub fn restaurant_grades_query(
-    min_lat: f64,
-    min_lon: f64,
-    max_lat: f64,
-    max_lon: f64,
-    limit: u32,
-) -> Query {
-    let base = format!("{SODA}/43nn-pn8j.json");
-    let params = vec![
-        (
-            "$select".to_string(),
-            "grade,latitude,longitude,inspection_date".to_string(),
-        ),
-        (
-            "$where".to_string(),
-            format!(
-                "grade in('A','B','C') \
-                 AND latitude >= {min_lat} AND latitude <= {max_lat} \
-                 AND longitude >= {min_lon} AND longitude <= {max_lon}"
+            (
+                "$where".to_string(),
+                "created_date > '2024-01-01'".to_string(),
             ),
-        ),
-        ("$order".to_string(), "inspection_date DESC".to_string()),
-        ("$limit".to_string(), limit.to_string()),
-    ];
-    (base, params)
+            ("$group".to_string(), "incident_zip".to_string()),
+            ("$limit".to_string(), "50000".to_string()),
+        ],
+    )
 }
 
-/// (grade, latitude, longitude) of a graded restaurant record, or None if the grade is empty or
-/// either coordinate is missing/unparseable. Grades are the DOHMH letters A/B/C.
-pub fn parse_restaurant_grade(v: &Value) -> Option<(String, f64, f64)> {
-    let grade = s(v, "grade")?;
-    let grade = grade.trim();
-    if grade.is_empty() {
-        return None;
+/// Homes (PLUTO `unitsres`) per ZIP, summed by Socrata: the denominator for the 311 rate.
+pub fn homes_by_zip_query() -> Query {
+    (
+        format!("{SODA}/64uk-42ks.json"),
+        vec![
+            (
+                "$select".to_string(),
+                "zipcode, sum(unitsres) AS n".to_string(),
+            ),
+            ("$where".to_string(), "unitsres>0".to_string()),
+            ("$group".to_string(), "zipcode".to_string()),
+            ("$limit".to_string(), "50000".to_string()),
+        ],
+    )
+}
+
+/// `zip -> n` from a grouped Socrata result, merging rows whose ZIPs normalize to the same
+/// five digits (`11221` and `11221-1234`) and dropping the malformed ones.
+pub fn parse_zip_counts(rows: &Value, zip_field: &str) -> HashMap<String, i64> {
+    let mut out = HashMap::new();
+    for r in rows.as_array().map(Vec::as_slice).unwrap_or_default() {
+        let (Some(z), Some(n)) = (
+            s(r, zip_field).as_deref().and_then(zip5),
+            s(r, "n").and_then(|n| n.trim().parse::<f64>().ok()),
+        ) else {
+            continue;
+        };
+        *out.entry(z).or_insert(0) += n as i64;
     }
-    Some((
-        grade.to_string(),
-        fnum(v, "latitude")?,
-        fnum(v, "longitude")?,
-    ))
+    out
+}
+
+/// 311 complaints per 1,000 homes for every ZIP with homes on record. A ZIP with homes and no
+/// complaints gets 0; a ZIP with no homes gets nothing, since a rate per zero homes is not a
+/// number anyone should read.
+pub fn zip_rates(
+    complaints: &HashMap<String, i64>,
+    homes: &HashMap<String, i64>,
+) -> HashMap<String, i32> {
+    homes
+        .iter()
+        .filter(|(_, &h)| h > 0)
+        .map(|(z, &h)| {
+            let c = complaints.get(z).copied().unwrap_or(0) as f64;
+            (z.clone(), (c * 1000.0 / h as f64).round() as i32)
+        })
+        .collect()
+}
+
+/// DCP's 2020 census tract to Neighborhood Tabulation Area table: 2,327 rows, one request.
+pub fn nta_query() -> Query {
+    (
+        format!("{SODA}/hm78-6dwm.json"),
+        vec![
+            ("$select".to_string(), "geoid,ntaname".to_string()),
+            ("$limit".to_string(), "50000".to_string()),
+        ],
+    )
+}
+
+/// `tract GEOID -> neighborhood name`. The GEOID is the same 11-digit form `parse_pluto`
+/// builds, so a building's neighborhood is one lookup.
+pub fn parse_nta(rows: &Value) -> HashMap<String, String> {
+    rows.as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|r| Some((s(r, "geoid")?, s(r, "ntaname")?)))
+        .collect()
 }
 
 // --- Rent stabilization (JustFix nyc-doffer) ---------------------------------------------------
@@ -467,42 +486,46 @@ mod tests {
         assert_eq!(param(&params, "$order"), "unitsres DESC");
         assert!(param(&params, "$select").contains("bbl"));
         assert!(param(&params, "$select").contains("bct2020"));
+        assert!(param(&params, "$select").contains("zipcode"));
         // No order → no $order param (the unordered neighborhood-mix pull).
         let (_, unordered) = pluto_query(303, 200, None);
         assert!(!unordered.iter().any(|(k, _)| k == "$order"));
     }
 
     #[test]
-    fn bbl_in_query_builds_where_in_clause() {
-        let bbls = ["3018420001".to_string(), "3018420002".to_string()];
-        let (base, params) = bbl_in_query("e5aq-a4j2", "bbl,device_type,device_status", &bbls);
-        assert!(base.ends_with("/e5aq-a4j2.json"), "base was {base}");
-        assert_eq!(param(&params, "$select"), "bbl,device_type,device_status");
+    fn pluto_query_takes_the_borough_from_the_district() {
+        // Brooklyn is no longer hardcoded: the district's leading digit names the borough.
+        let borough = |cd| param(&pluto_query(cd, 1, None).1, "$where").to_string();
+        assert!(borough(101).contains("borough='MN' AND cd=101"));
+        assert!(borough(212).contains("borough='BX'"));
+        assert!(borough(407).contains("borough='QN'"));
+        assert!(borough(503).contains("borough='SI'"));
+    }
+
+    #[test]
+    fn every_borough_has_its_county() {
         assert_eq!(
-            param(&params, "$where"),
-            "bbl in('3018420001','3018420002')"
+            (1..=5).map(county_fips).collect::<Vec<_>>(),
+            ["061", "005", "047", "081", "085"].map(Some)
         );
-        assert_eq!(param(&params, "$limit"), "50000");
+        assert_eq!(county_fips(0), None);
+        assert_eq!(county_fips(6), None);
     }
 
     #[test]
-    fn hpd_block_query_filters_by_boro_and_blocks() {
-        let (base, params) = hpd_block_query(3, &[1599, 1970]);
-        assert!(base.ends_with("/wvxf-dwi5.json"), "base was {base}");
-        assert_eq!(param(&params, "$where"), "boroid=3 AND block in(1599,1970)");
-        assert!(param(&params, "$select").contains("violationstatus"));
-        // This query matched 134,837 rows against a 50,000 `$limit` and silently dropped half
-        // the violation history. `$limit` is now a page size, and paging is only well-defined
-        // with a total order — so the absence of `$order` is the bug, not a style choice.
-        assert_eq!(param(&params, "$order"), ":id");
+    fn hpd_where_blocks_filters_by_boro_and_blocks() {
+        assert_eq!(
+            hpd_where_blocks(3, &[1599, 1970]),
+            "boroid=3 AND block in(1599,1970)"
+        );
     }
 
     #[test]
-    fn census_url_targets_kings_county_rent_median() {
-        let url = census_url("SECRET");
+    fn census_url_targets_one_county_rent_median() {
+        let url = census_url("SECRET", "081");
         assert!(url.contains("B25064_001E"));
         assert!(url.contains("in=state:36"));
-        assert!(url.contains("in=county:047"));
+        assert!(url.contains("in=county:081"));
         assert!(url.contains("key=SECRET"));
     }
 
@@ -518,7 +541,8 @@ mod tests {
             "bldgclass": "C0",
             "latitude": "40.6829",
             "longitude": "-73.9251",
-            "bct2020": "3025300"
+            "bct2020": "3025300",
+            "zipcode": "11233"
         });
         let b = parse_pluto(&v).expect("valid record");
         assert_eq!(b.bbl, "3018420001"); // float form normalized to canonical 10 digits
@@ -527,9 +551,24 @@ mod tests {
         assert_eq!(b.units_res, 6);
         // tract_geoid = state(36) + county(047) + tract(bct2020 minus boro digit)
         assert_eq!(b.tract_geoid, "36047025300");
+        assert_eq!(b.zip.as_deref(), Some("11233"));
         // defaults for fields PLUTO doesn't carry:
         assert!(!b.has_elevator);
         assert_eq!(b.rent_stabilized, None);
+    }
+
+    #[test]
+    fn pluto_tract_takes_its_county_from_the_borough() {
+        let tract = |bct: &str| {
+            parse_pluto(&json!({"bbl": "1000010001", "bct2020": bct}))
+                .unwrap()
+                .tract_geoid
+        };
+        assert_eq!(tract("1001901"), "36061001901"); // Manhattan
+        assert_eq!(tract("2001901"), "36005001901"); // the Bronx
+        assert_eq!(tract("4001901"), "36081001901"); // Queens
+        assert_eq!(tract("5001901"), "36085001901"); // Staten Island
+        assert_eq!(tract("9001901"), ""); // not a borough: no tract rather than a wrong one
     }
 
     #[test]
@@ -555,6 +594,23 @@ mod tests {
         // padding: block/lot zero-filled to 5/4 digits
         let v2 = json!({"boroid": "3", "block": "1599", "lot": "26"});
         assert_eq!(hpd_bbl(&v2).as_deref(), Some("3015990026"));
+    }
+
+    #[test]
+    fn hpd_row_bbl_takes_whichever_answer_is_ours() {
+        let ours: HashSet<String> = ["3017470030", "3015577501"].map(String::from).into();
+        // Lot merger: block/lot still says lot 33, the column has the merged lot 30.
+        let merged = json!({"bbl": "3017470030", "boroid": "3", "block": "1747", "lot": "33"});
+        assert_eq!(hpd_row_bbl(&merged, &ours).as_deref(), Some("3017470030"));
+        // Condo conversion: the column still says pre-condo lot 38, block/lot has 7501.
+        let condo = json!({"bbl": "3015570038", "boroid": "3", "block": "1557", "lot": "7501"});
+        assert_eq!(hpd_row_bbl(&condo, &ours).as_deref(), Some("3015577501"));
+        // Neither is ours: the column, so the row is reported against the lot HPD names.
+        let neither = json!({"bbl": "3015990007", "boroid": "3", "block": "1", "lot": "1"});
+        assert_eq!(hpd_row_bbl(&neither, &ours).as_deref(), Some("3015990007"));
+        // 9,757 rows carry no bbl; rebuilding it keeps them rather than dropping them.
+        let blank = json!({"boroid": "3", "block": "1599", "lot": "7"});
+        assert_eq!(hpd_row_bbl(&blank, &ours).as_deref(), Some("3015990007"));
     }
 
     #[test]
@@ -639,67 +695,62 @@ mod tests {
     }
 
     #[test]
-    fn complaints_311_query_bounds_bbox_and_recent_date() {
-        let (base, params) = complaints_311_query(40.68, -74.0, 40.70, -73.90, 50000);
-        assert!(base.ends_with("/erm2-nwe9.json"), "base was {base}");
-        let where_clause = param(&params, "$where");
-        assert!(where_clause.contains("created_date > '2024-01-01'"));
-        assert!(where_clause.contains("latitude >= 40.68"));
-        assert!(where_clause.contains("latitude <= 40.7"));
-        assert!(where_clause.contains("longitude >= -74"));
-        assert!(where_clause.contains("longitude <= -73.9"));
-        assert_eq!(param(&params, "$select"), "latitude,longitude");
-        // 50,000 is the PAGE SIZE, not a ceiling. The old test asserted the same value while
-        // it was a ceiling against 219,199 matching rows, which pinned the truncation as
-        // intended behaviour. The `$order` is what makes the page size safe.
-        assert_eq!(param(&params, "$limit"), "50000");
-        assert_eq!(param(&params, "$order"), ":id");
+    fn zip5_keeps_five_digits_and_drops_junk() {
+        assert_eq!(zip5("11221").as_deref(), Some("11221"));
+        assert_eq!(zip5("11221-1234").as_deref(), Some("11221"));
+        assert_eq!(zip5(" 10466 ").as_deref(), Some("10466"));
+        assert_eq!(zip5("N/A"), None);
+        assert_eq!(zip5("1122"), None);
     }
 
     #[test]
-    fn parses_311_point_from_string_or_number() {
-        // Socrata returns the coords as strings in some slices, JSON numbers in others.
-        let (lat, lon) =
-            parse_311_point(&json!({"latitude": "40.6829", "longitude": "-73.9251"})).unwrap();
-        assert!((lat - 40.6829).abs() < 1e-6);
-        assert!((lon + 73.9251).abs() < 1e-6);
-        assert!(parse_311_point(&json!({"latitude": 40.6829, "longitude": -73.9251})).is_some());
-        // A record missing a coordinate is dropped, not defaulted to (0,0).
-        assert!(parse_311_point(&json!({"latitude": "40.6829"})).is_none());
+    fn zip_counts_merge_variants_and_rates_divide_by_homes() {
+        let c311 = parse_zip_counts(
+            &json!([
+                {"incident_zip": "11221", "n": "300"},
+                {"incident_zip": "11221-1234", "n": "100"},
+                {"incident_zip": "N/A", "n": "999"},
+                {"n": "5"}
+            ]),
+            "incident_zip",
+        );
+        assert_eq!(c311, HashMap::from([("11221".to_string(), 400)]));
+        let homes = parse_zip_counts(
+            &json!([
+                {"zipcode": "11221", "n": "200"},
+                {"zipcode": "10001", "n": "50"},
+                {"zipcode": "10002", "n": "0"}
+            ]),
+            "zipcode",
+        );
+        let rates = zip_rates(&c311, &homes);
+        assert_eq!(rates.get("11221"), Some(&2000)); // 400 complaints / 200 homes * 1000
+        assert_eq!(rates.get("10001"), Some(&0)); // homes, no complaints: a real zero
+        assert_eq!(rates.get("10002"), None); // no homes: no rate
     }
 
     #[test]
-    fn restaurant_grades_query_bounds_bbox_and_letter_grades() {
-        let (base, params) = restaurant_grades_query(40.68, -74.0, 40.70, -73.90, 20000);
-        assert!(base.ends_with("/43nn-pn8j.json"), "base was {base}");
-        let where_clause = param(&params, "$where");
-        assert!(where_clause.contains("grade in('A','B','C')"));
-        assert!(where_clause.contains("latitude >= 40.68"));
-        assert!(where_clause.contains("longitude <= -73.9"));
-        assert_eq!(param(&params, "$order"), "inspection_date DESC");
-        assert_eq!(param(&params, "$limit"), "20000");
+    fn grouped_queries_ask_socrata_to_count() {
+        let (base, p) = complaints_311_by_zip_query();
+        assert!(base.ends_with("/erm2-nwe9.json"));
+        assert_eq!(param(&p, "$group"), "incident_zip");
+        assert_eq!(param(&p, "$where"), "created_date > '2024-01-01'");
+        let (base, p) = homes_by_zip_query();
+        assert!(base.ends_with("/64uk-42ks.json"));
+        assert_eq!(param(&p, "$group"), "zipcode");
     }
 
     #[test]
-    fn parses_restaurant_grade_and_drops_empty() {
-        // Socrata ships the coords as strings in some slices, numbers in others.
-        let (g, lat, lon) = parse_restaurant_grade(
-            &json!({"grade": "A", "latitude": "40.6829", "longitude": "-73.9251"}),
-        )
-        .expect("graded record");
-        assert_eq!(g, "A");
-        assert!((lat - 40.6829).abs() < 1e-6);
-        assert!((lon + 73.9251).abs() < 1e-6);
-        assert!(parse_restaurant_grade(
-            &json!({"grade": "B", "latitude": 40.6, "longitude": -73.9})
-        )
-        .is_some());
-        // Empty grade or missing coordinate → dropped.
-        assert!(parse_restaurant_grade(
-            &json!({"grade": "", "latitude": 40.6, "longitude": -73.9})
-        )
-        .is_none());
-        assert!(parse_restaurant_grade(&json!({"grade": "A", "latitude": 40.6})).is_none());
+    fn nta_maps_tract_geoid_to_name() {
+        let m = parse_nta(&json!([
+            {"geoid": "36005001901", "ntaname": "Mott Haven-Port Morris"},
+            {"geoid": "36047025300"}
+        ]));
+        assert_eq!(
+            m.get("36005001901").map(String::as_str),
+            Some("Mott Haven-Port Morris")
+        );
+        assert_eq!(m.len(), 1);
     }
 
     // Column layout: ucbbl,uc2018,pdfsoa2018,uc2019,pdfsoa2019,uc2020,pdfsoa2020,uc2021,

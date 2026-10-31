@@ -5,11 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-# Pure-Rust zlib (miniz_oxide backend, no C toolchain). Used only to block-compress
-# violation descriptions -- see `insert_violations`.
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 model = { path = "../model" }
 rusqlite.workspace = true
 anyhow.workspace = true
 # Parses the embedded `data/law.json` -- see `load_law`.
 serde_json.workspace = true
+# Description blocks, compressed against a trained dictionary -- see `ViolationWriter`.
+zstd = "0.14.3"

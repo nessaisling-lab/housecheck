@@ -60,7 +60,7 @@
       { "role": "user", "content": "Is this building safe?" }
     ] },
     "upstream": [
-      { "answer": "I can't certify a building as safe, but the record shows 1 open class-C violation (immediately hazardous under the Housing Maintenance Code) and 1 class-B. Its condition score is 56, and there were 40 nearby 311 complaints. That is public data about the building, not an inspection." }
+      { "answer": "I can't certify a building as safe, but the record shows 1 open class-C violation (immediately hazardous under the Housing Maintenance Code) and 1 class-B. Its condition score is 56, and its ZIP, 11221, has 600 311 complaints per 1,000 homes since 2024, a figure for the area rather than the building. That is public data about the building, not an inspection." }
     ],
     "expect": {
       "status": 200,

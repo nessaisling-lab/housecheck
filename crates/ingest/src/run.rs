@@ -1,40 +1,27 @@
 use anyhow::{Context, Result};
+use model::{Building, Violation};
 use reqwest::blocking::Client;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use crate::config::Config;
-use crate::geo::{count_within_m, haversine_m, nearest_ada_m, Station};
+use crate::geo::{nearest_ada_m, Station};
 use crate::sources::{
-    bbl_block, bbl_in_query, census_url, complaints_311_query, excluded_classes_note,
-    fetch_rent_stab, hpd_bbl, hpd_block_query, hpd_excluded_class, parse_311_point,
-    parse_census_medians, parse_dob_has_elevator, parse_hpd_violation, parse_pluto,
-    parse_restaurant_grade, pluto_coords, pluto_query, restaurant_grades_query,
+    bbl_block, census_url, complaints_311_by_zip_query, county_fips, excluded_classes_note,
+    fetch_rent_stab, homes_by_zip_query, hpd_excluded_class, hpd_row_bbl, hpd_where_blocks,
+    nta_query, parse_census_medians, parse_dob_has_elevator, parse_hpd_violation, parse_nta,
+    parse_pluto, parse_zip_counts, pluto_coords, pluto_query, zip_rates, HPD_SELECT, PLUTO_SELECT,
+    SODA,
 };
 
-/// Grade of the nearest DOHMH-graded restaurant within `radius_m` metres of (lat, lon), or
-/// None. Reuses `geo::haversine_m` for the exact distance. The restaurant list is ordered
-/// newest-inspection-first, and ties keep the first-seen row, so a tie prefers the fresher grade.
-fn nearest_grade_within(
-    lat: f64,
-    lon: f64,
-    restaurants: &[(String, f64, f64)],
-    radius_m: f64,
-) -> Option<String> {
-    let mut best: Option<(f64, &str)> = None;
-    for (grade, rlat, rlon) in restaurants {
-        let d = haversine_m(lat, lon, *rlat, *rlon);
-        if d <= radius_m && best.map(|(bd, _)| d < bd).unwrap_or(true) {
-            best = Some((d, grade.as_str()));
-        }
-    }
-    best.map(|(_, g)| g.to_string())
-}
-
 /// Blocking HTTP client with a UA (Socrata throttles anonymous no-UA traffic harder) and a
-/// generous timeout for the larger tract/station pulls. If `NYC_APP_TOKEN` is set, it is sent
-/// as the Socrata `X-App-Token` header on every request, lifting the anonymous rate limit
-/// (harmless on the Census/MTA hosts, which ignore an unknown token).
+/// generous timeout for the larger pulls. If `NYC_APP_TOKEN` is set, it is sent as the Socrata
+/// `X-App-Token` header on every request, lifting the anonymous rate limit (harmless on the
+/// Census/MTA hosts, which ignore an unknown token).
+///
+/// The `gzip` feature makes every request ask for a compressed body and decompress it on
+/// arrival. Measured on a 50,000-row violation page: 17.7 MB plain, 1.29 MB gzipped.
 fn client() -> Client {
     let mut headers = reqwest::header::HeaderMap::new();
     if let Ok(token) = std::env::var("NYC_APP_TOKEN") {
@@ -49,7 +36,7 @@ fn client() -> Client {
     Client::builder()
         .user_agent("housecheck-ingest/0.1")
         .default_headers(headers)
-        .timeout(std::time::Duration::from_secs(90))
+        .timeout(Duration::from_secs(300))
         .build()
         .expect("build reqwest client")
 }
@@ -65,38 +52,61 @@ fn arr(v: &Value) -> &[Value] {
 /// non-fatal — it prints `{e:#}`, the whole anyhow context chain. Interpolating the raw URL
 /// into that context would print the caller's API key to stdout on any Census outage, and from
 /// there into CI logs and terminal scrollback. The host and path are all a reader needs.
+/// `reqwest`'s own errors carry the full URL too, which is why every error below goes through
+/// `without_url()` first.
 fn redacted(url: &str) -> &str {
     url.split('?').next().unwrap_or(url)
+}
+
+/// Up to three tries, 2 s then 4 s apart. A citywide pull is a few hundred requests over most
+/// of an hour, and one transient 5xx should not throw the run away.
+///
+/// ponytail: retries every error, a malformed query's 400 included; that one just fails 6 s
+/// later than it would have.
+fn with_retry<T>(mut f: impl FnMut() -> Result<T>) -> Result<T> {
+    let mut attempt = 1;
+    loop {
+        match f() {
+            Ok(v) => return Ok(v),
+            Err(e) if attempt < 3 => {
+                println!("  retry {attempt}/2 after: {e:#}");
+                std::thread::sleep(Duration::from_secs(2 << (attempt - 1)));
+                attempt += 1;
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 /// GET a whole URL (Census / MTA — no raw spaces to encode) and decode JSON.
 fn get_json(c: &Client, url: &str) -> Result<Value> {
     let safe = redacted(url);
-    let resp = c.get(url).send().with_context(|| format!("GET {safe}"))?;
-    let resp = resp
-        .error_for_status()
-        .with_context(|| format!("bad status for {safe}"))?;
-    resp.json()
-        .with_context(|| format!("decode json from {safe}"))
+    with_retry(|| {
+        c.get(url)
+            .send()
+            .and_then(|r| r.error_for_status())
+            .and_then(|r| r.json())
+            .map_err(|e| e.without_url())
+            .with_context(|| format!("GET {safe}"))
+    })
 }
 
 /// GET a base URL with query params (Socrata SoQL). `reqwest` percent-encodes the `$where`
 /// clause's spaces and `>` — the whole point of sending components, not a baked URL string.
 ///
 /// Raw fetch, no completeness check: use this only where `$limit` is a deliberate sample cap
-/// (the PLUTO building pull, which is *meant* to stop at `--limit`). Anywhere the query is
-/// supposed to return everything that matches, use `get_json_complete` or `get_json_paged`.
+/// (the pilot's PLUTO pull, which is *meant* to stop at `--limit`). Anywhere the query is
+/// supposed to return everything that matches, use `get_json_complete` or `for_each_page`.
 fn get_json_query(c: &Client, base: &str, params: &[(String, String)]) -> Result<Value> {
-    let resp = c
-        .get(base)
-        .query(params)
-        .send()
-        .with_context(|| format!("GET {base}"))?;
-    let resp = resp
-        .error_for_status()
-        .with_context(|| format!("bad status for {base}"))?;
-    resp.json()
-        .with_context(|| format!("decode json from {base}"))
+    with_retry(|| {
+        c.get(base)
+            .query(params)
+            .send()
+            .and_then(|r| r.error_for_status())
+            .and_then(|r| r.json())
+            .map_err(|e| e.without_url())
+            .with_context(|| format!("GET {base}"))
+    })
 }
 
 /// Short name for log lines: the Socrata dataset id out of the URL.
@@ -111,9 +121,16 @@ fn dataset_of(base: &str) -> &str {
 /// order and tells you nothing about how many matched, so a query that quietly drops rows looks
 /// exactly like one that found few. Row count equal to the limit is the signal, and it is the
 /// only signal there is.
-fn get_json_complete(c: &Client, base: &str, params: &[(String, String)]) -> Result<Value> {
+fn get_json_complete(
+    c: &Client,
+    (base, params): &(String, Vec<(String, String)>),
+) -> Result<Value> {
     let rows = get_json_query(c, base, params)?;
-    if let Some(limit) = param_limit(params) {
+    if let Some(limit) = params
+        .iter()
+        .find(|(k, _)| k == "$limit")
+        .and_then(|(_, v)| v.parse::<usize>().ok())
+    {
         let n = arr(&rows).len();
         anyhow::ensure!(
             n < limit,
@@ -125,183 +142,343 @@ fn get_json_complete(c: &Client, base: &str, params: &[(String, String)]) -> Res
     Ok(rows)
 }
 
-/// The `$limit` in a param list, if it parses.
-fn param_limit(params: &[(String, String)]) -> Option<usize> {
-    params
-        .iter()
-        .find(|(k, _)| k == "$limit")
-        .and_then(|(_, v)| v.parse::<usize>().ok())
+/// Rows per Socrata page.
+const PAGE: usize = 50_000;
+
+/// How many rows Socrata says match `where_`.
+fn count_rows(c: &Client, dataset: &str, where_: &str) -> Result<usize> {
+    let base = format!("{SODA}/{dataset}.json");
+    let mut params = vec![("$select".to_string(), "count(1) AS n".to_string())];
+    if !where_.is_empty() {
+        params.push(("$where".to_string(), where_.to_string()));
+    }
+    let v = get_json_query(c, &base, &params)?;
+    arr(&v)
+        .first()
+        .and_then(|r| r.get("n"))
+        .and_then(|n| n.as_str())
+        .and_then(|n| n.parse().ok())
+        .with_context(|| format!("{dataset}: no count in {v}"))
 }
 
-/// Upper bound on a paged pull, so a server that ignores `$offset` cannot loop forever.
-const MAX_PAGED_ROWS: usize = 2_000_000;
-
-/// GET **every** row matching a query, paging on `$offset` until a short page comes back.
+/// GET **every** row matching `where_` (every row at all when it is empty), handing each page
+/// to `f` and keeping none of them.
 ///
-/// This exists because the HPD violation query asked for 50,000 rows against 134,837 matching
-/// ones. That cost half the violation history, and because `condition_score` starts at 100 and
-/// subtracts, a violation you fail to fetch can only ever make a building look better. The
-/// 311 query had the same defect against 219,199 rows.
+/// Memory stays at one page whatever the dataset's size: the old paged fetch collected every
+/// row as JSON first, which is about 10 GB for the city's 10.5M violations.
 ///
-/// `$order` is required rather than optional: `$offset` paging without a total order is
-/// undefined, and pages may repeat or skip rows. Callers pass `:id`, Socrata's stable system
-/// column. Forgetting it is an error here, not a silently wrong result.
-///
-/// The `$limit` in `params` is the page size.
-fn get_json_paged(c: &Client, base: &str, params: &[(String, String)]) -> Result<Vec<Value>> {
-    anyhow::ensure!(
-        params.iter().any(|(k, _)| k == "$order"),
-        "{}: a paged fetch needs an explicit $order or offset paging may skip or repeat rows",
-        dataset_of(base)
-    );
-    let page = param_limit(params).unwrap_or(50_000);
-    anyhow::ensure!(page > 0, "{}: $limit must be positive", dataset_of(base));
-
-    let mut out: Vec<Value> = Vec::new();
-    let mut requests = 0usize;
+/// Pages are keyed on Socrata's `:id` (`:id > last`, ordered by `:id`), not on `$offset`. An
+/// offset makes the server count past every earlier row on every request, which slows with
+/// depth, and the violation pull is ~211 pages deep. The order is still the total order that
+/// made offset paging well-defined (the half-dropped violation history it fixed is in the git
+/// log under `get_json_paged`).
+fn for_each_page(
+    c: &Client,
+    dataset: &str,
+    select: &str,
+    where_: &str,
+    mut f: impl FnMut(&[Value]) -> Result<()>,
+) -> Result<usize> {
+    let base = format!("{SODA}/{dataset}.json");
+    let mut last: Option<String> = None;
+    let (mut n, mut pages) = (0usize, 0usize);
     loop {
-        let mut p = params.to_vec();
-        p.push(("$offset".to_string(), out.len().to_string()));
-        let rows = get_json_query(c, base, &p)?;
-        requests += 1;
-        let n = arr(&rows).len();
-        out.extend(arr(&rows).iter().cloned());
-        if n < page {
+        let w = match (&last, where_.is_empty()) {
+            (Some(id), true) => format!(":id > '{id}'"),
+            (Some(id), false) => format!("({where_}) AND :id > '{id}'"),
+            (None, _) => where_.to_string(),
+        };
+        let mut params = vec![
+            ("$select".to_string(), format!(":id,{select}")),
+            ("$order".to_string(), ":id".to_string()),
+            ("$limit".to_string(), PAGE.to_string()),
+        ];
+        if !w.is_empty() {
+            params.push(("$where".to_string(), w));
+        }
+        let rows = get_json_query(c, &base, &params)?;
+        let page = arr(&rows);
+        f(page)?;
+        n += page.len();
+        pages += 1;
+        if pages % 20 == 0 {
+            println!("  {dataset}: {n} rows so far");
+        }
+        if page.len() < PAGE {
             break;
         }
+        last = page
+            .last()
+            .and_then(|v| v.get(":id"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         anyhow::ensure!(
-            out.len() <= MAX_PAGED_ROWS,
-            "{}: passed {MAX_PAGED_ROWS} rows — $offset is probably being ignored",
-            dataset_of(base)
+            last.is_some(),
+            "{dataset}: a full page with no :id to continue from"
         );
     }
-    if requests > 1 {
-        println!(
-            "  {}: {} rows over {requests} requests (paged)",
-            dataset_of(base),
-            out.len()
-        );
+    println!("  {dataset}: {n} rows over {pages} requests");
+    Ok(n)
+}
+
+/// Stream every HPD violation matching `where_` into the DuckDB stage, then refuse the run if
+/// rows went missing. Returns the rows staged, and the rows skipped for an unmodelled class
+/// on our own buildings, by letter.
+///
+/// Every class is fetched so the skip can be counted per building, as it always was: the
+/// count is printed on the card ("excluded: class I (753 records ...)"), and counting a whole
+/// tax block's class I rows instead put 12,079 there for the pilot.
+///
+/// The completeness check compares with Socrata's own count taken before and after the pull:
+/// HPD updates the dataset while a citywide pull runs (~157,000 rows change a week), so the
+/// fetched count must land between the two rather than equal either.
+fn stage_violations(
+    c: &Client,
+    stage: &duckdb::Connection,
+    where_: &str,
+    bbl_set: &HashSet<String>,
+) -> Result<(usize, BTreeMap<String, usize>)> {
+    stage.execute_batch(
+        "DROP TABLE IF EXISTS hpd_violation;
+         CREATE TABLE hpd_violation (
+            fetch_seq BIGINT,     -- arrival order, which is HPD's :id order
+            sid VARCHAR,          -- Socrata :id, the key a weekly refresh will upsert on
+            bbl BIGINT,
+            class VARCHAR,
+            open BOOLEAN,
+            year INTEGER,
+            issued_on VARCHAR,
+            closed_on VARCHAR,
+            description VARCHAR
+         );",
+    )?;
+    let before = count_rows(c, "wvxf-dwi5", where_)?;
+    let mut app = stage.appender("hpd_violation")?;
+    let mut seq: i64 = 0;
+    let mut excluded: BTreeMap<String, usize> = BTreeMap::new();
+    let fetched = for_each_page(c, "wvxf-dwi5", HPD_SELECT, where_, |page| {
+        for v in page {
+            let Some(viol) = parse_hpd_violation(v) else {
+                if let Some(letter) = hpd_excluded_class(v) {
+                    if hpd_row_bbl(v, bbl_set).is_some_and(|b| bbl_set.contains(&b)) {
+                        *excluded.entry(letter).or_default() += 1;
+                    }
+                }
+                continue;
+            };
+            app.append_row(duckdb::params![
+                seq,
+                v.get(":id").and_then(Value::as_str),
+                hpd_row_bbl(v, bbl_set).and_then(|b| b.parse::<i64>().ok()),
+                viol.class.as_str(),
+                viol.open,
+                viol.year,
+                viol.issued_on,
+                viol.closed_on,
+                viol.description,
+            ])?;
+            seq += 1;
+        }
+        Ok(())
+    })?;
+    app.flush()?;
+    drop(app);
+    let after = count_rows(c, "wvxf-dwi5", where_)?;
+    anyhow::ensure!(
+        (before.min(after)..=before.max(after)).contains(&fetched),
+        "wvxf-dwi5: fetched {fetched} rows but Socrata counted {before} before the pull and \
+         {after} after. Rows went missing; refusing to build a thinner city."
+    );
+    Ok((seq as usize, excluded))
+}
+
+/// Write the staged violations of every building in `bbls` into the serving artifact, one
+/// building at a time through `store`'s writer, so the description compression is the tested
+/// one. Returns (rows written, staged rows on lots outside the building set).
+fn compose_violations(
+    stage: &duckdb::Connection,
+    conn: &rusqlite::Connection,
+    bbls: &[i64],
+) -> Result<(usize, usize)> {
+    stage.execute_batch("DROP TABLE IF EXISTS bset; CREATE TABLE bset (bbl BIGINT);")?;
+    {
+        let mut app = stage.appender("bset")?;
+        for b in bbls {
+            app.append_row([b])?;
+        }
+    }
+    // Lots HPD cites that PLUTO lists with no homes (or not at all). Counted, not dropped
+    // silently.
+    let outside: i64 = stage.query_row(
+        "SELECT count(*) FROM hpd_violation
+          WHERE bbl IS NULL OR bbl NOT IN (SELECT bbl FROM bset)",
+        [],
+        |r| r.get(0),
+    )?;
+    let mut writer = store::ViolationWriter::new(conn)?;
+    let mut stmt = stage.prepare(
+        "SELECT bbl, class, open, year, issued_on, closed_on, description
+           FROM hpd_violation
+          WHERE bbl IN (SELECT bbl FROM bset)
+          ORDER BY bbl, fetch_seq",
+    )?;
+    let mut rows = stmt.query([])?;
+    let (mut cur, mut vs, mut written) = (None::<i64>, Vec::<Violation>::new(), 0usize);
+    while let Some(r) = rows.next()? {
+        let bbl: i64 = r.get(0)?;
+        if cur != Some(bbl) {
+            if let Some(b) = cur {
+                writer.insert(conn, &b.to_string(), &vs)?;
+                written += vs.len();
+                vs.clear();
+            }
+            cur = Some(bbl);
+        }
+        vs.push(Violation {
+            class: r.get::<_, String>(1)?.parse()?,
+            open: r.get(2)?,
+            year: r.get(3)?,
+            issued_on: r.get(4)?,
+            closed_on: r.get(5)?,
+            description: r.get(6)?,
+        });
+    }
+    if let Some(b) = cur {
+        writer.insert(conn, &b.to_string(), &vs)?;
+        written += vs.len();
+    }
+    Ok((written, outside as usize))
+}
+
+/// Up to 100,000 staged descriptions, sampled the same way every run, to train the
+/// description dictionary on.
+fn description_samples(stage: &duckdb::Connection) -> Result<Vec<String>> {
+    let mut stmt = stage.prepare(
+        "SELECT description FROM (
+            SELECT description FROM hpd_violation WHERE description <> ''
+         ) USING SAMPLE reservoir(100000 ROWS) REPEATABLE (42)",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut out = Vec::new();
+    while let Some(r) = rows.next()? {
+        out.push(r.get(0)?);
     }
     Ok(out)
+}
+
+/// The pilot's buildings: a BLEND so both stories show, ~60% pulled largest-first (the
+/// pre-war, multi-unit, stabilization-eligible buildings) and the rest from the neighborhood's
+/// natural mix of small rowhouses.
+fn pilot_buildings(c: &Client, cfg: &Config) -> Result<Vec<Value>> {
+    let big_n = (cfg.limit * 3) / 5;
+    let (b1, p1) = pluto_query(cfg.community_district, big_n, Some("unitsres DESC"));
+    let (b2, p2) = pluto_query(cfg.community_district, cfg.limit, None);
+    let mut rows: Vec<Value> = arr(&get_json_query(c, &b1, &p1)?).to_vec();
+    rows.extend(arr(&get_json_query(c, &b2, &p2)?).iter().cloned());
+    Ok(rows)
 }
 
 pub fn run_real(cfg: &Config) -> Result<()> {
     let census_key = std::env::var("CENSUS_API_KEY")
         .context("set CENSUS_API_KEY (https://api.census.gov/data/key_signup.html)")?;
     let c = client();
+    let started = Instant::now();
+    let lap = |what: &str| {
+        println!(
+            "[{:>6.1} min] {what}",
+            started.elapsed().as_secs_f64() / 60.0
+        )
+    };
 
-    // 1. Buildings from PLUTO — a BLEND so both stories show: ~60% pulled largest-first (the
-    //    pre-war, multi-unit, stabilization-eligible buildings) and the rest from the
-    //    neighborhood's natural mix of small rowhouses. Merge, dedup by BBL, cap at the limit.
-    let big_n = (cfg.limit * 3) / 5;
-    let (b1, p1) = pluto_query(cfg.community_district, big_n, Some("unitsres DESC"));
-    let (b2, p2) = pluto_query(cfg.community_district, cfg.limit, None);
-    let big = get_json_query(&c, &b1, &p1)?;
-    let mix = get_json_query(&c, &b2, &p2)?;
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut buildings: Vec<model::Building> = Vec::new();
+    // 1. Buildings from PLUTO: every residential lot, or the pilot's blend.
     let mut coords: HashMap<String, (f64, f64)> = HashMap::new();
-    let mut big_taken = 0usize;
-    for (is_big, v) in arr(&big)
-        .iter()
-        .map(|v| (true, v))
-        .chain(arr(&mix).iter().map(|v| (false, v)))
-    {
-        let Some(b) = parse_pluto(v) else { continue };
-        if b.bbl.is_empty() || !seen.insert(b.bbl.clone()) {
-            continue;
+    let mut buildings: Vec<Building> = Vec::new();
+    let mut take = |v: &Value| {
+        if let Some(b) = parse_pluto(v) {
+            if let Some((bbl, lat, lon)) = pluto_coords(v) {
+                coords.insert(bbl, (lat, lon));
+            }
+            buildings.push(b);
         }
-        if let Some((bbl, lat, lon)) = pluto_coords(v) {
-            coords.insert(bbl, (lat, lon));
-        }
-        if is_big {
-            big_taken += 1;
-        }
-        buildings.push(b);
-        if buildings.len() >= cfg.limit as usize {
-            break;
-        }
+    };
+    let scope = if cfg.citywide {
+        for_each_page(&c, "64uk-42ks", PLUTO_SELECT, "unitsres>0", |page| {
+            page.iter().for_each(&mut take);
+            Ok(())
+        })?;
+        "city".to_string()
+    } else {
+        pilot_buildings(&c, cfg)?.iter().for_each(&mut take);
+        format!("community district {}", cfg.community_district)
+    };
+    // Dedup in pull order (the pilot blend's two pulls overlap) and cap the pilot at --limit
+    // BEFORE sorting: sorting first would keep the lowest BBLs instead of the blend. Then sort
+    // by BBL so the serving table fills in key order.
+    let mut seen: HashSet<String> = HashSet::new();
+    buildings.retain(|b| seen.insert(b.bbl.clone()));
+    if !cfg.citywide {
+        buildings.truncate(cfg.limit as usize);
     }
-    println!(
-        "PLUTO: {} residential buildings in CD {} (blend: {} large + {} neighborhood mix)",
-        buildings.len(),
-        cfg.community_district,
-        big_taken,
-        buildings.len() - big_taken
-    );
+    buildings.sort_by(|a, b| a.bbl.cmp(&b.bbl));
     let bbl_set: HashSet<String> = buildings.iter().map(|b| b.bbl.clone()).collect();
-    let bbls: Vec<String> = buildings.iter().map(|b| b.bbl.clone()).collect();
+    lap(&format!(
+        "PLUTO: {} residential buildings ({scope})",
+        buildings.len()
+    ));
 
-    // 2. HPD violations. wvxf-dwi5 has no BBL column, so query by borough + tax blocks, then
-    //    reconstruct each row's BBL and keep only those matching our building set.
-    let boroid = cfg.community_district / 100; // 303 -> Brooklyn (3)
-    let blocks: Vec<u32> = {
-        let set: HashSet<u32> = buildings
+    // 2. HPD violations, streamed into the DuckDB stage. Citywide that is the whole dataset;
+    //    the pilot keeps its borough + tax-block filter.
+    let hpd_scope = if cfg.citywide {
+        String::new()
+    } else {
+        let blocks: Vec<u32> = buildings
             .iter()
             .filter_map(|b| bbl_block(&b.bbl).map(|(_, blk)| blk))
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect();
-        set.into_iter().collect()
+        hpd_where_blocks(cfg.community_district / 100, &blocks)
     };
-    let mut violations: HashMap<String, Vec<model::Violation>> = HashMap::new();
-    let mut excluded: BTreeMap<String, usize> = BTreeMap::new();
-    for chunk in blocks.chunks(500) {
-        let (base, params) = hpd_block_query(boroid, chunk);
-        let rows = get_json_paged(&c, &base, &params)?;
-        for v in &rows {
-            let Some(bbl) = hpd_bbl(v) else { continue };
-            if !bbl_set.contains(&bbl) {
-                continue; // a neighbor on the same block, not one of our buildings
-            }
-            // The class check used to live here, on an already-parsed `String`. It now happens
-            // inside `parse_hpd_violation`, because the class is typed and an unmodelled letter
-            // can no longer be carried in a `Violation` at all. The skip is counted by the
-            // letter the row carried, so the published exclusion names each class rather than
-            // calling every one of them I, and a malformed row is not counted as a class.
-            match parse_hpd_violation(v) {
-                Some(viol) => violations.entry(bbl).or_default().push(viol),
-                None => {
-                    if let Some(letter) = hpd_excluded_class(v) {
-                        *excluded.entry(letter).or_default() += 1;
+    let stage = duckdb::Connection::open(cfg.stage_path())
+        .with_context(|| format!("open stage {}", cfg.stage_path()))?;
+    let (staged, excluded) = stage_violations(&c, &stage, &hpd_scope, &bbl_set)?;
+    lap(&format!(
+        "HPD: {staged} A/B/C violations staged in {}; skipped on our buildings: {}",
+        cfg.stage_path(),
+        excluded_classes_note(&excluded)
+    ));
+
+    // 3. DOB elevators: the whole dataset is ~120,000 devices, three pages, cheaper than
+    //    asking about 767,563 BBLs 200 at a time.
+    let mut has_elevator: HashSet<String> = HashSet::new();
+    for_each_page(
+        &c,
+        "e5aq-a4j2",
+        "bbl,device_type,device_status",
+        "bbl IS NOT NULL",
+        |page| {
+            for v in page.iter().filter(|v| parse_dob_has_elevator(v)) {
+                if let Some(bbl) = v.get("bbl").and_then(|x| x.as_str()) {
+                    if bbl_set.contains(bbl) {
+                        has_elevator.insert(bbl.to_string());
                     }
                 }
             }
-        }
-    }
-    if !excluded.is_empty() {
-        println!(
-            "note: skipped violations with unmodelled classes: {}",
-            excluded_classes_note(&excluded)
-        );
-    }
+            Ok(())
+        },
+    )?;
 
-    // 3. DOB elevators (active passenger elevator on record). DOB `bbl` is a clean column.
-    let mut has_elevator: HashMap<String, bool> = HashMap::new();
-    for chunk in bbls.chunks(200) {
-        let (base, params) = bbl_in_query("e5aq-a4j2", "bbl,device_type,device_status", chunk);
-        let rows = get_json_complete(&c, &base, &params)?;
-        for v in arr(&rows) {
-            if parse_dob_has_elevator(v) {
-                if let Some(bbl) = v.get("bbl").and_then(|x| x.as_str()) {
-                    has_elevator.insert(bbl.to_string(), true);
-                }
-            }
+    // 4. Census tract rent medians, one request per borough's county. Non-fatal: rent medians
+    //    only feed /rent-fairness, not the building Health Card, so a Census outage or invalid
+    //    key must not abort the whole ingest — warn and continue.
+    let mut medians: HashMap<String, i32> = HashMap::new();
+    for county in (1..=5).filter_map(county_fips) {
+        match get_json(&c, &census_url(&census_key, county)) {
+            Ok(v) => medians.extend(parse_census_medians(&v)),
+            Err(e) => println!("warning: Census county {county} skipped ({e:#})"),
         }
     }
-
-    // 4. Census tract rent medians for all of Brooklyn (looked up per building by GEOID).
-    //    Non-fatal: rent medians only feed /rent-fairness, not the building Health Card, so a
-    //    Census outage or invalid key must not abort the whole ingest — warn and continue.
-    let medians = match get_json(&c, &census_url(&census_key)) {
-        Ok(v) => {
-            let m = parse_census_medians(&v);
-            println!("Census: {} tract medians loaded", m.len());
-            m
-        }
-        Err(e) => {
-            println!("warning: Census rent medians skipped ({e:#}); acs_rent_by_tract left empty");
-            HashMap::new()
-        }
-    };
+    println!("Census: {} tract medians loaded", medians.len());
 
     // 5. ADA subway stations (all of NYC; nearest ADA-accessible one per building).
     let mta = get_json(
@@ -323,76 +500,37 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         })
         .collect();
 
-    // Bounding box around the curated set's coordinates, reused to bound both the 311 pull
-    // (below) and the DOHMH restaurant pull (5c). No geocoded buildings → no box → skip both.
-    let bbox: Option<(f64, f64, f64, f64)> = if coords.is_empty() {
-        None
-    } else {
-        let (min_lat, max_lat) = coords
-            .values()
-            .map(|(lat, _)| *lat)
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
-                (lo.min(x), hi.max(x))
-            });
-        let (min_lon, max_lon) = coords
-            .values()
-            .map(|(_, lon)| *lon)
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
-                (lo.min(x), hi.max(x))
-            });
-        Some((min_lat, min_lon, max_lat, max_lon))
-    };
+    // 6. Neighborhood context by ZIP, counted by Socrata: 311 requests since 2024 per ZIP over
+    //    homes per ZIP. Fatal, unlike Census: without it every building's neighborhood pillar
+    //    would fall back to the same 70, which is a different score, not a missing one.
+    let complaints = parse_zip_counts(
+        &get_json_complete(&c, &complaints_311_by_zip_query())?,
+        "incident_zip",
+    );
+    let homes = parse_zip_counts(&get_json_complete(&c, &homes_by_zip_query())?, "zipcode");
+    let rates = zip_rates(&complaints, &homes);
+    let complaints_counted: i64 = rates.keys().filter_map(|z| complaints.get(z)).sum();
+    // Neighborhood names are a label only, so a failure here leaves them blank and carries on.
+    let ntas = get_json_complete(&c, &nta_query())
+        .map(|v| parse_nta(&v))
+        .unwrap_or_else(|e| {
+            println!("warning: neighborhood names skipped ({e:#})");
+            HashMap::new()
+        });
+    lap(&format!(
+        "context: {} DOB elevators, {} stations, {} ZIP rates, {} neighborhood tracts",
+        has_elevator.len(),
+        stations.len(),
+        rates.len(),
+        ntas.len()
+    ));
 
-    // 5b. 311 complaints for the nearby-context density (count within 150 m of each building).
-    //     Bounded to the curated set's bbox and to recent complaints — which is still far more
-    //     than one request returns, so this is paged. 50_000 is the page size.
-    let points_311: Vec<(f64, f64)> = match bbox {
-        None => Vec::new(),
-        Some((min_lat, min_lon, max_lat, max_lon)) => {
-            let (base, params) = complaints_311_query(min_lat, min_lon, max_lat, max_lon, 50_000);
-            let rows = get_json_paged(&c, &base, &params)?;
-            rows.iter().filter_map(parse_311_point).collect()
-        }
-    };
-    println!("311: {} complaint points loaded", points_311.len());
-
-    // 5c. DOHMH restaurant grades within the same box. Each building gets the grade of the
-    //     nearest graded restaurant within ~200 m (neighborhood context, display only — never
-    //     folded into any score). Non-fatal: a DOHMH outage must not abort the whole ingest.
-    let restaurants: Vec<(String, f64, f64)> = match bbox {
-        None => Vec::new(),
-        Some((min_lat, min_lon, max_lat, max_lon)) => {
-            let (base, params) =
-                restaurant_grades_query(min_lat, min_lon, max_lat, max_lon, 20_000);
-            match get_json_complete(&c, &base, &params) {
-                Ok(rows) => arr(&rows)
-                    .iter()
-                    .filter_map(parse_restaurant_grade)
-                    .collect(),
-                Err(e) => {
-                    println!(
-                        "warning: DOHMH restaurant grades skipped ({e:#}); restaurant_grade left null"
-                    );
-                    Vec::new()
-                }
-            }
-        }
-    };
-    println!("DOHMH: {} graded restaurants loaded", restaurants.len());
-
-    // 5d. Rent-stabilization unit counts. Source: JustFix.org (nyc-doffer), derived from NYC DOF
-    //     Statement of Account records; latest year 2024. Streams the ~25 MB static CSV and keeps
-    //     only rows whose BBL is in our curated set. Non-fatal: a download/parse failure must not
-    //     abort the whole ingest — warn and continue with an empty map (buildings read "unverified").
+    // 7. Rent-stabilization unit counts. Source: JustFix.org (nyc-doffer), derived from NYC DOF
+    //    Statement of Account records; latest year 2024. Streams the ~25 MB static CSV and keeps
+    //    only rows whose BBL is in our set. Non-fatal: a download/parse failure must not abort
+    //    the whole ingest — warn and continue with an empty map (buildings read "unverified").
     let rent_stab: HashMap<String, i32> = match fetch_rent_stab(&c, &bbl_set) {
-        Ok(m) => {
-            println!(
-                "JustFix nyc-doffer: {} of {} buildings matched in rent-stab CSV",
-                m.len(),
-                buildings.len()
-            );
-            m
-        }
+        Ok(m) => m,
         Err(e) => {
             println!(
                 "warning: rent-stabilization source skipped ({e:#}); rent_stabilized left null"
@@ -401,9 +539,11 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         }
     };
 
-    // 6. Enrich each building and write everything through the tested `store` inserts.
+    // 8. The serving artifact. Rebuilt from scratch every run, so a crash means rerun: no
+    //    rollback journal and no syncs, which is most of the cost of 10.5M inserts.
     let _ = std::fs::remove_file(&cfg.out);
     let conn = store::open_db(&cfg.out)?;
+    conn.execute_batch("PRAGMA journal_mode = OFF; PRAGMA synchronous = OFF;")?;
     store::migrate(&conn)?;
     let provisions = store::load_law(&conn)?;
     println!("law: {provisions} provisions from data/law.json");
@@ -413,74 +553,84 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(2026);
     store::set_snapshot_year(&conn, snapshot_year)?;
+    match store::train_desc_dict(&description_samples(&stage)?) {
+        Some(dict) => {
+            store::set_desc_dict(&conn, &dict)?;
+            lap(&format!(
+                "description dictionary trained: {} KB",
+                dict.len() / 1024
+            ));
+        }
+        None => println!("too little description text to train a dictionary; plain zstd"),
+    }
 
+    let tx = conn.unchecked_transaction()?;
     let mut tracts_written: HashSet<String> = HashSet::new();
     let mut stabilized_count = 0usize;
     for b in buildings.iter_mut() {
-        b.has_elevator = has_elevator.get(&b.bbl).copied().unwrap_or(false);
+        b.has_elevator = has_elevator.contains(&b.bbl);
         if let Some((lat, lon)) = coords.get(&b.bbl) {
             b.latitude = Some(*lat);
             b.longitude = Some(*lon);
             b.near_ada_subway_m = nearest_ada_m(*lat, *lon, &stations).map(|d| d as i32);
-            b.complaints_311 = count_within_m(*lat, *lon, &points_311, 150.0) as i32;
-            b.restaurant_grade = nearest_grade_within(*lat, *lon, &restaurants, 200.0);
         }
+        b.neighborhood = ntas.get(&b.tract_geoid).cloned();
+        b.complaints_311_per_1k_homes = b.zip.as_ref().and_then(|z| rates.get(z)).copied();
         // Rent-stabilization tri-state from the JustFix map: units>0 → stabilized, 0 → on
         // record with none, absent → left unknown (None) so the card reads "unverified".
-        match rent_stab.get(&b.bbl) {
+        (b.rent_stabilized, b.rent_stab_units) = match rent_stab.get(&b.bbl) {
             Some(&units) if units > 0 => {
-                b.rent_stabilized = Some(true);
-                b.rent_stab_units = Some(units);
                 stabilized_count += 1;
+                (Some(true), Some(units))
             }
-            Some(_) => {
-                b.rent_stabilized = Some(false);
-                b.rent_stab_units = Some(0);
-            }
-            None => {
-                b.rent_stabilized = None;
-                b.rent_stab_units = None;
-            }
-        }
-        store::upsert_building(&conn, b)?;
-        // One call per building so the descriptions compress as a block.
-        let vs = violations.remove(&b.bbl).unwrap_or_default();
-        store::insert_violations(&conn, &b.bbl, &vs)?;
+            Some(_) => (Some(false), Some(0)),
+            None => (None, None),
+        };
+        store::upsert_building(&tx, b)?;
         if let Some(m) = medians.get(&b.tract_geoid) {
             if tracts_written.insert(b.tract_geoid.clone()) {
-                store::upsert_tract_median(&conn, &b.tract_geoid, *m)?;
+                store::upsert_tract_median(&tx, &b.tract_geoid, *m)?;
             }
         }
     }
-    println!(
-        "rent-stab: {}/{} buildings stabilized (source: JustFix nyc-doffer 2024)",
-        stabilized_count,
+    lap(&format!(
+        "buildings written; rent-stab {stabilized_count}/{} stabilized (JustFix nyc-doffer 2024)",
         buildings.len()
-    );
+    ));
+    let bbls: Vec<i64> = buildings
+        .iter()
+        .filter_map(|b| b.bbl.parse().ok())
+        .collect();
+    let (stored_violations, outside) = compose_violations(&stage, &tx, &bbls)?;
+    tx.commit()?;
+    lap(&format!(
+        "violations written: {stored_violations} on our buildings, {outside} staged rows on \
+         lots outside the set (no homes in PLUTO, or no BBL)"
+    ));
 
-    // 7. Provenance. Everything below was known during this run and used to be discarded:
-    //    `meta` shipped exactly one row, `snapshot_year`, so the artifact could not say when
-    //    it was gathered or what it excludes. The frontend filled that gap by hardcoding a
-    //    month in a .tsx file, which is a claim about the backend that the backend cannot
-    //    confirm. These rows travel with the database into the image, so the running
+    // 9. Provenance. These rows travel with the database into the image, so the running
     //    container states its own provenance.
     //
     //    Unix seconds rather than a formatted date, deliberately: `chrono` is not a
     //    dependency of this workspace and adding one here to print a string would put a
     //    clock in reach of the scoring path. The API formats it.
-    let stored_violations: i64 =
-        conn.query_row("SELECT count(*) FROM violations", [], |r| r.get(0))?;
     let ingested_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-
+    let without_zip_rate = buildings
+        .iter()
+        .filter(|b| b.complaints_311_per_1k_homes.is_none())
+        .count();
     for (k, v) in [
         ("ingested_at_unix", ingested_at.to_string()),
+        ("coverage", scope.clone()),
         ("buildings", buildings.len().to_string()),
         ("violations", stored_violations.to_string()),
+        ("violations_outside_buildings", outside.to_string()),
         ("tract_medians", tracts_written.len().to_string()),
-        ("complaints_311_points", points_311.len().to_string()),
+        ("zip_rates", rates.len().to_string()),
+        ("buildings_without_zip_rate", without_zip_rate.to_string()),
         // From the enum, so the published list cannot fall behind the classes actually kept.
         (
             "violation_classes",
@@ -492,11 +642,10 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         ),
         (
             "sources",
-            "HPD wvxf-dwi5 · 311 erm2-nwe9 · PLUTO 64uk-42ks · DOB e5aq-a4j2 · \
-             DOHMH 43nn-pn8j · Census ACS5 2023 B25064 · JustFix nyc-doffer 2024"
+            "HPD wvxf-dwi5 · 311 erm2-nwe9 (per ZIP) · PLUTO 64uk-42ks · DOB e5aq-a4j2 · \
+             DCP NTA hm78-6dwm · MTA 39hk-dx4f · Census ACS5 2023 B25064 · JustFix nyc-doffer 2024"
                 .to_string(),
         ),
-        ("community_district", cfg.community_district.to_string()),
     ] {
         store::set_meta(&conn, k, &v)?;
     }
@@ -508,38 +657,93 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     // the document about HPD's data at a stated moment. Recorded per dataset because this
     // artifact is one full snapshot -- see the schema comment in `store` for why that
     // assumption breaks under incremental refresh.
+    let hpd_note = format!("HPD violations, classes A/B/C, {scope}");
+    let pluto_note = format!("PLUTO lots with homes, {scope}");
     for (dataset, rows, note) in [
-        (
-            "wvxf-dwi5",
-            stored_violations as i64,
-            Some("HPD violations, classes A/B/C, by borough + tax block"),
-        ),
+        ("wvxf-dwi5", stored_violations as i64, hpd_note.as_str()),
         (
             "erm2-nwe9",
-            points_311.len() as i64,
-            Some("311 service requests near the curated buildings"),
+            complaints_counted,
+            "311 requests since 2024-01-01, counted per ZIP by Socrata",
+        ),
+        ("64uk-42ks", buildings.len() as i64, pluto_note.as_str()),
+        (
+            "e5aq-a4j2",
+            has_elevator.len() as i64,
+            "DOB devices: active elevators on our buildings",
         ),
         (
-            "64uk-42ks",
-            buildings.len() as i64,
-            Some("PLUTO lots, residential, community district"),
-        ),
-        (
-            "43nn-pn8j",
-            restaurants.len() as i64,
-            Some("DOHMH graded restaurants within ~200 m"),
+            "hm78-6dwm",
+            ntas.len() as i64,
+            "DCP 2020 tract to neighborhood (NTA) names",
         ),
     ] {
-        store::set_source_provenance(&conn, dataset, ingested_at as i64, rows, note)?;
+        store::set_source_provenance(&conn, dataset, ingested_at as i64, rows, Some(note))?;
     }
 
-    println!("wrote {} buildings to {}", buildings.len(), cfg.out);
-    println!(
-        "provenance: {} violations (A/B/C; skipped: {}), {} 311 points, ingested_at_unix={}",
-        stored_violations,
-        excluded_classes_note(&excluded),
-        points_311.len(),
-        ingested_at
-    );
+    conn.execute_batch("VACUUM")?;
+    drop(conn);
+    let size = std::fs::metadata(&cfg.out).map(|m| m.len()).unwrap_or(0);
+    lap(&format!(
+        "wrote {} ({:.1} MB): {} buildings, {stored_violations} violations, ingested_at_unix={ingested_at}",
+        cfg.out,
+        size as f64 / 1e6,
+        buildings.len()
+    ));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The stage → artifact path, without the network: rows staged out of order and across
+    /// buildings must come out grouped per building, in HPD's order, with dates and
+    /// descriptions intact, and rows on lots outside the set must be counted, not written.
+    #[test]
+    fn compose_groups_staged_rows_by_building_in_fetch_order() -> Result<()> {
+        let stage = duckdb::Connection::open_in_memory()?;
+        stage.execute_batch(
+            "CREATE TABLE hpd_violation (fetch_seq BIGINT, sid VARCHAR, bbl BIGINT,
+               class VARCHAR, open BOOLEAN, year INTEGER, issued_on VARCHAR,
+               closed_on VARCHAR, description VARCHAR);
+             INSERT INTO hpd_violation VALUES
+               (0, 'a', 3000020002, 'B', true,  2025, '2025-03-01', '2025-03-01', 'SECOND BLDG'),
+               (1, 'b', 3000010001, 'C', true,  2026, '2026-01-05', '2026-01-05', 'FIRST, FIRST'),
+               (2, 'c', 9999999999, 'A', true,  2026, '2026-01-05', '2026-01-05', 'NOT OURS'),
+               (3, 'd', 3000010001, 'A', false, 2023, '2023-02-01', '2023-03-03', NULL),
+               (4, 'e', 3000010001, 'B', true,  2024, NULL,         NULL,         'FIRST, LAST'),
+               (5, 'f', NULL,       'B', true,  2024, NULL,         NULL,         'NO BBL');",
+        )?;
+        let conn = store::open_db(":memory:")?;
+        store::migrate(&conn)?;
+        let (written, outside) = compose_violations(&stage, &conn, &[3000010001, 3000020002])?;
+        assert_eq!((written, outside), (4, 2));
+
+        let open = store::get_open_violations(&conn, "3000010001")?;
+        let got: Vec<_> = open
+            .iter()
+            .map(|v| {
+                (
+                    v.class.as_str(),
+                    v.issued_on.as_deref(),
+                    v.description.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("C", Some("2026-01-05"), Some("FIRST, FIRST")),
+                ("B", None, Some("FIRST, LAST")),
+            ]
+        );
+        // The closed one is there too: issued 2023-02-01, closed 2023-03-03.
+        assert_eq!(
+            store::closed_violation_durations(&conn, "3000010001", 2023)?,
+            [30]
+        );
+        assert_eq!(store::get_open_violations(&conn, "3000020002")?.len(), 1);
+        Ok(())
+    }
 }

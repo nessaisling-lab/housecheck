@@ -628,10 +628,11 @@ mod tests {
             good_cause: false,
             has_elevator: false,
             near_ada_subway_m: Some(897),
-            complaints_311: 12,
+            zip: None,
+            neighborhood: None,
+            complaints_311_per_1k_homes: None,
             latitude: None,
             longitude: None,
-            restaurant_grade: None,
         };
         let details = vec![model::ViolationDetail {
             class: ViolationClass::B,

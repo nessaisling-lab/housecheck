@@ -471,7 +471,14 @@ fn check_senate(
             Ok(r) if r.status != 200 => (Finding::Unreachable(format!("HTTP {}", r.status)), None),
             Ok(r) => match serde_json::from_slice::<Value>(&r.body) {
                 Ok(v) if v["success"] == true => {
-                    let text = v["result"]["text"].as_str().unwrap_or_default().to_string();
+                    // The API's text carries its line breaks as a backslash and an `n`, not as
+                    // new lines; Phase B's seed turned them into new lines, so this does too.
+                    // Left as they were, they glued words together, and the first keyed run
+                    // reported all 10 statutes changed.
+                    let text = v["result"]["text"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .replace("\\n", "\n");
                     let active = v["result"]["activeDate"].as_str().unwrap_or("unknown");
                     let note = format!(
                         "the section differs from the stored copy (Open Legislation activeDate \
@@ -1846,7 +1853,8 @@ mod tests {
         let mut state = State::default();
         let mut net = fake(|u, _, _| {
             assert!(u.ends_with("/RPP/235-B?key=K"), "{u}");
-            doc(text)
+            // Line breaks as the API sends them: a backslash and an `n`.
+            doc(&text.replace(' ', "\\n"))
         });
         let c = check(&seed, &mut net, &mut state, today(), true, Some("K")).unwrap();
         assert_eq!(c[0].finding, Finding::Unchanged);

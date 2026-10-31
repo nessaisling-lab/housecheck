@@ -47,11 +47,16 @@ Nothing outstanding. For the record, so nobody re-checks:
 | Frontend | ✅ deployed, deep links work, react-router 8 |
 | Backend | ✅ live, real data, CORS locked to the Vercel origin |
 | Deploys | manual and documented — see `docs/DEPLOY.md`. There is deliberately no CD; the reason is written up there rather than left as a gap. |
-| Anthony | ✅ accepted and actively contributing (the whole React frontend is his) |
+| Antonin | ✅ accepted and actively contributing (the whole React frontend is his) |
 | Fly billing | ✅ card added; app runs scale-to-zero |
 
 **`/summary` (the LLM agent) is intentionally disabled** — it returns `501` until `OPENROUTER_API_KEY` is set, and the UI degrades honestly to grounded canned answers. It stays off until a paid zero-data-retention model is configured, because prompts contain a building address and the user's rent. Not required for submission. Full plan in `docs/agent/PRD-AGENT.md`.
 
+> **2026-10-30:** superseded. `OPENROUTER_API_KEY` is now set on Fly, so `/summary` and the
+> agent (`/agent/chat`, `/agent/chat/stream`) answer live; `501` is only what a deployment
+> without the key returns (`summary_handler`, `crates/api/src/main.rs`). `/summary`'s prompt
+> is public building data only — the user's rent goes to `/rent-fairness`, not an LLM.
+
 ## Not yours
 
-Frontend (React), map layer, theme pick → **Anthony**. Agent feature → tracked in `docs/agent/`. Demo/pitch delivery → **team**.
+Frontend (React), map layer, theme pick → **Antonin**. Agent feature → tracked in `docs/agent/`. Demo/pitch delivery → **team**.

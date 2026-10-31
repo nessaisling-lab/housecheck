@@ -2,7 +2,7 @@
 
 **What this is:** a map of verification that already exists, written down so it is legible
 to someone skimming the repo. It is documentation, not a new test format. Every test named
-here runs today under `cargo test --workspace` — **179 tests, clippy clean, 7 crates.**
+here runs today under `cargo test --workspace` — **190 tests, clippy clean, 7 crates.**
 
 **What this is not:** a synthetic prompt suite. The strongest evidence in this project was
 not produced by an eval harness, and saying otherwise would be the kind of claim the
@@ -91,7 +91,7 @@ describes, reintroduced somewhere new.
 
 ## Agent behaviour
 
-The `/summary` assistant is where a wrong answer would be most persuasive, so what it is
+The `/agent/chat` assistant is where a wrong answer would be most persuasive, so what it is
 *forbidden* to do is tested rather than prompted.
 
 - `system_prompt_forbids_advice_and_outcome_prediction` — it never predicts case outcomes
@@ -99,7 +99,8 @@ The `/summary` assistant is where a wrong answer would be most persuasive, so wh
   answer, not a hardcoded line
 - `grounding_block_states_when_there_is_no_median_instead_of_omitting_it` — a missing
   figure is stated, not silently dropped
-- `law_search_domains_are_authoritative_only` — legal lookups cannot wander off .gov/.org
+- `law_search_domains_are_authoritative_only` — legal lookups cannot wander off .gov/.edu
+  and two vetted legal-reference sites
 - `legal_help_directory_entries_are_actionable_and_free` — no lead-generation sites in
   front of someone in a housing crisis
 - `tool_schemas_declare_every_tool_with_a_usable_description`
@@ -143,7 +144,7 @@ for each of those and asserts the matching check fires. Details: `crates/api/eva
 ## Running it
 
 ```bash
-cargo test --workspace                              # 179 tests
+cargo test --workspace                              # 190 tests
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 

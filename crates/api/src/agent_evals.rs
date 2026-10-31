@@ -21,6 +21,18 @@ const RECORDED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/evals/recorded.json
 const FAILURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/evals/live-failures.json");
 const ENDPOINTS: [&str; 2] = ["/agent/chat", "/agent/chat/stream"];
 
+/// The headings `AGENT_SYSTEM_PROMPT` asks for, in order, whenever a tool served law: the
+/// record, the law, HouseCheck's inference labelled as one, and a question to take to a legal
+/// professional (Aisling's answer design, 2026-10-30). Found by heading, so each part is
+/// checkable and an inference can't pass as the law. `prompt_asks_for_each_answer_part` keeps
+/// this list and the prompt in step.
+const ANSWER_PARTS: [&str; 4] = [
+    "What the record shows",
+    "What the law says",
+    "What this might mean",
+    "A question to ask",
+];
+
 /// Phrases that turn legal information into legal advice or a prediction.
 ///
 /// ponytail: a substring list, not a classifier. It catches the phrasings the system prompt
@@ -328,6 +340,8 @@ struct Outcome {
     done: bool,
     /// Stream only: an `error` event arrived.
     stream_error: Option<String>,
+    /// The urgency the server returned with the answer; `null` when none.
+    urgency: Value,
     tape: Tape,
 }
 
@@ -374,6 +388,7 @@ async fn run(case: &Case, endpoint: &str, live: Option<(&str, &str)>) -> Outcome
         citations: Vec::new(),
         done: false,
         stream_error: None,
+        urgency: Value::Null,
         tape: std::mem::take(&mut *up.tape.lock().unwrap()),
     };
     if status != 200 {
@@ -398,6 +413,7 @@ async fn run(case: &Case, endpoint: &str, live: Option<(&str, &str)>) -> Outcome
                     let v: Value = serde_json::from_str(&data).unwrap_or_default();
                     out.citations =
                         serde_json::from_value(v["citations"].clone()).unwrap_or_default();
+                    out.urgency = v["urgency"].clone();
                 }
                 "error" => out.stream_error = Some(data),
                 _ => {}
@@ -407,6 +423,7 @@ async fn run(case: &Case, endpoint: &str, live: Option<(&str, &str)>) -> Outcome
         let v: Value = serde_json::from_str(&body).unwrap_or_default();
         out.answer = v["answer"].as_str().unwrap_or("").to_string();
         out.citations = serde_json::from_value(v["citations"].clone()).unwrap_or_default();
+        out.urgency = v["urgency"].clone();
     }
     out
 }
@@ -444,7 +461,18 @@ fn tool_citation(name: &str, result: &Value) -> Option<String> {
     }
     let s = match name {
         "get_building" => "NYC HPD violations (wvxf-dwi5) · NYC DOF / PLUTO",
-        "get_open_violations" => "NYC HPD open violations (wvxf-dwi5)",
+        "get_open_violations" => {
+            let cites: Vec<&str> = std::iter::once("NYC HPD open violations (wvxf-dwi5)")
+                .chain(
+                    result["cited_law"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|p| p["citation"].as_str()),
+                )
+                .collect();
+            return Some(cites.join(" · "));
+        }
         "search_address" if result["in_curated_set"] == json!(true) => "HouseCheck curated set",
         "search_address" => "NYC GeoSearch (Planning Labs)",
         "lookup_law" => {
@@ -518,6 +546,97 @@ fn strip_non_claims(answer: &str) -> String {
 }
 
 /// Digit runs in `s`, with thousands separators dropped: `$2,500` → `2500`, `120°F` → `120`.
+/// Numbers written as words, as digits: "twenty-one" is 21, "one hundred twenty" 120,
+/// "nineteen hundred seventy-eight" 1978. Each run of number words is one number.
+///
+/// ponytail: cardinals only. "Fifth" is not 5; add ordinals if a faithful answer trips on one.
+fn number_words(s: &str) -> Vec<String> {
+    const UNITS: [&str; 20] = [
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+    ];
+    const TENS: [&str; 8] = [
+        "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    ];
+    let lower = s.to_lowercase();
+    // Each word, and whether punctuation follows it: a run of number words ends there, and
+    // where a units word follows a units word ("eight one").
+    let mut words: Vec<(&str, bool)> = Vec::new();
+    let mut start = None;
+    for (i, c) in lower
+        .char_indices()
+        .chain(std::iter::once((lower.len(), '.')))
+    {
+        let joins = c == ' ' || c == '-';
+        match (c.is_ascii_alphabetic(), start) {
+            (true, None) => start = Some(i),
+            (true, Some(_)) => {}
+            (false, Some(a)) => {
+                words.push((&lower[a..i], !joins));
+                start = None;
+            }
+            (false, None) => {
+                if let Some(last) = words.last_mut().filter(|_| !joins) {
+                    last.1 = true;
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let (mut total, mut current, mut any, mut last_unit) = (0u64, 0u64, false, false);
+    let mut flush = |total: &mut u64, current: &mut u64, any: &mut bool| {
+        if *any {
+            out.push((*total + *current).to_string());
+        }
+        (*total, *current, *any) = (0, 0, false);
+    };
+    for (w, breaks) in words {
+        let unit = UNITS.iter().position(|x| *x == w);
+        if unit.is_some() && last_unit {
+            flush(&mut total, &mut current, &mut any);
+        }
+        last_unit = unit.is_some();
+        if let Some(u) = unit {
+            current += u as u64;
+        } else if let Some(t) = TENS.iter().position(|x| *x == w) {
+            current += 20 + 10 * t as u64;
+        } else if w == "hundred" && any {
+            current = current.max(1) * 100;
+        } else if w == "thousand" && any {
+            total += current.max(1) * 1000;
+            current = 0;
+        } else if !(w == "and" && any) {
+            flush(&mut total, &mut current, &mut any);
+            continue;
+        }
+        any = true;
+        if breaks {
+            flush(&mut total, &mut current, &mut any);
+            last_unit = false;
+        }
+    }
+    flush(&mut total, &mut current, &mut any);
+    out
+}
+
 fn numbers(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
@@ -540,48 +659,20 @@ fn numbers(s: &str) -> Vec<String> {
     out
 }
 
-/// Sections `s` cites, lowercased: the token after `§`, the token after "section" when it has a
-/// hyphen ("Section 27-2029", not "Section 8 voucher"), and "local law N of YYYY".
-///
-/// ponytail: cue-based. A section named with no cue ("RPL 235-b") is not seen. Add the cue if a
-/// live answer ever cites that way.
-fn cited_sections(s: &str) -> Vec<String> {
-    let lower = s.to_lowercase();
-    let token = |rest: &str| -> String {
-        let t: String = rest
-            .trim_start_matches(|c: char| c == '§' || c.is_whitespace())
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '.')
-            .collect();
-        t.trim_end_matches(['.', '-']).to_string()
-    };
-    let mut out = Vec::new();
-    for (i, cue) in lower.match_indices('§') {
-        let t = token(&lower[i + cue.len()..]);
-        if t.starts_with(|c: char| c.is_ascii_digit()) {
-            out.push(t);
+/// Every string under a `description` key, at any depth: HPD's notice text in a tool result.
+fn descriptions(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::Object(m) => {
+            for (k, x) in m {
+                match (k.as_str(), x.as_str()) {
+                    ("description", Some(text)) => out.push(text.to_string()),
+                    _ => descriptions(x, out),
+                }
+            }
         }
+        Value::Array(a) => a.iter().for_each(|x| descriptions(x, out)),
+        _ => {}
     }
-    for (i, cue) in lower.match_indices("section ") {
-        let t = token(&lower[i + cue.len()..]);
-        if t.starts_with(|c: char| c.is_ascii_digit()) && t.contains('-') {
-            out.push(t);
-        }
-    }
-    for (i, cue) in lower.match_indices("local law ") {
-        let rest = &lower[i + cue.len()..];
-        let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
-        let year: String = rest[n.len()..]
-            .strip_prefix(" of ")
-            .unwrap_or("")
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        if !n.is_empty() {
-            out.push(format!("local law {n} of {year}"));
-        }
-    }
-    out
 }
 
 /// Temperatures `s` states: a number followed by `°` or "degree", with at most one space or
@@ -708,6 +799,20 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
                 .is_some_and(|m| m["content"] == AGENT_SYSTEM_PROMPT),
             || format!("round {i}: first turn is not AGENT_SYSTEM_PROMPT"),
         );
+        // Once a tool result has handed the model law, every later round must require a
+        // tool, so the answer can only come back through write_answer.
+        let law_before = req["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|m| m["role"] == "tool")
+            .filter_map(|m| serde_json::from_str::<Value>(m["content"].as_str()?).ok())
+            .any(|v| serves_law(&v));
+        if law_before {
+            r.check(ctx, req["tool_choice"] == "required", || {
+                format!("round {i}: law was served earlier and tool_choice is not \"required\"")
+            });
+        }
         r.check(ctx, req["max_tokens"] == json!(AGENT_MAX_TOKENS), || {
             format!("round {i}: max_tokens {}", req["max_tokens"])
         });
@@ -757,26 +862,26 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             || format!("law search ran outside the allowlist: {}", req["plugins"]),
         );
     }
-    // The law handed to the model in this conversation. Every legal claim in the answer is
-    // held to it below.
-    let law: Vec<&Value> = exchanges
-        .iter()
-        .filter(|(n, _)| n == "lookup_law")
-        .map(|(_, v)| v)
-        .collect();
-    let field = |key: &str| -> Vec<&Value> {
-        law.iter()
-            .flat_map(|v| v[key].as_array().into_iter().flatten())
+    // The law handed to the model in this conversation: what lookup_law returned, and the
+    // sections HPD's notices cite that get_open_violations joined to the law table. Every
+    // legal claim in the answer is held to it below.
+    let served = |tool: &str, key: &str| -> Vec<&Value> {
+        exchanges
+            .iter()
+            .filter(|(n, _)| n == tool)
+            .flat_map(|(_, v)| v[key].as_array().into_iter().flatten())
             .collect()
     };
-    let (provisions, facts) = (field("provisions"), field("facts"));
+    let facts = served("lookup_law", "facts");
+    let mut provisions = served("lookup_law", "provisions");
+    provisions.extend(served("get_open_violations", "cited_law"));
     for p in &provisions {
         r.check(
             ctx,
             p["status"] == "current" && p["verified_on"].as_str().is_some_and(|d| d.len() == 10),
             || {
                 format!(
-                    "lookup_law served {} without status current and a verified_on date",
+                    "served law {} without status current and a verified_on date",
                     p["id"]
                 )
             },
@@ -812,7 +917,7 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     });
     for c in &e.citations_include {
         r.check(ctx, out.citations.contains(c), || {
-            format!("missing citation {c:?}")
+            format!("missing citation {c:?}; got {:?}", out.citations)
         });
     }
     for c in &e.citations_exclude {
@@ -858,15 +963,21 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         .map(|m| m["content"].as_str().unwrap_or("").to_string())
         .collect::<Vec<_>>()
         .join("\n");
-    let evidence = format!(" {} ", numbers(&shown).join(" "));
+    // Statutes write numbers as words ("twenty-one days"), so those count as shown too.
+    let evidence = format!(
+        " {} {} ",
+        numbers(&shown).join(" "),
+        number_words(&shown).join(" ")
+    );
     for n in numbers(&strip_non_claims(&out.answer)) {
         r.check(ctx, evidence.contains(&format!(" {n} ")), || {
             format!("number {n} in the answer appears in no fact, tool result or user turn")
         });
     }
 
-    // Every section the answer cites must be one lookup_law returned in this conversation. A
-    // live run cited a code section nobody could find; this is the check that names it.
+    // Every section the answer cites must be one served in this conversation, by lookup_law or
+    // as a section a violation cites. A live run cited a code section nobody could find; this
+    // is the check that names it.
     let returned: Vec<String> = provisions
         .iter()
         .flat_map(|p| {
@@ -877,9 +988,19 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             ))
         })
         .collect();
+    // Naming a section HPD's own notice cites ("citing § 27-2056.6 ADM CODE") is reading the
+    // record back, not stating law, so those count as shown too. Saying what one requires
+    // still needs it served: the four-part question below checks against `returned` only.
+    let mut notices = Vec::new();
+    for (n, v) in &exchanges {
+        if n == "get_building" || n == "get_open_violations" {
+            descriptions(v, &mut notices);
+        }
+    }
+    let hpd_cited: Vec<String> = notices.iter().flat_map(|d| cited_sections(d)).collect();
     for s in cited_sections(&out.answer) {
-        r.check(ctx, returned.contains(&s), || {
-            format!("cites section {s:?}, which no lookup_law result in this conversation holds")
+        r.check(ctx, returned.contains(&s) || hpd_cited.contains(&s), || {
+            format!("cites section {s:?}, which no law served in this conversation holds")
         });
     }
 
@@ -921,23 +1042,104 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     // correctly and named nobody who could say whether it applies to the reader.
     if !provisions.is_empty() {
         r.check(ctx, names_free_help(&out.answer), || {
-            "lookup_law served law, and the answer names no free legal-help organisation".into()
+            "law was served, and the answer names no free legal-help organisation".into()
         });
     }
-}
 
-/// `http(s)://` links in `s`, cut at whitespace or a closing bracket or quote, with trailing
-/// sentence punctuation dropped.
-fn links(s: &str) -> Vec<String> {
-    s.match_indices("http")
-        .filter(|(i, _)| s[*i..].starts_with("https://") || s[*i..].starts_with("http://"))
-        .map(|(i, _)| {
-            let end = s[i..]
-                .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '>' | '"' | '\''))
-                .map_or(s.len(), |e| i + e);
-            s[i..end].trim_end_matches(['.', ',', ';', ':']).to_string()
-        })
-        .collect()
+    // Law served means the four-part answer. The record part is required only when a building
+    // tool ran; a plain question about the law may not touch this building at all. An answer
+    // the token cap cut short is exempt: the server already says it is incomplete.
+    // Time-sensitive answers (docs/design/law-passages.md §7), against the urgency the server
+    // counted and returned with the answer.
+    let u = &out.urgency;
+    let opening = out
+        .answer
+        .trim_start_matches(|c: char| c == '*' || c == '#' || c.is_whitespace())
+        .to_lowercase();
+    let asks_for_date = u["needs_date"] == true && u["level"].is_null();
+    if u["danger"] == true {
+        r.check(ctx, opening.starts_with("call 911 now"), || {
+            "danger was reported, and the answer does not open with \"Call 911 now\"".into()
+        });
+    } else if let Some(level) = u["level"].as_str() {
+        let word = match level {
+            "urgent" => "urgent",
+            "time_sensitive" => "time-sensitive",
+            _ => "coming up",
+        };
+        let head: String = opening.chars().take(300).collect();
+        r.check(ctx, head.contains(word), || {
+            format!("the answer does not open by naming the level ({word})")
+        });
+        if let Some(days) = u["days_left"].as_i64().filter(|d| *d > 0) {
+            r.check(
+                ctx,
+                numbers(&out.answer).contains(&days.to_string()),
+                || format!("the answer never states the {days} days left"),
+            );
+        }
+    }
+    if asks_for_date {
+        r.check(
+            ctx,
+            answer.contains("date")
+                && (out.answer.contains('?')
+                    || [
+                        "need to know",
+                        "tell me",
+                        "let me know",
+                        "please share",
+                        "what is",
+                    ]
+                    .iter()
+                    .any(|p| answer.contains(p))),
+            || "a deadline came with no date, and the answer does not ask for it".into(),
+        );
+    }
+
+    if !provisions.is_empty()
+        && !asks_for_date
+        && !out.answer.contains("cut short by a length limit")
+    {
+        let lower = out.answer.to_lowercase();
+        // The bold heading, not the same words in a sentence: run 8's openings said "I need to
+        // look up what the law says", which read as part 2 arriving before part 1.
+        let at: Vec<Option<usize>> = ANSWER_PARTS
+            .iter()
+            .map(|h| lower.find(&format!("**{}", h.to_lowercase())))
+            .collect();
+        let building_tool = exchanges
+            .iter()
+            .any(|(n, _)| n == "get_building" || n == "get_open_violations");
+        for (i, (h, pos)) in ANSWER_PARTS.iter().zip(&at).enumerate() {
+            if i > 0 || building_tool {
+                r.check(ctx, pos.is_some(), || {
+                    format!("law was served, and the answer has no {h:?} part")
+                });
+            }
+        }
+        let found: Vec<usize> = at.iter().flatten().copied().collect();
+        r.check(ctx, found.windows(2).all(|w| w[0] < w[1]), || {
+            "the answer's parts are out of order".into()
+        });
+        // The question names who to ask and what law to ask about: a section that was served,
+        // whenever any served provision has one.
+        if let Some(q) = at[3] {
+            let question = &lower[q..];
+            r.check(ctx, names_free_help(question), || {
+                "the question to ask names no free legal-help organisation".into()
+            });
+            if !returned.is_empty() {
+                r.check(
+                    ctx,
+                    cited_sections(question)
+                        .iter()
+                        .any(|s| returned.contains(s)),
+                    || "the question to ask cites no section the law served".into(),
+                );
+            }
+        }
+    }
 }
 
 /// Whether `answer` names an organisation from the legal-help directory: its name before any
@@ -949,21 +1151,18 @@ fn links(s: &str) -> Vec<String> {
 fn names_free_help(answer: &str) -> bool {
     let lower = answer.to_lowercase();
     let digits: String = answer.chars().filter(char::is_ascii_digit).collect();
-    legal_help_directory()
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|o| o["name"] != "NYC 311")
+    store::law_seed()
+        .expect("data/law.json")
+        .legal_help
+        .iter()
+        .filter(|o| o.name != "NYC 311")
         .any(|o| {
-            let name = o["name"].as_str().unwrap_or("");
-            let short = name.split(" — ").next().unwrap_or(name);
+            let short = o.name.split(" — ").next().unwrap_or(&o.name);
             let short = short.trim_start_matches("The ").to_lowercase();
-            let phone: String = o["phone"].as_str().unwrap_or("").to_string();
             lower.contains(&short)
-                || phone.split(['·', ',']).any(|p| {
-                    let d: String = p.chars().filter(char::is_ascii_digit).collect();
-                    d.len() >= 10 && digits.contains(&d)
-                })
+                || model::law::phone_numbers(o.phone.as_deref().unwrap_or(""))
+                    .iter()
+                    .any(|d| digits.contains(d.as_str()))
         })
 }
 
@@ -1083,6 +1282,51 @@ fn links_and_referrals_are_read_from_the_text() {
     assert!(!names_free_help("Legal Aid can help."));
 }
 
+#[test]
+fn number_words_read_as_digits() {
+    let s = "within twenty-one days; nineteen hundred seventy-eight; one hundred twenty degrees; \
+             fifty square feet in the aggregate; the fifth day";
+    assert_eq!(number_words(s), ["21", "1978", "120", "50"]);
+    assert!(number_words("no numbers here, none at all").is_empty());
+}
+
+/// The urgency checks fire on the defects they name.
+#[tokio::test]
+async fn urgency_checks_fail_on_their_defects() {
+    let cases = load_cases();
+    let fires = |case: &Case, out: &Outcome, needle: &str| {
+        let mut r = Report::default();
+        check(case, "/agent/chat", out, Mode::Replay, &mut r);
+        assert!(
+            r.failures.iter().any(|f| f.contains(needle)),
+            "expected a failure containing {needle:?}, got {:?}",
+            r.failures
+        );
+    };
+    for (id, bad, needle) in [
+        (
+            "gas-smell-danger",
+            "The landlord must repair gas lines.",
+            "Call 911 now",
+        ),
+        (
+            "court-date-no-date",
+            "Bring your lease and rent receipts.",
+            "does not ask for it",
+        ),
+        (
+            "urgent-court-date-tomorrow",
+            "**What the law says**\nSection 732 sets a ten-day answer period.",
+            "naming the level",
+        ),
+    ] {
+        let mut case = cases.iter().find(|c| c.id == id).expect(id).clone();
+        let at = case.upstream.len() - 1;
+        case.upstream[at] = json!({ "answer": bad });
+        fires(&case, &run(&case, "/agent/chat", None).await, needle);
+    }
+}
+
 /// The checks are code too. Break a passing conversation in each way a check claims to
 /// catch — the model's side by editing a turn, the server's side by editing what came back —
 /// and confirm the check that names that defect is the one that fires.
@@ -1151,12 +1395,24 @@ async fn each_check_fails_on_the_defect_it_names() {
         "names no free legal-help",
     );
 
+    // Since the link guard, the server removes a link the model was never shown, on both
+    // endpoints; the check stays as the backstop if the guard ever lets one through.
     let mut made_up_link = base.clone();
     made_up_link.upstream[answer_at] = json!({ "answer": "See https://data.cityofnewyork.us/d/a2nx-4u46 \
         for this building. Housing Court Answers can help." });
+    for ep in ENDPOINTS {
+        let out = run(&made_up_link, ep, None).await;
+        assert!(
+            !out.answer.contains("a2nx-4u46") && out.answer.contains("link removed"),
+            "{ep}: {}",
+            out.answer
+        );
+    }
+    let mut out = run(&made_up_link, "/agent/chat", None).await;
+    out.answer = "See https://data.cityofnewyork.us/d/a2nx-4u46 for this building.".into();
     fires(
         &made_up_link,
-        &run(&made_up_link, "/agent/chat", None).await,
+        &out,
         "link https://data.cityofnewyork.us/d/a2nx-4u46 appears in no",
     );
 
@@ -1204,6 +1460,30 @@ async fn each_check_fails_on_the_defect_it_names() {
     }
     fires(&base, &out, "without status current");
 
+    // Aisling's four-part answer: the law and a referral with no parts, then all four parts
+    // with a question that names no section.
+    let mut no_parts = base.clone();
+    no_parts.upstream[answer_at] = json!({ "answer": "Real Property Law § 235-b requires premises \
+        fit for human habitation. Housing Court Answers (212-962-4795) can help." });
+    fires(
+        &no_parts,
+        &run(&no_parts, "/agent/chat", None).await,
+        "has no \"What the law says\" part",
+    );
+
+    let mut vague_question = base.clone();
+    vague_question.upstream[answer_at] = json!({ "answer": "**What the record shows** 1 open \
+        class-C violation (HPD). **What the law says** NY Real Property Law § 235-b requires \
+        premises fit for human habitation. **What this might mean (HouseCheck's inference, not \
+        legal advice)** the open violation may bear on that. **A question to ask a legal \
+        professional** \"What can I do about my apartment?\" Ask Housing Court Answers \
+        (212-962-4795)." });
+    fires(
+        &vague_question,
+        &run(&vague_question, "/agent/chat", None).await,
+        "cites no section the law served",
+    );
+
     let mut stale = base.clone();
     stale.kind = "recorded".into();
     stale.agent_version = Some("0000000000000000".into());
@@ -1214,6 +1494,16 @@ async fn each_check_fails_on_the_defect_it_names() {
         "{:?}",
         r.failures
     );
+}
+
+#[test]
+fn prompt_asks_for_each_answer_part() {
+    for h in ANSWER_PARTS {
+        assert!(
+            AGENT_SYSTEM_PROMPT.contains(h),
+            "the prompt must ask for the heading the eval finds: {h}"
+        );
+    }
 }
 
 /// Live scoring against the real model. **Billed.** Never runs in CI.

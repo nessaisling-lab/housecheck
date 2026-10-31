@@ -257,7 +257,7 @@ export async function exportRecord(
     });
     if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
     const text = await res.text();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = newYorkDate();
     const ext = format === "text" ? "txt" : "json";
     return { text, filename: `housecheck-${bbl}-${today}.${ext}` };
   } finally {
@@ -344,10 +344,108 @@ export interface ChatTurn {
   content: string;
 }
 
+/**
+ * Today as YYYY-MM-DD in New York. Every date HouseCheck shows is about New York, so a reader
+ * in the evening (after 8 p.m. in summer, when UTC has already rolled over) sees today, not
+ * tomorrow.
+ */
+export function newYorkDate(d: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(d);
+}
+
+/** How much law text an answer may draw on: the reader's toggle in the chat sheet. */
+export type LawDetail = "brief" | "more" | "full";
+
+/** A law an answer was given. The app, never the model, draws its links. */
+export interface LawRef {
+  id: string;
+  citation: string;
+  /** The official page. */
+  url: string;
+  /** Whether the assistant saw the whole provision or passages of it. */
+  complete: boolean;
+}
+
+/** How time-sensitive a question is, as the server counted it (New York time). */
+export interface Urgency {
+  level: "urgent" | "time_sensitive" | "coming_up" | null;
+  reason: string;
+  danger: boolean;
+  /** YYYY-MM-DD */
+  date: string | null;
+  days_left: number | null;
+  needs_date: boolean;
+  counted_on: string;
+}
+
+export interface ChatOptions {
+  lawDetail?: LawDetail;
+  /** The reader confirmed they want every word of a law over 40,000 characters. */
+  fullTextConfirmed?: boolean;
+}
+
 export interface ChatReply {
   answer: string;
   /** Sources that actually fed the answer — render these, never a hardcoded line. */
   citations: string[];
+  laws: LawRef[];
+  urgency: Urgency | null;
+  /** Characters of law held back to a preview because the reader chose Full; null otherwise. */
+  fullTextWithheld: number | null;
+}
+
+interface ChatExtras {
+  laws?: LawRef[];
+  urgency?: Urgency | null;
+  full_text_withheld?: number | null;
+}
+
+function extras(raw: ChatExtras): Pick<ChatReply, "laws" | "urgency" | "fullTextWithheld"> {
+  return {
+    laws: raw.laws ?? [],
+    urgency: raw.urgency ?? null,
+    fullTextWithheld: raw.full_text_withheld ?? null,
+  };
+}
+
+function chatBody(bbl: string, messages: ChatTurn[], opts: ChatOptions): string {
+  return JSON.stringify({
+    bbl,
+    messages,
+    law_detail: opts.lawDetail ?? "brief",
+    full_text_confirmed: opts.fullTextConfirmed ?? false,
+  });
+}
+
+/** The verified full text of one law: to read in the browser, or as a download. */
+export function lawTextUrl(id: string, download = false): string {
+  return `${BASE}/law/${encodeURIComponent(id)}/text${download ? "?download=1" : ""}`;
+}
+
+/** The file for a lawyer: time left, the question, what to bring, the record and every law in full. */
+export async function fetchLawyerBundle(input: {
+  bbl: string;
+  lawIds: string[];
+  question?: string;
+  urgency?: Urgency | null;
+}): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${BASE}/law/bundle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      bbl: input.bbl,
+      law_ids: input.lawIds,
+      question: input.question ?? null,
+      urgency: input.urgency ?? null,
+    }),
+  });
+  if (!res.ok) throw new ApiError(`Bundle failed (${res.status})`, res.status);
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1];
+  return {
+    blob: await res.blob(),
+    filename: name ?? `HouseCheck-for-your-lawyer-${input.bbl}-${newYorkDate()}.txt`,
+  };
 }
 
 /**
@@ -358,15 +456,19 @@ export interface ChatReply {
  * caller falls back to the deterministic canned answers, which are grounded in the
  * card and honest about being canned.
  */
-export async function sendChat(bbl: string, messages: ChatTurn[]): Promise<ChatReply> {
-  const raw = await req<{ answer?: string; citations?: string[] }>(
+export async function sendChat(
+  bbl: string,
+  messages: ChatTurn[],
+  opts: ChatOptions = {}
+): Promise<ChatReply> {
+  const raw = await req<{ answer?: string; citations?: string[] } & ChatExtras>(
     "/agent/chat",
-    { method: "POST", body: JSON.stringify({ bbl, messages }) },
+    { method: "POST", body: chatBody(bbl, messages, opts) },
     LLM_TIMEOUT_MS
   );
   const answer = (raw.answer ?? "").trim();
   if (!answer) throw new ApiError("Empty agent answer");
-  return { answer, citations: raw.citations ?? [] };
+  return { answer, citations: raw.citations ?? [], ...extras(raw) };
 }
 
 /** What the caller is told while the answer is being produced. */
@@ -399,7 +501,8 @@ export async function streamChat(
   bbl: string,
   messages: ChatTurn[],
   handlers: ChatStreamHandlers = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts: ChatOptions = {}
 ): Promise<ChatReply> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), LLM_TIMEOUT_MS);
@@ -411,7 +514,7 @@ export async function streamChat(
     res = await fetch(`${BASE}/agent/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bbl, messages }),
+      body: chatBody(bbl, messages, opts),
       signal: ctl.signal,
     });
   } catch (e) {
@@ -428,6 +531,7 @@ export async function streamChat(
   let buf = "";
   let answer = "";
   let citations: string[] = [];
+  let more = extras({});
   let failure: string | null = null;
 
   try {
@@ -459,7 +563,9 @@ export async function streamChat(
           handlers.onToken?.(payload);
         } else if (event === "done") {
           try {
-            citations = JSON.parse(payload).citations ?? [];
+            const done = JSON.parse(payload);
+            citations = done.citations ?? [];
+            more = extras(done);
           } catch {
             citations = [];
           }
@@ -474,7 +580,7 @@ export async function streamChat(
   if (failure) throw new ApiError(failure);
   answer = answer.trim();
   if (!answer) throw new ApiError("Empty agent answer");
-  return { answer, citations };
+  return { answer, citations, ...more };
 }
 
 export interface RankedBuilding {

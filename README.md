@@ -185,7 +185,7 @@ Rust · Axum · bundled SQLite (read-only, baked into the Docker image → the d
 | Person | Branch | Area |
 |---|---|---|
 | Aisling Leiva-Davila | `aisling-backend` | Backend + data (lead) |
-| Anthony Lesov | `anthony-frontend` | React frontend |
+| Antonin Lesov ([@antoninlesov](https://github.com/antoninlesov)) | `anthony-frontend` | React frontend |
 | Jagger | `jagger-agent` | Agent |
 | — | `db-analyst` | Data |
 

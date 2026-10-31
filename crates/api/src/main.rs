@@ -259,43 +259,7 @@ fn today_iso() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-/// The New York calendar date at `utc_secs`: US Eastern time, daylight time from 2 a.m. on
-/// the second Sunday of March to 2 a.m. on the first Sunday of November (the rule since 2007).
-///
-/// ponytail: the rule is written out, not read from a tz database. If it changes (permanent
-/// daylight time keeps being proposed), switch to `jiff`, as Phase C plans for ingest.
-fn new_york_ymd(utc_secs: i64) -> (i64, u32, u32) {
-    let est = utc_secs - 5 * 3600;
-    let (y, _, _) = civil_ymd(est.div_euclid(86_400));
-    let sunday = |m: i64, n: i64| {
-        let first = model::urgency::days_from_civil(y, m, 1);
-        first + (4 - first).rem_euclid(7) + 7 * (n - 1)
-    };
-    // In standard-time seconds: starts at 2:00 EST, ends at 2:00 EDT, which is 1:00 EST.
-    let dst = sunday(3, 2) * 86_400 + 2 * 3600..sunday(11, 1) * 86_400 + 3600;
-    let local = if dst.contains(&est) { est + 3600 } else { est };
-    civil_ymd(local.div_euclid(86_400))
-}
-
-/// Civil date from days since the epoch. Howard Hinnant's algorithm.
-///
-/// This returns the day as well as the month, which the older `civil_from_days` did not —
-/// it existed only to name a month for the provenance line. Building an ISO date on top of
-/// it produced `2026-00-08`: an invalid month, silently rejected downstream, so every
-/// violation reported an unknown age. The unit test did not catch it because it hands the
-/// date in as a literal, which tests the arithmetic and not its caller.
-fn civil_ymd(z: i64) -> (i64, u32, u32) {
-    let z = z + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
-}
+use model::urgency::{civil_ymd, new_york_ymd};
 
 fn civil_from_days(z: i64) -> (i64, u32) {
     let (y, m, _) = civil_ymd(z);
@@ -359,6 +323,13 @@ impl AppState {
             buildings > 0,
             "artifact at {path} has no buildings — refusing to start rather than serve a \
              404 for every address under a green health check"
+        );
+        // An artifact built before the Good Cause columns would fail every card with a 500.
+        anyhow::ensure!(
+            conn.prepare("SELECT good_cause_exemption, good_cause_detail FROM buildings LIMIT 0")
+                .is_ok(),
+            "artifact at {path} predates the Good Cause columns — rebuild it with \
+             `ingest --real --out {path}`"
         );
         // Same rule for the law and the legal-help directory. An artifact built before their
         // tables existed has none, and the agent would answer every legal question with "I could
@@ -4673,6 +4644,25 @@ mod tests {
         assert_eq!(card2.building.rent_stab_units, None);
     }
 
+    /// Building 1: 12 of 40 apartments stabilized. Building 2: 8 apartments, no record.
+    /// Neither is ever "covered"; the wire strings are what `HealthCard.tsx` matches on.
+    #[tokio::test]
+    async fn building_card_states_good_cause_without_scoring_it() {
+        let server = test_server();
+        let one: serde_json::Value = server.get("/building/3000010001").await.json();
+        assert_eq!(one["good_cause"]["status"], "partly_stabilized");
+        let two: serde_json::Value = server.get("/building/3000020002").await.json();
+        assert_eq!(two["good_cause"]["status"], "might_be_covered");
+        assert!(two["good_cause"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("10 or fewer"));
+        assert_eq!(
+            two["building"]["good_cause_exemption"],
+            serde_json::Value::Null
+        );
+    }
+
     #[tokio::test]
     async fn buildings_list_returns_scored_items() {
         let server = test_server();
@@ -4848,8 +4838,8 @@ mod tests {
         conn.execute(
             "INSERT INTO buildings
                (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,
-                good_cause,has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
-             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,0,NULL,NULL,NULL,NULL)",
+                has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
+             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,NULL,NULL,NULL,NULL)",
             rusqlite::params![bbl, address],
         )
         .unwrap();
@@ -5525,6 +5515,29 @@ mod tests {
         assert!(err.to_string().contains("no law provisions"), "{err}");
         store::load_law(&store::open_db(path)?)?;
         assert!(AppState::from_path(path).is_ok());
+        let _ = std::fs::remove_file(path);
+        Ok(())
+    }
+
+    /// An artifact built before 2026-10-31 has no Good Cause columns. Starting on it would
+    /// 500 every card, so it refuses with the rebuild command instead.
+    #[test]
+    fn an_artifact_without_good_cause_columns_refuses_to_start() -> anyhow::Result<()> {
+        let path = std::env::temp_dir().join(format!("hc-old-gc-{}.db", std::process::id()));
+        let path = path.to_str().unwrap();
+        let _ = std::fs::remove_file(path);
+        {
+            let conn = store::open_db(path)?;
+            store::migrate(&conn)?;
+            store::insert_fixture(&conn)?;
+        }
+        assert!(AppState::from_path(path).is_ok());
+        store::open_db(path)?
+            .execute_batch("ALTER TABLE buildings DROP COLUMN good_cause_exemption;")?;
+        let err = AppState::from_path(path)
+            .err()
+            .expect("old artifact, no start");
+        assert!(err.to_string().contains("Good Cause columns"), "{err}");
         let _ = std::fs::remove_file(path);
         Ok(())
     }

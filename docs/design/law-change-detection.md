@@ -8,8 +8,10 @@ no longer matches its source, without letting a script decide what the law says?
 for Aisling to verify. It reports. It never changes served law.**
 
 **Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status: approved by Aisling on
-2026-10-31**, with her answers recorded at the end. Nothing here is built; building starts after
-law Phase B lands.
+2026-10-31**, with her answers recorded at the end. **Rollout step 2 is built:** the weekly text
+check, `ingest --law-check` (see "Built" at the end). Still to build: the daily bill and Council
+watches with the `pending`/`imminent` states and the "may have changed" warning, the supersede
+and changelog rules, and the workflow.
 
 ---
 
@@ -466,3 +468,65 @@ donations, and verbatim excerpts fit "NoDerivatives". Questions:
 | 6 | Hot water hours | **Serve both, labelled.** § 27-2031's text is the rule (120°F "at all times between the hours of six a.m. and midnight"; 110°F with mixing valves). The 311 line ("365 days per year") is labelled city guidance. The agent never states round-the-clock hot water as law, and adds a question for Legal Aid about hours |
 | — | `verified_by` for the captured texts | **"Aisling"**, set as she reads each one against its source |
 | — | The design | **Approved** 2026-10-31. Building starts after Phase B lands |
+
+## Built: the weekly text check (2026-10-31)
+
+`cargo run -p ingest -- --law-check` re-reads every current provision and every legal-help
+entry (answer 6), writes `law-check.md` (the issue body), one stored and one fetched text per
+finding under `law-check/`, and `law-check-state.json` (cursors, validators, open findings).
+Code: `crates/ingest/src/lawcheck.rs` (routes, checks, report) and `lawnet.rs` (traffic rules);
+the comparisons are `model::law::{compare_excerpt, compare_whole, facts_missing}`.
+
+**Measured on 2026-10-31, without the Senate key.** Full pass: 16 requests, 1,999 KB, 25 of 25
+fetchable sources unchanged once one stored row was fixed (below); all 12 Admin Code sections
+read from the bulk XML by byte range. Quiet run with the state from the first: 14 requests,
+661 KB. The HCR pages, the bulk zip and Met Council answered `304`; the rest send no validators.
+The estimate above (under 0.5 MB) was low: the 311 pages, Legal Aid, LawHelpNY and Housing Court
+Answers are fetched whole every week.
+
+**What the first run found.** `NYC-OPENDATA-WVXF-DWI5` stored three non-adjacent pieces joined
+by plain new lines, against `law.rs`'s rule of a line holding only `…`; the check read it as
+changed. The two `…` lines are added in `data/law.json`; no word changed.
+
+**Where it differs from the design above, and why:**
+
+- **New York dates** use the US Eastern rule written out in `model::urgency::new_york_ymd`,
+  shared with the API, not `jiff`: one rule in one place, no new dependency. Switch both to `jiff`
+  if the rule changes.
+- **Open findings stay open.** A source reported once is compared in full every run until it comes
+  back unchanged, whatever its validator says. Otherwise a change would vanish from the issue the
+  week after, because its validator had already moved on.
+- **Senate cursor.** Each law's `updates/{from}/{to}?type=processed&detail=true` lists the changed
+  sections; the cursor is the day before the last run, a day of overlap, since the feed's times
+  are the API's own clock.
+- **Open Data** is read from `/api/views/{id}.json`, never the dataset page (built by script; 647
+  KB). The stored row is the description plus `Name (column description): …` lines, rebuilt the
+  same way; the cursor is `viewLastModified`.
+- **Extraction.** HTML: tags stripped, a new line at each block tag, `script` and `style`
+  dropped, entities decoded. PDF: `pdftotext -enc UTF-8`, with `PAGE n OF m` footers dropped
+  (DHCR Fact Sheet 9's stored copy runs across one). amlegal XML: a `TAB` is a space, a
+  `LINEBRK` a new line, `[ALP S-nnn]` markers dropped. A page read wrong shows as "could not
+  compare", never as a changed law.
+- **Dead pages.** The Wayback CDX API gives the last good copy and the last redirect recorded
+  after it; a same-site redirect target is fetched and scored by the passage check.
+
+**Not built yet:** the word diff (a workflow step, `git diff --no-index --word-diff`), Save Page
+Now for unchanged rows, sitemap leads for dead pages, the calendar re-checks (before Oct 1, Aug 1
+and Jan 1), and the daily watches.
+
+### Running it locally (rollout step 3)
+
+Free: the Open Legislation API costs nothing. From the repo root, in PowerShell, with the key
+read the way the other keys are:
+
+```powershell
+$env:NYSENATE_API_KEY = [System.Net.NetworkCredential]::new('', (Get-Content "$HOME\.nysenate-key" | ConvertTo-SecureString)).Password
+cargo run -p ingest -- --law-check --full
+Remove-Item Env:NYSENATE_API_KEY
+```
+
+Then read `law-check.md`. On today's seed the expected result is nothing changed; a Senate row
+reported changed is an API-versus-capture difference to look at (`NY-RPL-235-B` is a hand copy
+of the web page, so it is the likeliest). Flags: `--full` compares everything; `--report`,
+`--texts`, `--state` and `--law-file` move the outputs and input. The three outputs are
+git-ignored.

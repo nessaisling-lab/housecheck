@@ -1,4 +1,4 @@
-import { asStabilization } from "@/types/building";
+import { asGoodCause, asStabilization } from "@/types/building";
 import type {
   ApiResult,
   BuildingCard,
@@ -186,7 +186,7 @@ function normalizeBuilding(raw: any): BuildingCard {
       asStabilization(typeof stab === "string" ? stab : stab?.status),
     stabilization_message:
       typeof stab === "string" ? raw.stabilization_message ?? null : stab?.message ?? null,
-    good_cause: facts.good_cause ?? raw.good_cause ?? null,
+    good_cause: asGoodCause(raw.good_cause),
     rent: raw.rent ?? null,
   };
 }

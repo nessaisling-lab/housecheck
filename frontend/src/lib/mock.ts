@@ -39,7 +39,7 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     access_likelihood: "Lower",
     stabilization: "likely",
     stabilization_message: "Confirm stabilization with NYS DHCR before signing.",
-    good_cause: true,
+    good_cause: { status: "partly_stabilized", message: "Rent-stabilized apartments here are not covered (they have stronger protection). Other apartments might be." },
     rent: { tract_median: 2400, hud_fmr: { area: "New York, NY HUD Metro FMR Area", fiscal_year: 2027, studio: 2593, one_br: 2729, two_br: 2971, three_br: 3760 }, pct_vs_median: 21 },
   },
   {
@@ -66,7 +66,7 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     access_likelihood: "Mixed",
     stabilization: "likely",
     stabilization_message: "Confirm stabilization with NYS DHCR before signing.",
-    good_cause: true,
+    good_cause: { status: "likely_not_covered", message: "Likely not covered: rent-stabilized. Stabilized apartments have their own, stronger protection." },
     rent: { tract_median: 2400, hud_fmr: { area: "New York, NY HUD Metro FMR Area", fiscal_year: 2027, studio: 2593, one_br: 2729, two_br: 2971, three_br: 3760 }, pct_vs_median: 4 },
   },
   {
@@ -96,7 +96,7 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     stabilization: "unverified",
     stabilization_message:
       "We couldn't verify stabilization from public records — ask the landlord and check with NYS DHCR.",
-    good_cause: null,
+    good_cause: { status: "might_be_covered", message: "Might be covered: it depends on your landlord. Good Cause doesn't cover landlords who own 10 or fewer apartments in New York State, or who live in a building with 10 or fewer apartments." },
     rent: { tract_median: 2350, hud_fmr: { area: "New York, NY HUD Metro FMR Area", fiscal_year: 2027, studio: 2593, one_br: 2729, two_br: 2971, three_br: 3760 }, pct_vs_median: -2 },
   },
   {
@@ -120,7 +120,7 @@ export const MOCK_BUILDINGS: BuildingCard[] = [
     access_likelihood: "Higher",
     stabilization: "none_on_record",
     stabilization_message: "No stabilization on record — Good Cause protections may still apply.",
-    good_cause: true,
+    good_cause: { status: "no_exemption_found", message: "No exemption found in public records. Good Cause may cover apartments here; your rent and your lease's Good Cause notice decide." },
     rent: { tract_median: 3100, hud_fmr: { area: "New York, NY HUD Metro FMR Area", fiscal_year: 2027, studio: 2593, one_br: 2729, two_br: 2971, three_br: 3760 }, pct_vs_median: 9 },
   },
 ];
@@ -183,5 +183,5 @@ export function mockSummary(bbl: string): string | null {
       : b.stabilization === "unverified"
         ? "stabilization unverified"
         : "no stabilization on record";
-  return `${b.address} is a ${b.year_built ?? "older"} ${b.has_elevator ? "elevator building" : "walk-up"} scoring ${b.score} — a signal built from public records. Legal record: ${stab}${b.good_cause ? " with Good Cause coverage" : ""}. ${b.open_violations.c === null ? "No violation data available." : b.open_violations.c > 0 ? `${b.open_violations.c} hazardous (Class C) violation${b.open_violations.c > 1 ? "s" : ""} open — ask about repairs before signing.` : "No hazardous violations open."} Verify everything in person; this is public data, not a legal ruling.`;
+  return `${b.address} is a ${b.year_built ?? "older"} ${b.has_elevator ? "elevator building" : "walk-up"} scoring ${b.score} — a signal built from public records. Legal record: ${stab}. ${b.open_violations.c === null ? "No violation data available." : b.open_violations.c > 0 ? `${b.open_violations.c} hazardous (Class C) violation${b.open_violations.c > 1 ? "s" : ""} open — ask about repairs before signing.` : "No hazardous violations open."} Verify everything in person; this is public data, not a legal ruling.`;
 }

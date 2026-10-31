@@ -1,5 +1,7 @@
 mod config;
 mod geo;
+mod lawcheck;
+mod lawnet;
 mod run;
 mod sources;
 
@@ -31,6 +33,7 @@ fn main() -> Result<()> {
             let n = store::load_law(&conn)?;
             println!("loaded {n} law provisions into {}", cfg.out);
         }
+        Mode::LawCheck => lawcheck::run(&lawcheck::Opts::parse(&args))?,
     }
     Ok(())
 }

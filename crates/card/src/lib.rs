@@ -9,7 +9,7 @@
 //! source and the days-open arithmetic is testable without waiting a day.
 
 use anyhow::Result;
-use model::{HealthCard, ScoreBreakdown, Stabilization, ViolationCounts};
+use model::{GoodCause, HealthCard, ScoreBreakdown, Stabilization, ViolationCounts};
 use rusqlite::Connection;
 use store::{get_building, get_open_violations};
 
@@ -64,6 +64,7 @@ pub fn card_for(
             building.rent_stabilized,
             building.rent_stab_units,
         ),
+        good_cause: GoodCause::from_building(&building),
         building,
     }))
 }

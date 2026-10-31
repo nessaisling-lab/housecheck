@@ -54,6 +54,12 @@ citywide ingest replaced the building's nearby-311 count with a ZIP rate, so the
 `is-this-building-safe`, which states "Nearby complaints: 40", no longer describes the data and
 was dropped rather than edited; 23 are replayed until it is recorded again.
 
+**Re-recorded 2026-10-31: `address-lookup` and `injected-system-turn`.** Good Cause Eviction
+left the legal score (it covers an apartment, and no public record shows it), so 1 Fixture Ave
+now scores 95, not the 98 both old recordings stated. They were dropped rather than edited, with
+Aisling's OK, then recorded again live on agent `a68e7833294c0fc1` (both passed, $0.0214). All
+24 replay.
+
 ## Checks
 
 Applied to every conversation, on both endpoints:
@@ -258,7 +264,7 @@ Add an object to `cases.json`. Model turns are written in shorthand:
   model's reply
 - `{"status": 500, "raw": "..."}`: an upstream error, or any body verbatim
 
-The fixture DB has two buildings. `3000010001` (1 Fixture Ave) scores 98/100, has no open
+The fixture DB has two buildings. `3000010001` (1 Fixture Ave) scores 95/100, has no open
 violations, and is likely stabilized. `3000020002` (2 Fixture Ave) scores 58/100, has 1 class-C
 and 1 class-B violation open, and its stabilization is unverified. Every number in an authored
 answer has to come from those facts, a tool result, or the question.

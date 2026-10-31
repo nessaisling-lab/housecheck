@@ -151,7 +151,7 @@ function Methodology() {
       <p className="mt-2 text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
         The Building Health Score runs 0–100 and is a plain average of four pillars —{" "}
         <strong style={{ color: "var(--hc-ink)" }}>each pillar counts equally</strong>: condition
-        (HPD violations, 311), legal protections (DHCR stabilization, Good Cause), neighborhood
+        (HPD violations, 311), legal protections (DHCR stabilization), neighborhood
         rents (Census, HUD), and accessibility (DOB elevators, MTA ADA stations). A missing pillar
         is marked <em>unverified</em> — never treated as a zero.
       </p>

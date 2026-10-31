@@ -52,8 +52,13 @@ One-time setup, in `scripts/pr-visuals`:
 
 ```bash
 npm ci
-npx playwright-core install chromium-headless-shell
+node setup.mjs
 ```
+
+`setup.mjs` installs Playwright's headless browser into HouseCheck's own labelled folder:
+`%LOCALAPPDATA%\ms-playwright\housecheck` on Windows, `~/.cache/ms-playwright/housecheck` on
+Linux. The shared `ms-playwright` folder belongs to other tools (gstack, career-ops, global and
+Python Playwright) and is left alone. `PLAYWRIGHT_BROWSERS_PATH` overrides the folder.
 
 Edge and Chrome as installed on the development PC exit at once in headless mode, so the kit uses
 Playwright's own headless browser. Set `PR_VISUALS_BROWSER=msedge` or `chrome` to try an
@@ -98,4 +103,5 @@ Then drag the same images into the PR comment by hand as a backup.
 | `diagram.mjs` | backend diagrams in the same library: boxes, right-angled lines, moving dashes and packets |
 | `app.mjs` | the app at any commit: build the frontend there, serve it, run the local API |
 | `pr-media.mjs` | publish to the `pr-media` branch and print the Markdown |
+| `setup.mjs` | one-time install of the headless browser into `ms-playwright/housecheck` |
 | `kit.test.mjs` | `npm test`: the library's rules, line routing, what gets published, and redaction in a real browser |

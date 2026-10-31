@@ -175,18 +175,34 @@ export function frameHtml({ pr, heading, step, of, title, cols, why = [], when }
 }
 
 /**
- * A headless browser: Playwright's own (`npx playwright-core install chromium-headless-shell`, once),
+ * HouseCheck's own Playwright browser folder: `housecheck` inside Playwright's usual one, so each
+ * project's browsers sit in a labelled subfolder and the shared one is left to the tools that use
+ * it. PLAYWRIGHT_BROWSERS_PATH, when set, wins.
+ */
+export function browsersPath() {
+  if (process.env.PLAYWRIGHT_BROWSERS_PATH) return process.env.PLAYWRIGHT_BROWSERS_PATH;
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const base = process.platform === "win32" ? join(process.env.LOCALAPPDATA || home, "ms-playwright")
+    : process.platform === "darwin" ? join(home, "Library", "Caches", "ms-playwright")
+      : join(process.env.XDG_CACHE_HOME || join(home, ".cache"), "ms-playwright");
+  return join(base, "housecheck");
+}
+
+/**
+ * A headless browser: Playwright's own, from `browsersPath()` (`node setup.mjs` installs it once),
  * or an installed one named in PR_VISUALS_BROWSER (`msedge`, `chrome`). Installed Edge and Chrome
  * exit at once in headless mode on the machine this was built on (Oct 31, 2026), so they are not
  * the default.
  */
 export async function launch() {
+  // Read by Playwright when it loads, so it is set before the import.
+  process.env.PLAYWRIGHT_BROWSERS_PATH = browsersPath();
   const { chromium } = await import("playwright-core");
   const channel = process.env.PR_VISUALS_BROWSER || undefined;
   try {
     return await chromium.launch(channel ? { channel } : {});
   } catch (e) {
-    const fix = channel ? "unset PR_VISUALS_BROWSER to use Playwright's own browser" : "run `npx playwright-core install chromium-headless-shell` in scripts/pr-visuals";
+    const fix = channel ? "unset PR_VISUALS_BROWSER to use Playwright's own browser" : "run `node setup.mjs` in scripts/pr-visuals";
     throw new Error(`could not start the browser (${fix}): ${e.message.split("\n")[0]}`);
   }
 }

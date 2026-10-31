@@ -14,9 +14,9 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 51: 35 synthetic, 16 recorded from a live run |
-| Replays per run | 101: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 4,432 (2026-10-31); the 35 synthetic conversations pass all 2,674 of theirs, and the 16 recordings fail until the next live run (below) |
+| Conversations | 38 synthetic, plus the recordings of the latest live run (none current: see below) |
+| Replays per run | 75 for the synthetic set: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 2,908 for the synthetic set, all passing (2026-10-31) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
@@ -47,9 +47,10 @@ The 16 recordings are from agent `5b6ff01bd7641d20` on `anthropic/claude-haiku-4
 live runs found" below.
 
 **Stale since law Phase B (2026-10-31).** Phase B added the `lead_paint` and `housing_court`
-topics, the four-part answer and the statute-over-guidance rule, so the agent is now
-`45bece92e581405d` and every recording fails replay on `agent_version` until a live run records
-it again.
+topics, the four-part answer, the statute-over-guidance rule, law passages (`lookup_law`'s
+`about`), the urgency rules and `mark_urgent`. The agent is now `e0f659682b7d9161`, so every
+recording fails replay on `agent_version` until the next live run records it again. Live run 6
+(on `45bece92e581405d`, below) recorded 8, which are stale too.
 
 ## Checks
 
@@ -91,6 +92,12 @@ Applied to every conversation, on both endpoints:
   result.
 - **Law comes with a referral.** If `lookup_law` served law, the answer names an organisation
   from the legal-help directory, by name or by phone number. NYC 311 doesn't count.
+- **Numbers written as words count as shown.** Statutes say "twenty-one days"; a faithful
+  "21 days" passes, an invented "22" still fails.
+- **Urgency** (`docs/design/law-passages.md` §7), against what the server counted and returned:
+  danger opens with "Call 911 now"; a deadline with no date gets the date asked for, and is then
+  exempt from the four parts; otherwise the answer opens by naming the level and states the
+  days left.
 
 Per conversation, in `expect`: `tools` (exact order of tool results fed back, replay only),
 `must_call`, `fed_back_contains`, `citations_include` / `_exclude`, `answer_contains` (replay
@@ -104,7 +111,7 @@ $env:OPENROUTER_API_KEY = "<key>"
 cargo test -p api live_eval -- --ignored --nocapture
 ```
 
-This runs the 21 conversations marked `"live": true` through `/agent/chat` against the real
+This runs the 24 conversations marked `"live": true` through `/agent/chat` against the real
 model. To run only some, set `HOUSECHECK_EVAL_ONLY` to a comma-separated list of ids. The
 stand-in model server forwards each request to OpenRouter and records the answer.
 
@@ -135,6 +142,13 @@ Six billed runs, $0.6758 in all:
 - **Run 4b:** the same agent again, the first run with the key read from a saved file, $0.1269,
   14 of 17 passed. Its recordings were replaced by run 5's.
 - **Run 5:** fixes for run 4 (`5b6ff01bd7641d20`), $0.1333, 16 of 17 passed.
+
+- **Run 6** (2026-10-31): law Phase B (`45bece92e581405d`), $0.2279, 8 of 21 passed. 11 of the
+  13 failures were the first live test of the four-part answer: the model wrote its own headings
+  and skipped parts 3 and 4, after up to 49,999 characters of statute. Two more were the number
+  check reading "twenty-one" as no number. Fixed by serving passages, repeating the headings in
+  each tool result that serves law, and reading number words. The rest were real: a link from
+  memory (`violations-for-unheld-bbl`), "children under six" and § 214 stated from memory.
 
 A fourth attempt sent a key OpenRouter rejected and cost nothing. That is why the key is now
 checked first.

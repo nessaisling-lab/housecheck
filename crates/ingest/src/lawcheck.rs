@@ -1271,7 +1271,9 @@ fn file_id(id: &str) -> String {
         .collect()
 }
 
-/// The issue body: findings a person must verify, most urgent kinds first.
+/// The issue body: findings a person must verify, most urgent kinds first. Every item starts
+/// with its bold id, and nothing else does: `law-check.yml` opens the issue only when a line
+/// starts with `**`.
 pub fn report(
     date: &str,
     checked: &[Checked],
@@ -1696,6 +1698,53 @@ mod tests {
         assert!(body.contains("### Changed\n**NYC311-KA-01036**"), "{body}");
         assert!(body.contains("Fact `heat.night.min_f` (62)"), "{body}");
         assert!(body.contains("**Re-record likely needed**"), "{body}");
+    }
+
+    /// law-check.yml decides "any findings?" by a line starting with `**`.
+    #[test]
+    fn report_items_and_only_items_start_bold() {
+        let row = |id: &str, finding: Finding| Checked {
+            id: id.into(),
+            url: "https://example.org/a".into(),
+            help: false,
+            verified_on: "2026-09-01".into(),
+            finding,
+            stored: "s".into(),
+            fetched: Some("f".into()),
+        };
+        let bold = |c: &[Checked]| {
+            report("2026-10-31", c, &State::default(), false, (1, 1))
+                .lines()
+                .filter(|l| l.starts_with("**"))
+                .count()
+        };
+        let quiet = [row("A", Finding::Unchanged), row("B", Finding::Quiet)];
+        assert_eq!(bold(&quiet), 0);
+        let found = [
+            Finding::Changed {
+                note: "n".into(),
+                missing: vec!["m".into()],
+                facts: vec!["`k` (1)".into()],
+            },
+            Finding::Mismatch { note: "n".into() },
+            Finding::Moved {
+                to: "https://example.org/b".into(),
+                permanent: true,
+                same_text: Some(true),
+            },
+            Finding::Dead {
+                status: 404,
+                archived: None,
+                candidate: None,
+            },
+            Finding::Blocked,
+            Finding::Unreachable("e".into()),
+            Finding::NotChecked("no key".into()),
+            Finding::Due,
+        ];
+        for f in found {
+            assert_eq!(bold(&[row("X", f.clone())]), 1, "{f:?}");
+        }
     }
 
     #[test]

@@ -123,6 +123,8 @@ without one they are listed as not checked. See `docs/design/law-change-detectio
 ```bash
 cargo run -p ingest -- --law-check --full
 ```
+On GitHub, the `law-check` workflow runs the same check from the Actions tab (a dry run unless you
+untick it) and keeps its findings in one issue labelled `law-check`.
 
 ### Local CI, before you push
 

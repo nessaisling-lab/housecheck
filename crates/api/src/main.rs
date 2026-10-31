@@ -1015,7 +1015,7 @@ async fn buildings_handler(State(state): State<AppState>) -> impl IntoResponse {
         };
         let condition = scoring::condition_score(&violations, snapshot_year);
         let legal = scoring::legal_score(b);
-        let neighborhood = scoring::neighborhood_score(b.complaints_311);
+        let neighborhood = scoring::neighborhood_score(b.complaints_311_per_1k_homes);
         let (accessibility, _) = scoring::access_likelihood(b);
         let total = scoring::total_score(condition, legal, neighborhood, accessibility);
         out.push(model::BuildingListItem {
@@ -1792,7 +1792,7 @@ fn grounding_block(card: &HealthCard, tract_median: Option<i32>, prov: &Provenan
          Rent-stabilization signal: {stab_message} ({stab_status}).\n\
          Rent context: {rent_context}.\n\
          Accessibility likelihood: {access}.\n\
-         Nearby 311 complaints: {complaints_311}.\n\
+         Neighborhood: {neighborhood_311}.\n\
          {coverage}",
         address = card.building.address,
         bbl = card.building.bbl,
@@ -1810,7 +1810,20 @@ fn grounding_block(card: &HealthCard, tract_median: Option<i32>, prov: &Provenan
         stab_status = card.stabilization.status,
         rent_context = rent_context,
         access = card.access_likelihood,
-        complaints_311 = card.building.complaints_311,
+        neighborhood_311 = match (
+            &card.building.zip,
+            card.building.complaints_311_per_1k_homes
+        ) {
+            (Some(zip), Some(r)) => format!(
+                "{} (ZIP {zip}), {r} 311 complaints per 1,000 homes in the ZIP since 2024 \
+                 (an area figure, the same for every building in the ZIP)",
+                card.building
+                    .neighborhood
+                    .as_deref()
+                    .unwrap_or("name not on record")
+            ),
+            _ => "ZIP not on record, so no area 311 figure".to_string(),
+        },
         coverage = coverage_note(prov),
     )
 }
@@ -4835,9 +4848,8 @@ mod tests {
         conn.execute(
             "INSERT INTO buildings
                (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,
-                good_cause,has_elevator,near_ada_subway_m,complaints_311,latitude,longitude,
-                restaurant_grade,rent_stab_units)
-             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,0,NULL,0,NULL,NULL,NULL,NULL)",
+                good_cause,has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
+             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,0,NULL,NULL,NULL,NULL)",
             rusqlite::params![bbl, address],
         )
         .unwrap();

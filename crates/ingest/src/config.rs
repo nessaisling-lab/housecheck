@@ -5,6 +5,9 @@ pub struct Config {
     pub out: String,
     pub community_district: u32, // e.g. 303 = Brooklyn CD3 (Bed-Stuy)
     pub limit: u32,              // cap building count for a demo-sized set
+    /// Every residential lot in all five boroughs. Ignores `--cd` and `--limit`; explicit so
+    /// an hour-long run never starts by accident.
+    pub citywide: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -48,7 +51,13 @@ impl Config {
             out,
             community_district,
             limit,
+            citywide: args.iter().any(|a| a == "--citywide"),
         })
+    }
+
+    /// The DuckDB staging file, kept next to the artifact and between runs.
+    pub fn stage_path(&self) -> String {
+        format!("{}.stage.duckdb", self.out.trim_end_matches(".db"))
     }
 }
 
@@ -66,9 +75,17 @@ mod tests {
                 mode: Mode::Real,
                 out: "data/hc.db".into(),
                 community_district: 303,
-                limit: 200
+                limit: 200,
+                citywide: false,
             }
         );
+        assert_eq!(c.stage_path(), "data/hc.stage.duckdb");
+    }
+
+    #[test]
+    fn parses_citywide() {
+        let args = ["--real", "--citywide", "--out", "x.db"].map(String::from);
+        assert!(Config::parse(&args).unwrap().citywide);
     }
 
     #[test]

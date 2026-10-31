@@ -1,0 +1,9 @@
+HouseCheck
+Copyright 2026 Aisling Leiva-Davila and the HouseCheck contributors.
+
+The frontend (frontend/) was written largely by antoninlesov
+(https://github.com/antoninlesov) and is distributed under the same license.
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Data sources and their attribution are listed in README.md, under "Data sources".

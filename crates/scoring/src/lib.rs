@@ -36,9 +36,33 @@ pub fn legal_score(b: &Building) -> u8 {
     s.clamp(0, 100) as u8
 }
 
-/// 0–100 neighborhood score from the nearby 311-complaint count.
+/// 0–100 neighborhood score from the building's ZIP: 311 complaints since 2024 per 1,000 homes.
 ///
-/// The old linear rule (`-2` per complaint, capped at `-60`) hit its floor at just 30
+/// `penalty = clamp(round((ln(1 + r) - 6.52).max(0) * 20.0), 0, 60)`, `score = 100 - penalty`.
+///
+/// **Refit 2026-10-30, when the input changed from a count to a rate.** The input used to be
+/// the count of 311 complaints within 150 m of the building (history below). Citywide, that
+/// meant comparing 767,563 buildings with 10.4M complaint points, so Aisling moved the pillar
+/// to ZIP codes, which every source carries as a plain column. A rate is a different number
+/// from a count, so the curve had to move; the question was which property to keep.
+///
+/// Kept: the log shape, the slope of 20, the 60-point floor, and **the worst real place sits at
+/// 43**, three points off the floor, exactly as the worst pilot block did under the count. Only
+/// the allowance moved (5.5 → 6.52), and it is solved from that one condition rather than
+/// fitted: the worst ZIP measured, 11366, has 11,735 complaints per 1,000 homes, and
+/// `ln(11,736) - 57/20 = 6.52`.
+///
+/// Measured on 2026-10-30 across the 184 ZIPs with homes on record, that puts p10 (1,362) at 86,
+/// the median (2,677) at 73, p90 (4,212) at 63, and the worst at 43. No ZIP is under the
+/// zero-penalty line (r ≤ 677), because no ZIP in New York City is that quiet.
+///
+/// **What it can no longer say:** every building in a ZIP gets the same number, so a bad block
+/// inside a quiet ZIP does not show.
+///
+/// `None` (ZIP unknown, 213 of 767,563 residential lots) scores 70, half the band: neither
+/// rewarded nor punished for a gap in the record.
+///
+/// *History, for the count this replaced:* the old linear rule (`-2` per complaint, capped at `-60`) hit its floor at just 30
 /// complaints, so every dense-NYC building scored an identical 40 — the signal was useless.
 /// This LOG rule keeps 311 volume discriminating across the whole realistic range:
 ///
@@ -70,9 +94,12 @@ pub fn legal_score(b: &Building) -> u8 {
 /// Observed range on the shipped artifact is 433..4310, so the worst real block sits at 43 with
 /// about 11% headroom before the floor. That margin is thin and `neighborhood_floor_has_headroom`
 /// exists to fail if a future ingest closes it.
-pub fn neighborhood_score(complaints_311: i32) -> u8 {
-    let c = complaints_311.max(0) as f64;
-    let penalty = (((1.0 + c).ln() - 5.5).max(0.0) * 20.0)
+pub fn neighborhood_score(complaints_311_per_1k_homes: Option<i32>) -> u8 {
+    let Some(r) = complaints_311_per_1k_homes else {
+        return 70;
+    };
+    let r = r.max(0) as f64;
+    let penalty = (((1.0 + r).ln() - 6.52).max(0.0) * 20.0)
         .round()
         .clamp(0.0, 60.0);
     (100.0 - penalty) as u8
@@ -178,10 +205,11 @@ mod tests {
             good_cause: false,
             has_elevator: false,
             near_ada_subway_m: None,
-            complaints_311: 0,
+            zip: None,
+            neighborhood: None,
+            complaints_311_per_1k_homes: None,
             latitude: None,
             longitude: None,
-            restaurant_grade: None,
         }
     }
 
@@ -195,40 +223,35 @@ mod tests {
     }
 
     #[test]
-    fn neighborhood_penalizes_311_density() {
-        // LOG rule: a busy-but-normal block (c ≤ 244 on complete 311 data) is not penalized.
-        assert_eq!(neighborhood_score(0), 100);
-        assert_eq!(neighborhood_score(10), 100);
-        assert_eq!(neighborhood_score(244), 100);
-        assert_eq!(neighborhood_score(250), 99); // first penalised count
-                                                 // Spec reference points that the discriminating curve must hit.
-        assert_eq!(neighborhood_score(1966), 58);
-        assert_eq!(neighborhood_score(4914), 40); // penalty clamped at 60
+    fn neighborhood_penalizes_311_rate() {
+        assert_eq!(neighborhood_score(Some(0)), 100);
+        assert_eq!(neighborhood_score(Some(677)), 100); // the zero-penalty line
+        assert_eq!(neighborhood_score(Some(700)), 99);
+        // The measured citywide distribution, 2026-10-30: p10, median, p90.
+        assert_eq!(neighborhood_score(Some(1362)), 86);
+        assert_eq!(neighborhood_score(Some(2677)), 73);
+        assert_eq!(neighborhood_score(Some(4212)), 63);
+        assert_eq!(neighborhood_score(Some(20_000)), 40); // penalty clamped at 60
     }
 
     #[test]
-    fn neighborhood_discriminates_dense_blocks() {
-        // Under the old linear rule (−2/complaint, −60 cap) both 100 and 500 saturated to 40,
-        // so the score told you nothing. The LOG rule must now separate them.
-        assert_ne!(neighborhood_score(433), neighborhood_score(4310));
-        assert_eq!(neighborhood_score(433), 89);
-        assert_eq!(neighborhood_score(4310), 43);
+    fn neighborhood_unknown_zip_is_half_the_band() {
+        assert_eq!(neighborhood_score(None), 70);
     }
 
     #[test]
     fn neighborhood_floor_has_headroom_over_the_real_maximum() {
-        // The curve was recalibrated once already, after paging the 311 query multiplied every
-        // count by 4.56x. A future ingest that widens the bbox or the date window will do the
-        // same thing again, and the failure is silent: counts drift up, buildings pile onto the
-        // 40 floor, and the pillar stops discriminating exactly as it did under the pre-2bc7851
-        // linear rule. 4310 is the worst block in the shipped artifact.
-        const WORST_OBSERVED: i32 = 4310;
+        // The curve has been recalibrated twice: once when paging the 311 query multiplied
+        // every count by 4.56x, and once when the input became a ZIP rate. Either kind of
+        // change, done again, fails silently: values drift up, places pile onto the 40 floor,
+        // and the pillar stops discriminating as it did under the pre-2bc7851 linear rule.
+        // 11,735 per 1,000 homes is the worst ZIP measured (11366, 2026-10-30).
+        const WORST_OBSERVED: i32 = 11_735;
         assert!(
-            neighborhood_score(WORST_OBSERVED) > 40,
-            "the worst real block is already on the floor — recalibrate the allowance"
+            neighborhood_score(Some(WORST_OBSERVED)) > 40,
+            "the worst real ZIP is already on the floor — recalibrate the allowance"
         );
-        // And the floor itself must stay meaningfully above it, not one complaint above.
-        assert!(neighborhood_score(WORST_OBSERVED) >= 43);
+        assert!(neighborhood_score(Some(WORST_OBSERVED)) >= 43);
     }
 
     #[test]

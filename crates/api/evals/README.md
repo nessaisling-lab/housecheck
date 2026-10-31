@@ -14,9 +14,9 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 64: 40 synthetic, 24 recorded from live run 8 and its re-runs |
-| Replays per run | 127: each conversation on both endpoints, except one the stream skips by design |
-| Checks per run | 6,088, all passing (2026-10-31) |
+| Conversations | 63: 40 synthetic, 23 recorded from live run 8 and its re-runs |
+| Replays per run | 125: each conversation on both endpoints, except one the stream skips by design |
+| Checks per run | 6,019, all passing (2026-10-31, with the citywide ingest) |
 | Time | 1.9 s for the eval tests, no network |
 | Live model calls | 0 |
 
@@ -49,8 +49,10 @@ live runs found" below.
 **Stale since law Phase B (2026-10-31).** Phase B added the `lead_paint` and `housing_court`
 topics, the four-part answer, the statute-over-guidance rule, law passages (`lookup_law`'s
 `about`), the urgency rules, `mark_urgent` and `write_answer`. The agent is now
-`a68e7833294c0fc1`; live run 8 and its re-runs recorded all 24 of its live conversations, and
-those are the recordings CI replays.
+`a68e7833294c0fc1`; live run 8 and its re-runs recorded all 24 of its live conversations. The
+citywide ingest replaced the building's nearby-311 count with a ZIP rate, so the recording of
+`is-this-building-safe`, which states "Nearby complaints: 40", no longer describes the data and
+was dropped rather than edited; 23 are replayed until it is recorded again.
 
 ## Checks
 

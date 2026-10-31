@@ -27,7 +27,7 @@ pub fn card_for(
 
     let condition = scoring::condition_score(&violations, snapshot_year);
     let legal = scoring::legal_score(&building);
-    let neighborhood = scoring::neighborhood_score(building.complaints_311);
+    let neighborhood = scoring::neighborhood_score(building.complaints_311_per_1k_homes);
     let (accessibility, access_likelihood) = scoring::access_likelihood(&building);
     let total = scoring::total_score(condition, legal, neighborhood, accessibility);
 

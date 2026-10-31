@@ -385,6 +385,40 @@ rely on it", and several are accessibility issues rather than features.
 
 ---
 
+## Future features, from the citywide build (2026-10-30)
+
+Raised by Aisling after the first citywide run. Measurements behind each are in
+`design/citywide-ingest.md`.
+
+- [ ] **Serve the citywide artifact, fast.** `GET /buildings` scores every building on every
+      request and `search_curated` loads every building per search: fine at 250, not at
+      767,563. Precompute scores at ingest, answer the map by bounding box (or static vector
+      tiles), and search through an index with the borough in the key (a B-tree on a normalized
+      address measured 40 MB citywide). Measure p50/p95 before and after.
+- [ ] **Neighborhood as several measures, not one number.** One ZIP rate leaves 67.8% of
+      buildings scoring 70–79. Show the parts a renter weighs differently: 311 by category
+      (noise, heat and hot water, pests, sanitation), complaints at the building's own BBL
+      (88.7% of 311 rows carry one), each with its citywide percentile, so a reader can decide
+      what they will tolerate. Keep each measure accurate on its own before combining any.
+- [ ] **Restaurant grades, back as neighborhood context.** Removed when coverage went citywide
+      because nothing displayed them, and the 200 m nearest-restaurant join does not scale.
+      Bring back per ZIP or NTA: the share of restaurants whose latest DOHMH grade (`43nn-pn8j`,
+      latest inspection per `camis`) is an A. Display only, as before.
+- [ ] **Weekly refresh from the stage.** The DuckDB stage keeps Socrata's `:id` on every row;
+      pull `:updated_at > last_run` (157,231 rows changed in the week to 2026-10-30, 1.5%),
+      upsert, recompose, verify, swap. Decide alongside it whether to keep a Parquet snapshot
+      per week as history.
+- [ ] **Cap the ingest's memory.** Peak working set 6.9 GB, from DuckDB sorting 10.5M rows at
+      compose (it may take up to 80% of RAM by default). Set `memory_limit` and
+      `temp_directory`, then re-measure wall clock and peak.
+- [ ] **Attribute re-lotted violations by HPD `buildingid`.** Block/lot keeps a row on the lot it
+      was written against, which is right after a merger (88 Tompkins Ave) and misses rows
+      re-lotted at a condo conversion (21 Prescott Pl, 9 rows). Adding a row to a building
+      whose block/lot rows share its `buildingid` would catch those without importing a
+      demolished predecessor's history.
+
+---
+
 ## Known defects and stated limitations
 
 - [x] **A count without its meaning can be read backwards.** *Confirmed closed 2026-08-15 —
@@ -508,7 +542,14 @@ Not "someday" — each has a specific blocker.
       grep for `login`, `jwt`, `session`, `user_id` returns no implementation in any of them. On a
       lawyer's tool a saved caseload is client-adjacent data, so getting it wrong is worse than
       not having it.
-- [ ] **Citywide coverage.** **The ~266 MB figure below is wrong, and the error is in the plan, not
+- [ ] **Citywide coverage.** **Ingest built and run locally, 2026-10-30:** 767,563 buildings,
+      10,428,631 violations, a **479.1 MB** artifact (160.9 MB zstd'd), 35.6 minutes, cards
+      in 0.34 ms median through the MCP server. Every violation kept, as decided that day, so
+      repair-speed history stays whole. **Still open before it can be served:** `/buildings`
+      and `search_curated` load every building per request, the frontend coverage map, and
+      the "pilot" wording; then hosting, sized from the number above. Design, measurements
+      and what changed from the plan: `design/citywide-ingest.md`.
+      *Earlier note:* **The ~266 MB figure below is wrong, and the error is in the plan, not
       the arithmetic.** `design/database-layer.md:36-39` sizes the city assuming *open* violations
       only (2,858,719 rows). `crates/ingest/src/run.rs:255-261` stores **every** A/B/C violation
       regardless of status — visible in the shipped artifact, which holds 26,343 violations for

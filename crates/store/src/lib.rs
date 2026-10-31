@@ -927,7 +927,7 @@ mod tests {
         )?;
         refuses(
             &|o| o["hours"] = "Tuesday — Thursday 9 am to 5 pm".into(),
-            "is not in its excerpt",
+            "are not in its excerpt",
         )?;
         refuses(&|o| o["free"] = false.into(), "legal help")?;
 

@@ -403,6 +403,8 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/meta", get(meta_handler))
         .route("/building/{bbl}", get(building_handler))
         .route("/building/{bbl}/export", get(export_handler))
+        .route("/law/{id}", get(law_handler))
+        .route("/law/{id}/text", get(law_text_handler))
         .route("/verify", axum::routing::post(verify_handler))
         .route("/buildings", get(buildings_handler))
         .route("/compare", get(compare_handler))
@@ -601,6 +603,103 @@ async fn export_handler(
 /// Offered as a convenience, not as the authority. The same check runs entirely offline from
 /// the document alone, which is the property that matters: a verifier who has to ask us
 /// whether our own document is genuine has not verified anything.
+/// One provision's full verified text, with who verified it and its fingerprint.
+#[derive(Serialize)]
+struct LawDoc {
+    #[serde(flatten)]
+    provision: model::law::ServedProvision,
+    verified_by: String,
+    /// sha256 of the text with whitespace collapsed (`model::law::text_sha256`).
+    text_sha256: String,
+}
+
+/// The provision `id` names, whole. `None` for an id that is not a law-table id at all, so a
+/// crafted id never reaches a query or a download header.
+fn law_doc(state: &AppState, id: &str) -> anyhow::Result<Option<LawDoc>> {
+    if id.is_empty()
+        || id.len() > 48
+        || !id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'.')
+    {
+        return Ok(None);
+    }
+    let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(provision) = store::law_provision(&conn, id)? else {
+        return Ok(None);
+    };
+    let (verified_by, text_sha256) = conn.query_row(
+        "SELECT verified_by, text_sha256 FROM law_provision WHERE id = ?1",
+        [id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    Ok(Some(LawDoc {
+        provision,
+        verified_by,
+        text_sha256,
+    }))
+}
+
+/// `GET /law/{id}` — the full verified text of one provision, as JSON.
+async fn law_handler(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+    match law_doc(&state, &id) {
+        Ok(Some(doc)) => (StatusCode::OK, Json(doc)).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "no such law").into_response(),
+        Err(e) => internal_error("law lookup failed", e),
+    }
+}
+
+/// `GET /law/{id}/text` — the same as a plain-text download a reader can keep, print or attach
+/// to an email or a text for a lawyer. The header says what it is and how to check it.
+async fn law_text_handler(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let doc = match law_doc(&state, &id) {
+        Ok(Some(doc)) => doc,
+        Ok(None) => return (StatusCode::NOT_FOUND, "no such law").into_response(),
+        Err(e) => return internal_error("law lookup failed", e),
+    };
+    let p = &doc.provision;
+    let body = format!(
+        "HouseCheck: verified copy of the official text\n\
+         {citation}: {title}\n\
+         Official source: {url}\n\
+         Publisher: {publisher}\n\
+         Retrieved {retrieved}; verified {verified_on} by {verified_by}; status {status}\n\
+         SHA-256 of the text, whitespace collapsed: {sha}\n\
+         Compare it with the official source before relying on it. This is legal information, \
+         not legal advice.\n\
+         ----------------------------------------------------------------------\n\
+         {text}",
+        citation = p.citation,
+        title = p.title,
+        url = p.url,
+        publisher = p.publisher,
+        retrieved = p.retrieved_at,
+        verified_on = p.verified_on,
+        verified_by = doc.verified_by,
+        status = p.status,
+        sha = doc.text_sha256,
+        text = p.text,
+    );
+    (
+        StatusCode::OK,
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "text/plain; charset=utf-8".to_string(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"HouseCheck-{}.txt\"", p.id),
+            ),
+        ],
+        body,
+    )
+        .into_response()
+}
+
 async fn verify_handler(Json(doc): Json<model::export::ExportDocument>) -> impl IntoResponse {
     (StatusCode::OK, Json(doc.verify())).into_response()
 }
@@ -3459,6 +3558,48 @@ mod tests {
         // Shared in-memory DB seeded with fixtures, wrapped in the app state.
         let state = AppState::in_memory_fixture().unwrap();
         TestServer::new(app_with_state(state)).unwrap()
+    }
+
+    /// The full text a reader downloads is the stored text, byte for byte, with a header whose
+    /// fingerprint matches it. Unknown and crafted ids are 404s.
+    #[tokio::test]
+    async fn law_full_text_downloads_verbatim() {
+        let server = test_server();
+        let seed = store::law_seed().expect("seed");
+        let p = seed
+            .provisions
+            .iter()
+            .find(|p| p.id == "NY-RPL-231-C")
+            .expect("231-c seeded");
+
+        let res = server.get("/law/NY-RPL-231-C/text").await;
+        res.assert_status_ok();
+        let disposition = res.header("content-disposition");
+        assert_eq!(
+            disposition.to_str().unwrap(),
+            "attachment; filename=\"HouseCheck-NY-RPL-231-C.txt\""
+        );
+        let body = res.text();
+        let (head, text) = body
+            .split_once("----------------------------------------------------------------------\n")
+            .expect("header, rule, text");
+        assert_eq!(text, p.text, "every word, unchanged");
+        assert!(head.contains(&model::law::text_sha256(&p.text)));
+        assert!(head.contains(&p.url));
+
+        let res = server.get("/law/NY-RPL-231-C").await;
+        res.assert_status_ok();
+        let doc: serde_json::Value = res.json();
+        assert_eq!(doc["text"], p.text.as_str());
+        assert_eq!(doc["verified_by"], p.verified_by.as_str());
+
+        for bad in ["/law/NOPE-1", "/law/a%22b/text", "/law/..%2Fetc/text"] {
+            server
+                .get(bad)
+                .expect_failure()
+                .await
+                .assert_status_not_found();
+        }
     }
 
     #[tokio::test]

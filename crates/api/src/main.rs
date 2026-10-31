@@ -671,9 +671,16 @@ async fn law_handler(State(state): State<AppState>, Path(id): Path<String>) -> i
 
 /// `GET /law/{id}/text` — the same as a plain-text download a reader can keep, print or attach
 /// to an email or a text for a lawyer. The header says what it is and how to check it.
+#[derive(Deserialize)]
+struct LawTextParams {
+    /// `1` makes the response a download; otherwise it opens in the browser.
+    download: Option<String>,
+}
+
 async fn law_text_handler(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(params): Query<LawTextParams>,
 ) -> impl IntoResponse {
     let doc = match law_doc(&state, &id) {
         Ok(Some(doc)) => doc,
@@ -712,7 +719,15 @@ async fn law_text_handler(
             ),
             (
                 axum::http::header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"HouseCheck-{}.txt\"", p.id),
+                format!(
+                    "{}; filename=\"HouseCheck-{}.txt\"",
+                    if params.download.as_deref() == Some("1") {
+                        "attachment"
+                    } else {
+                        "inline"
+                    },
+                    p.id
+                ),
             ),
         ],
         body,
@@ -2736,6 +2751,7 @@ async fn dispatch_tool_in(
                             .into();
                     }
                     if let Some(n) = withheld {
+                        *ctx.withheld.lock().unwrap_or_else(|e| e.into_inner()) = Some(n);
                         out["full_text_withheld"] = serde_json::json!({
                             "full_chars": n,
                             "note": "The reader chose Full, but this law runs over 40,000 \
@@ -2995,6 +3011,9 @@ struct ChatResp {
     laws: Vec<LawRef>,
     /// How time-sensitive the question is, for the app's banner and the lawyer bundle.
     urgency: Option<model::urgency::Urgency>,
+    /// Set when the reader chose Full and the law ran over 40,000 characters: its size, so the
+    /// app can ask them to confirm before every word is sent.
+    full_text_withheld: Option<usize>,
 }
 
 /// How much law text one lookup serves (docs/design/law-passages.md §4).
@@ -3037,6 +3056,8 @@ struct ToolCtx {
     full_confirmed: bool,
     /// What the rules found, raised (never lowered) by `mark_urgent`.
     urgency: std::sync::Mutex<Option<model::urgency::Urgency>>,
+    /// Characters of law Full held back to a preview, for the app's confirm step.
+    withheld: std::sync::Mutex<Option<usize>>,
 }
 
 impl ToolCtx {
@@ -3050,7 +3071,12 @@ impl ToolCtx {
             detail: req.law_detail,
             full_confirmed: req.full_text_confirmed,
             urgency: std::sync::Mutex::new(urgency),
+            withheld: std::sync::Mutex::new(None),
         }
+    }
+
+    fn withheld(&self) -> Option<usize> {
+        *self.withheld.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn urgency(&self) -> Option<model::urgency::Urgency> {
@@ -3428,6 +3454,7 @@ async fn run_agent_stream(
                         "citations": citations,
                         "laws": laws,
                         "urgency": ctx.urgency(),
+                        "full_text_withheld": ctx.withheld(),
                     })
                     .to_string(),
                 ),
@@ -3687,6 +3714,7 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
                 citations,
                 laws,
                 urgency: ctx.urgency(),
+                full_text_withheld: ctx.withheld(),
             })
             .into_response();
         }
@@ -3925,7 +3953,13 @@ mod tests {
             .find(|p| p.id == "NY-RPL-231-C")
             .expect("231-c seeded");
 
-        let res = server.get("/law/NY-RPL-231-C/text").await;
+        let inline = server.get("/law/NY-RPL-231-C/text").await;
+        assert!(inline
+            .header("content-disposition")
+            .to_str()
+            .unwrap()
+            .starts_with("inline;"));
+        let res = server.get("/law/NY-RPL-231-C/text?download=1").await;
         res.assert_status_ok();
         let disposition = res.header("content-disposition");
         assert_eq!(

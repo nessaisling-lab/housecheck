@@ -2,6 +2,15 @@
 
 **Status:** Draft for team review · **Written:** 2026-07-25 · **Audience:** HouseCheck capstone team
 
+> **Note (2026-10-30):** this is the July plan, kept as written; its line citations point at
+> July's code. As built (`crates/api/src/main.rs`): eight tools in `tool_schemas()` —
+> `get_building`, `get_open_violations`, `search_address`, `lookup_law`, `search_law`,
+> `find_legal_help`, `rank_by_priorities`, `check_rent_fairness` (no `compare_buildings` tool;
+> open `web_search` became `search_law` over nine allowlisted domains); `AGENT_MAX_TOKENS = 3000`,
+> `AGENT_MAX_HISTORY = 12`, `MAX_TOOL_ITERATIONS = 5`, 30 s per LLM call; a per-client limit of
+> 10 requests a minute; a streamed `/agent/chat/stream`; and production now runs with Fly
+> secrets set, so §10.2's "no secrets" no longer holds.
+
 **Read `docs/agent/LLM-RULES.md` before you start building.** It sets the rules for how you use your AI assistant on this feature.
 
 ---

@@ -255,11 +255,11 @@ depends on them. Every one of these was written after a real failure.
 
 | Layer | Choice | Why |
 |---|---|---|
-| API | Rust + Axum, five crates (`model`, `scoring`, `store`, `ingest`, `api`) | Scoring is a pure function of the record, so it is testable without a server or a database |
+| API | Rust + Axum, seven crates (`model`, `scoring`, `store`, `card`, `ingest`, `api`, `mcp`) | Scoring is a pure function of the record, so it is testable without a server or a database |
 | Data | SQLite, baked into the container image, opened read-only | No database server to breach and no write path to abuse |
 | Hosting (API) | Fly.io, 256 MB shared-CPU | Measured at 2.2 ms per card; capacity is not the constraint |
 | Frontend | React 19 + Vite + TypeScript + Tailwind | Existing; deployed on Vercel |
-| Agent | LLM with tool access restricted to the building's own record, plus search limited to nine government and academic domains | It answers from the record or says it does not know |
+| Agent | LLM with tool access restricted to the building's own record, plus search limited to nine government, academic and vetted legal-reference domains | It answers from the record or says it does not know |
 | Export signing | Ed25519 (`ed25519-dalek`), hash chain `sha256(prev_hash + payload_hash)` | Both patterns already built in earlier cycles — Resona's licence verification and SiteAssure's audit chain |
 | Sources | HPD, 311, PLUTO, DOB, DOHMH, Census ACS5, DHCR, JustFix | All public, all named, nothing scraped or behind a login |
 

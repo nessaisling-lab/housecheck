@@ -510,7 +510,7 @@ impl HudFmr {
     /// County / Brooklyn, our curated set), effective Oct 1, 2025 through Sep 30, 2026.
     /// Source: HUD USER FY2026 Fair Market Rent Documentation System
     /// (https://www.huduser.gov/portal/datasets/fmr.html). No HUD API key required — the four
-    /// area-wide figures are embedded as constants. FY2025 was 2233/2330/2580/3215; the FY2026
+    /// area-wide figures are embedded as constants. FY2025 was 2406/2511/2780/3465; the FY2026
     /// step up is consistent with HUD's published revision.
     pub fn ny_metro_fy2026() -> Self {
         HudFmr {

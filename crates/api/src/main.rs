@@ -324,6 +324,13 @@ impl AppState {
             "artifact at {path} has no buildings — refusing to start rather than serve a \
              404 for every address under a green health check"
         );
+        // An artifact built before the Good Cause columns would fail every card with a 500.
+        anyhow::ensure!(
+            conn.prepare("SELECT good_cause_exemption, good_cause_detail FROM buildings LIMIT 0")
+                .is_ok(),
+            "artifact at {path} predates the Good Cause columns — rebuild it with \
+             `ingest --real --out {path}`"
+        );
         // Same rule for the law and the legal-help directory. An artifact built before their
         // tables existed has none, and the agent would answer every legal question with "I could
         // not verify it", or name nobody to call.
@@ -4637,6 +4644,25 @@ mod tests {
         assert_eq!(card2.building.rent_stab_units, None);
     }
 
+    /// Building 1: 12 of 40 apartments stabilized. Building 2: 8 apartments, no record.
+    /// Neither is ever "covered"; the wire strings are what `HealthCard.tsx` matches on.
+    #[tokio::test]
+    async fn building_card_states_good_cause_without_scoring_it() {
+        let server = test_server();
+        let one: serde_json::Value = server.get("/building/3000010001").await.json();
+        assert_eq!(one["good_cause"]["status"], "partly_stabilized");
+        let two: serde_json::Value = server.get("/building/3000020002").await.json();
+        assert_eq!(two["good_cause"]["status"], "might_be_covered");
+        assert!(two["good_cause"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("10 or fewer"));
+        assert_eq!(
+            two["building"]["good_cause_exemption"],
+            serde_json::Value::Null
+        );
+    }
+
     #[tokio::test]
     async fn buildings_list_returns_scored_items() {
         let server = test_server();
@@ -4812,8 +4838,8 @@ mod tests {
         conn.execute(
             "INSERT INTO buildings
                (bbl,address,year_built,num_floors,units_res,tract_geoid,rent_stabilized,
-                good_cause,has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
-             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,0,NULL,NULL,NULL,NULL)",
+                has_elevator,near_ada_subway_m,latitude,longitude,rent_stab_units)
+             VALUES (?1,?2,1920,4,10,'36047000100',NULL,0,NULL,NULL,NULL,NULL)",
             rusqlite::params![bbl, address],
         )
         .unwrap();
@@ -5489,6 +5515,29 @@ mod tests {
         assert!(err.to_string().contains("no law provisions"), "{err}");
         store::load_law(&store::open_db(path)?)?;
         assert!(AppState::from_path(path).is_ok());
+        let _ = std::fs::remove_file(path);
+        Ok(())
+    }
+
+    /// An artifact built before 2026-10-31 has no Good Cause columns. Starting on it would
+    /// 500 every card, so it refuses with the rebuild command instead.
+    #[test]
+    fn an_artifact_without_good_cause_columns_refuses_to_start() -> anyhow::Result<()> {
+        let path = std::env::temp_dir().join(format!("hc-old-gc-{}.db", std::process::id()));
+        let path = path.to_str().unwrap();
+        let _ = std::fs::remove_file(path);
+        {
+            let conn = store::open_db(path)?;
+            store::migrate(&conn)?;
+            store::insert_fixture(&conn)?;
+        }
+        assert!(AppState::from_path(path).is_ok());
+        store::open_db(path)?
+            .execute_batch("ALTER TABLE buildings DROP COLUMN good_cause_exemption;")?;
+        let err = AppState::from_path(path)
+            .err()
+            .expect("old artifact, no start");
+        assert!(err.to_string().contains("Good Cause columns"), "{err}");
         let _ = std::fs::remove_file(path);
         Ok(())
     }

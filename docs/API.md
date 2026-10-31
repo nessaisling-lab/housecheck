@@ -54,7 +54,8 @@ curl -s http://127.0.0.1:8787/building/3018420001
     "tract_geoid": "36047025300",
     "rent_stabilized": null,
     "rent_stab_units": null,
-    "good_cause": false,
+    "good_cause_exemption": null,
+    "good_cause_detail": null,
     "has_elevator": false,
     "near_ada_subway_m": 420,
     "zip": "11233",
@@ -75,6 +76,10 @@ curl -s http://127.0.0.1:8787/building/3018420001
   "stabilization": {
     "status": "unverified",
     "message": "Unverified — no DOF stabilization record found for this building."
+  },
+  "good_cause": {
+    "status": "might_be_covered",
+    "message": "Might be covered: it depends on your landlord. Good Cause doesn't cover landlords who own 10 or fewer apartments in New York State, or who live in a building with 10 or fewer apartments."
   }
 }
 ```
@@ -106,6 +111,30 @@ Field notes:
   > NYC DOF Statement of Account records; latest year 2024. The count is the most recent non-blank
   > year in the JustFix dataset. It's an incomplete public signal, never a legal ruling — the
   > wording is intentionally hedged and never overstates a match.
+- `good_cause` — what public records suggest about Good Cause Eviction (NY Real Property Law
+  Article 6-A). **Not part of any score**, and never "covered": coverage is per apartment and
+  turns on facts no public record holds (the landlord's apartments statewide, whether they live
+  there, the rent), which the landlord must state in writing on the lease (RPL § 231-c). Checked
+  in this order:
+  | `status`              | when |
+  |-----------------------|------|
+  | `likely_not_covered`  | `building.good_cause_exemption` is set, or every apartment is stabilized |
+  | `partly_stabilized`   | some apartments stabilized (those are exempt, § 214(5)); the others might be covered |
+  | `might_be_covered`    | 10 or fewer apartments: the small-landlord and owner-occupied exemptions can't be seen |
+  | `no_exemption_found`  | 11 or more apartments and nothing in the records |
+- `building.good_cause_exemption` — a whole-building exemption (§ 214) from public records, or
+  `null`: `condo` (condo rentals, PLUTO RR, included), `coop`, `hotel`, `dormitory`,
+  `care_facility`, `religious`, `school`, `manufactured_homes` (all from the PLUTO building
+  class, by JustFix's Good Cause screener rule); `subsidized` (a DOF tax exemption for public or
+  subsidized housing: NYCHA, Mitchell-Lama, HDFC, Article XI, 420-c and others); `new_building`
+  or `renovation` (a DOB certificate of occupancy dated 2009-01-01 or later; a renovation's is
+  the less certain case). Chosen in that order. `building.good_cause_detail` holds the
+  certificate's date (YYYY-MM-DD) or the program's name.
+
+  > **Sources:** PLUTO `64uk-42ks`; DOF exemptions `muvi-b6kx` (latest tax year); DOB
+  > certificates of occupancy `bs8b-p36w` (2012-07-12 on) and `pkdm-hqz6` (DOB NOW); for
+  > 2009-01-01 to 2012-07-11, DOB's list obtained by JustFix.org under FOIL request
+  > 2024-810-4230 (`justfix-data` on S3), the only public copy.
 
 ---
 

@@ -8,11 +8,12 @@ use std::time::{Duration, Instant};
 use crate::config::Config;
 use crate::geo::{nearest_ada_m, Station};
 use crate::sources::{
-    bbl_block, census_url, complaints_311_by_zip_query, county_fips, excluded_classes_note,
-    fetch_rent_stab, homes_by_zip_query, hpd_excluded_class, hpd_row_bbl, hpd_where_blocks,
-    nta_query, parse_census_medians, parse_dob_has_elevator, parse_hpd_violation, parse_nta,
-    parse_pluto, parse_zip_counts, pluto_coords, pluto_query, zip_rates, HPD_SELECT, PLUTO_SELECT,
-    SODA,
+    bbl_block, census_url, complaints_311_by_zip_query, county_fips, dobnow_date,
+    excluded_classes_note, fetch_foil_cos, fetch_rent_stab, homes_by_zip_query, hpd_excluded_class,
+    hpd_row_bbl, hpd_where_blocks, is_new_building_job, later_exemption, note_co, nta_query,
+    parse_census_medians, parse_dob_has_elevator, parse_hpd_violation, parse_nta, parse_pluto,
+    parse_zip_counts, pluto_coords, pluto_query, soda_date, zip_rates, LatestCo, DOF_SUBSIDY_CODES,
+    HPD_SELECT, PLUTO_SELECT, SODA,
 };
 
 /// Blocking HTTP client with a UA (Socrata throttles anonymous no-UA traffic harder) and a
@@ -415,6 +416,126 @@ fn pilot_buildings(c: &Client, cfg: &Config) -> Result<Vec<Value>> {
     Ok(rows)
 }
 
+/// What `fetch_good_cause` found: housing program by BBL, certificates of occupancy by BBL,
+/// and (dataset, rows read, note) for the provenance table.
+type GoodCauseFound = (
+    HashMap<String, &'static str>,
+    HashMap<String, LatestCo>,
+    Vec<(&'static str, usize, String)>,
+);
+
+/// Good Cause exemptions beyond the building class: DOF tax exemptions for public or
+/// subsidized housing, and certificates of occupancy dated 2009 or later from three sources
+/// (DOB's two open datasets, and the FOIL list for the gap before 2012-07-12).
+///
+/// Fatal, like the 311 counts: a source that failed would show "No exemption found" on
+/// buildings that have one, which is a wrong answer rather than a missing one.
+fn fetch_good_cause(c: &Client, bbl_set: &HashSet<String>, until: &str) -> Result<GoodCauseFound> {
+    let str_of = |v: &Value, k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_string);
+
+    // The latest tax year only, so an exemption that has ended doesn't count.
+    let latest = get_json_query(
+        c,
+        &format!("{SODA}/muvi-b6kx.json"),
+        &[("$select".into(), "max(year) AS y".into())],
+    )?;
+    let year = arr(&latest)
+        .first()
+        .and_then(|r| str_of(r, "y"))
+        .context("muvi-b6kx: no latest year")?;
+    let codes = DOF_SUBSIDY_CODES
+        .iter()
+        .map(|(code, _)| format!("'{code}'"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut programs: HashMap<String, &'static str> = HashMap::new();
+    let dof_rows = for_each_page(
+        c,
+        "muvi-b6kx",
+        "parid,exmp_code",
+        &format!("year='{year}' AND exmp_code in({codes})"),
+        |page| {
+            for v in page {
+                let (Some(bbl), Some(code)) = (str_of(v, "parid"), str_of(v, "exmp_code")) else {
+                    continue;
+                };
+                let program = DOF_SUBSIDY_CODES.iter().find(|(k, _)| *k == code);
+                if let (Some((_, p)), true) = (program, bbl_set.contains(&bbl)) {
+                    programs.entry(bbl).or_insert(p);
+                }
+            }
+            Ok(())
+        },
+    )?;
+
+    let mut cos: HashMap<String, LatestCo> = HashMap::new();
+    let mut note = |v: &Value, date: Option<String>| {
+        if let (Some(bbl), Some(job), Some(d)) = (str_of(v, "bbl"), str_of(v, "job_type"), date) {
+            if bbl_set.contains(&bbl) {
+                note_co(&mut cos, &bbl, is_new_building_job(&job), &d, until);
+            }
+        }
+    };
+    let bis_rows = for_each_page(
+        c,
+        "bs8b-p36w",
+        "bbl,job_type,c_o_issue_date",
+        "bbl IS NOT NULL AND c_o_issue_date >= '2009-01-01'",
+        |page| {
+            for v in page {
+                note(
+                    v,
+                    str_of(v, "c_o_issue_date").as_deref().and_then(soda_date),
+                );
+            }
+            Ok(())
+        },
+    )?;
+    let now_rows = for_each_page(
+        c,
+        "pkdm-hqz6",
+        "bbl,job_type,c_of_o_issuance_date",
+        "bbl IS NOT NULL",
+        |page| {
+            for v in page {
+                note(
+                    v,
+                    str_of(v, "c_of_o_issuance_date")
+                        .as_deref()
+                        .and_then(dobnow_date),
+                );
+            }
+            Ok(())
+        },
+    )?;
+    let foil_rows = fetch_foil_cos(c, bbl_set, until, &mut cos)?;
+
+    let provenance = vec![
+        (
+            "muvi-b6kx",
+            dof_rows,
+            format!("DOF exemptions for public or subsidized housing, tax year {year}"),
+        ),
+        (
+            "bs8b-p36w",
+            bis_rows,
+            "DOB certificates of occupancy (BIS), 2012-07-12 on".to_string(),
+        ),
+        (
+            "pkdm-hqz6",
+            now_rows,
+            "DOB NOW certificates of occupancy".to_string(),
+        ),
+        (
+            "justfix-foil-co-2000-2012",
+            foil_rows,
+            "DOB certificates of occupancy to 2012-07-11, FOIL 2024-810-4230, via JustFix"
+                .to_string(),
+        ),
+    ];
+    Ok((programs, cos, provenance))
+}
+
 /// Deletes the previous artifact so the next one starts from an empty schema. A file that
 /// is still there afterwards means something has it open (on Windows, a running API), and
 /// writing into it would mix the old schema with the new rows: a pilot rebuild failed with
@@ -602,6 +723,17 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         }
     };
 
+    // Scoring recency reads this snapshot year, not the wall clock, so runs are reproducible.
+    let snapshot_year: i32 = std::env::var("SNAPSHOT_YEAR")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2026);
+
+    // 7b. Good Cause exemptions: subsidized housing and certificates of occupancy. The building
+    //     class ones were read with PLUTO in step 1.
+    let (programs, cos, good_cause_provenance) =
+        fetch_good_cause(&c, &bbl_set, &format!("{snapshot_year}-12-31"))?;
+
     // 8. The serving artifact. Rebuilt from scratch every run, so a crash means rerun: no
     //    rollback journal and no syncs, which is most of the cost of 10.5M inserts.
     remove_old(&cfg.out)?;
@@ -610,11 +742,6 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     store::migrate(&conn)?;
     let provisions = store::load_law(&conn)?;
     println!("law: {provisions} provisions from data/law.json");
-    // Scoring recency reads this snapshot year, not the wall clock, so runs are reproducible.
-    let snapshot_year: i32 = std::env::var("SNAPSHOT_YEAR")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(2026);
     store::set_snapshot_year(&conn, snapshot_year)?;
     match store::train_desc_dict(&description_samples(&stage)?) {
         Some(dict) => {
@@ -630,7 +757,15 @@ pub fn run_real(cfg: &Config) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     let mut tracts_written: HashSet<String> = HashSet::new();
     let mut stabilized_count = 0usize;
+    let mut exemptions: BTreeMap<&str, usize> = BTreeMap::new();
     for b in buildings.iter_mut() {
+        if b.good_cause_exemption.is_none() {
+            (b.good_cause_exemption, b.good_cause_detail) =
+                later_exemption(programs.get(&b.bbl).copied(), cos.get(&b.bbl));
+        }
+        if let Some(e) = b.good_cause_exemption {
+            *exemptions.entry(e.as_wire()).or_default() += 1;
+        }
         b.has_elevator = has_elevator.contains(&b.bbl);
         if let Some((lat, lon)) = coords.get(&b.bbl) {
             b.latitude = Some(*lat);
@@ -657,7 +792,8 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         }
     }
     lap(&format!(
-        "buildings written; rent-stab {stabilized_count}/{} stabilized (JustFix nyc-doffer 2024)",
+        "buildings written; rent-stab {stabilized_count}/{} stabilized (JustFix nyc-doffer 2024); \
+         Good Cause exemptions {exemptions:?}",
         buildings.len()
     ));
     let bbls: Vec<i64> = buildings
@@ -702,7 +838,9 @@ pub fn run_real(cfg: &Config) -> Result<()> {
         (
             "sources",
             "HPD wvxf-dwi5 · 311 erm2-nwe9 (per ZIP) · PLUTO 64uk-42ks · DOB e5aq-a4j2 · \
-             DCP NTA hm78-6dwm · MTA 39hk-dx4f · Census ACS5 2023 B25064 · JustFix nyc-doffer 2024"
+             DCP NTA hm78-6dwm · MTA 39hk-dx4f · Census ACS5 2023 B25064 · JustFix nyc-doffer 2024 · \
+             DOF exemptions muvi-b6kx · DOB CO bs8b-p36w, pkdm-hqz6 · DOB CO 2009 to 2012-07-11 \
+             (FOIL 2024-810-4230, via JustFix)"
                 .to_string(),
         ),
     ] {
@@ -736,7 +874,13 @@ pub fn run_real(cfg: &Config) -> Result<()> {
             ntas.len() as i64,
             "DCP 2020 tract to neighborhood (NTA) names",
         ),
-    ] {
+    ]
+    .into_iter()
+    .chain(
+        good_cause_provenance
+            .iter()
+            .map(|(d, rows, note)| (*d, *rows as i64, note.as_str())),
+    ) {
         store::set_source_provenance(&conn, dataset, ingested_at as i64, rows, Some(note))?;
     }
 

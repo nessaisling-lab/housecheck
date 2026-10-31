@@ -24,14 +24,17 @@ pub fn condition_score(violations: &[Violation], current_year: i32) -> u8 {
 
 use model::Building;
 
-/// 0–100 legal-protection score. Base 60; stabilized +25; Good Cause +15.
+/// 0–100 legal-protection score. Base 60; stabilized +25.
+///
+/// Good Cause Eviction is not scored. It covers an apartment, not a building, and turns on
+/// facts no public record holds (how many units the landlord owns statewide, whether they live
+/// there, the tenant's rent); the landlord has to state it on the lease (RPL § 231-c). It also
+/// excludes stabilized apartments (RPL § 214(5)), so the old "+25 and +15" added up two
+/// protections one apartment cannot have. The +15 never fired anyway: ingest never set it.
 pub fn legal_score(b: &Building) -> u8 {
     let mut s: i32 = 60;
     if b.rent_stabilized == Some(true) {
         s += 25;
-    }
-    if b.good_cause {
-        s += 15;
     }
     s.clamp(0, 100) as u8
 }
@@ -202,7 +205,8 @@ mod tests {
             tract_geoid: "36047000100".into(),
             rent_stabilized: None,
             rent_stab_units: None,
-            good_cause: false,
+            good_cause_exemption: None,
+            good_cause_detail: None,
             has_elevator: false,
             near_ada_subway_m: None,
             zip: None,
@@ -214,12 +218,11 @@ mod tests {
     }
 
     #[test]
-    fn legal_rewards_stabilized_and_good_cause() {
+    fn legal_rewards_stabilized() {
         let mut b = base_building();
         assert_eq!(legal_score(&b), 60);
         b.rent_stabilized = Some(true);
-        b.good_cause = true;
-        assert_eq!(legal_score(&b), 100);
+        assert_eq!(legal_score(&b), 85);
     }
 
     #[test]

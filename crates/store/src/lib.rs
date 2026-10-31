@@ -882,7 +882,14 @@ pub fn select_passages(
     }
     let matched = !wanted.is_empty();
     if !matched {
-        wanted.extend((0..provisions.len()).map(|i| (i, 0)));
+        // A heading on its own line ("§ 27-2005 Duties of owner.") says nothing; the opening
+        // is the heading and the first subdivision after it.
+        for (i, p) in parts.iter().enumerate() {
+            wanted.push((i, 0));
+            if p.len() > 1 && p[0].trim().chars().count() < 200 {
+                wanted.push((i, 1));
+            }
+        }
     }
 
     let mut chosen: Vec<Vec<bool>> = parts.iter().map(|v| vec![false; v.len()]).collect();

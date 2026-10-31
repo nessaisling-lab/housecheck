@@ -835,7 +835,7 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     });
     for c in &e.citations_include {
         r.check(ctx, out.citations.contains(c), || {
-            format!("missing citation {c:?}")
+            format!("missing citation {c:?}; got {:?}", out.citations)
         });
     }
     for c in &e.citations_exclude {

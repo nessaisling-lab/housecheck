@@ -2042,6 +2042,12 @@ fn tool_schemas() -> serde_json::Value {
                             "type": "string",
                             "enum": model::law::TOPICS,
                             "description": "The closest topic; general when none fits"
+                        },
+                        "about": {
+                            "type": "string",
+                            "description": "A few words for what the reader asked, e.g. \
+    'rent increase notice' or 'mold in the bathroom'. Used to pick the passages that bear on \
+    it."
                         }
                     },
                     "required": ["topic"]
@@ -2169,11 +2175,23 @@ fn agent_version(model: &str) -> String {
 ///
 /// Errors are returned to the model as JSON rather than aborting the request — a tool failing
 /// is information the model can relay honestly ("I couldn't look that up"), not a 500.
+#[cfg(test)]
 async fn dispatch_tool(
     state: &AppState,
     api_key: &str,
     name: &str,
     args: &serde_json::Value,
+) -> (serde_json::Value, Option<String>) {
+    dispatch_tool_in(state, api_key, name, args, &ToolCtx::default()).await
+}
+
+/// `dispatch_tool`, knowing the conversation: the reader's question and law detail level.
+async fn dispatch_tool_in(
+    state: &AppState,
+    api_key: &str,
+    name: &str,
+    args: &serde_json::Value,
+    ctx: &ToolCtx,
 ) -> (serde_json::Value, Option<String>) {
     let bbl_arg = || {
         args.get("bbl")
@@ -2223,7 +2241,8 @@ async fn dispatch_tool(
                         v.map(|v| {
                             let descs: Vec<&str> =
                                 v.iter().filter_map(|x| x.description.as_deref()).collect();
-                            let law = store::law_cited_by(&conn, &descs)?;
+                            let cited = store::law_cited_by(&conn, &descs)?;
+                            let (law, _) = serve_law(&conn, cited, &[], &descs.join(" "), ctx)?;
                             Ok((v, law))
                         })
                         .transpose()
@@ -2238,6 +2257,7 @@ async fn dispatch_tool(
                     let mut out =
                         serde_json::json!({ "bbl": bbl, "count": v.len(), "violations": v });
                     if !law.is_empty() {
+                        out["answer_format"] = ANSWER_FORMAT.into();
                         out["cited_law"] = serde_json::json!(law);
                         out["cited_law_note"] = "The verified text of code sections these \
                             violations cite. A cited section missing here is one HouseCheck has \
@@ -2315,27 +2335,47 @@ async fn dispatch_tool(
                 .into_iter()
                 .find(|t| *t == asked)
                 .unwrap_or("general");
+            let about = args.get("about").and_then(|a| a.as_str()).unwrap_or("");
             let found = {
                 let conn = state.conn.lock().unwrap_or_else(|e| e.into_inner());
-                store::law_for_topic(&conn, topic)
+                store::law_for_topic(&conn, topic).and_then(|law| {
+                    let query = format!("{} {about}", ctx.query);
+                    let (provisions, withheld) =
+                        serve_law(&conn, law.provisions, &law.facts, &query, ctx)?;
+                    Ok((provisions, law.facts, withheld))
+                })
             };
             match found {
-                Ok(law) if !law.provisions.is_empty() => {
-                    let cite = law
-                        .provisions
+                Ok((provisions, facts, withheld)) if !provisions.is_empty() => {
+                    let cite = provisions
                         .iter()
                         .map(|p| p.citation.as_str())
                         .collect::<Vec<_>>()
                         .join(" · ");
-                    (
-                        serde_json::json!({
-                            "topic": topic,
-                            "provisions": law.provisions,
-                            "facts": law.facts,
-                            "document_this": document_this(topic),
-                        }),
-                        Some(cite),
-                    )
+                    let mut out = serde_json::json!({
+                        "topic": topic,
+                        "answer_format": ANSWER_FORMAT,
+                        "law_detail": ctx.detail,
+                        "provisions": provisions,
+                        "facts": facts,
+                        "document_this": document_this(topic),
+                    });
+                    if provisions.iter().any(|p| !p.complete) {
+                        out["passages_note"] = "A provision with complete: false is passages of \
+                            the official text, in order, with a line holding only … where text \
+                            was left out. State only what is here; the app gives the reader the \
+                            full text."
+                            .into();
+                    }
+                    if let Some(n) = withheld {
+                        out["full_text_withheld"] = serde_json::json!({
+                            "full_chars": n,
+                            "note": "The reader chose Full, but this law runs over 40,000 \
+                                characters, so a preview was served. The app asks the reader to \
+                                confirm before sending every word. Answer from the preview.",
+                        });
+                    }
+                    (out, Some(cite))
                 }
                 Ok(_) => (
                     serde_json::json!({
@@ -2529,6 +2569,12 @@ struct ChatMessage {
 struct ChatReq {
     bbl: String,
     messages: Vec<ChatMessage>,
+    /// How much law text a lookup may serve; the reader's toggle in the chat sheet.
+    #[serde(default)]
+    law_detail: LawDetail,
+    /// The reader confirmed they want every word of a law over `FULL_TEXT_PREVIEW_CHARS`.
+    #[serde(default)]
+    full_text_confirmed: bool,
 }
 
 #[derive(Serialize)]
@@ -2538,6 +2584,118 @@ struct ChatResp {
     /// Sources backing the facts the answer was grounded in. The client renders these instead
     /// of hardcoding a source line, so a demo/fallback answer can never borrow real provenance.
     citations: Vec<String>,
+    /// The provisions this answer was given. The app draws their full-text links, so the
+    /// model never has to write one.
+    laws: Vec<LawRef>,
+}
+
+/// How much law text one lookup serves (docs/design/law-passages.md §4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum LawDetail {
+    #[default]
+    Brief,
+    More,
+    Full,
+}
+
+impl LawDetail {
+    /// Characters a lookup may serve, or `None` for the whole text.
+    fn budget(self) -> Option<usize> {
+        match self {
+            LawDetail::Brief => Some(6_000),
+            LawDetail::More => Some(10_000),
+            LawDetail::Full => None,
+        }
+    }
+}
+
+/// Above this, Full serves a preview until the reader confirms they want every word.
+const FULL_TEXT_PREVIEW_CHARS: usize = 40_000;
+
+/// The four headings, repeated in every tool result that serves law. Live run 6 showed the
+/// system prompt alone is not enough once thousands of words of statute sit between it and the
+/// answer: 11 of 13 failures skipped parts 3 and 4.
+const ANSWER_FORMAT: &str = "Write the answer under these four headings, exactly and in this \
+order: **What the record shows**, **What the law says**, **What this might mean (HouseCheck's \
+inference, not legal advice)**, **A question to ask a legal professional**.";
+
+/// What a tool call knows about the conversation it serves.
+#[derive(Debug, Default)]
+struct ToolCtx {
+    /// The reader's latest message: what law passages are ranked against.
+    query: String,
+    detail: LawDetail,
+    full_confirmed: bool,
+}
+
+impl ToolCtx {
+    fn new(req: &ChatReq) -> Self {
+        ToolCtx {
+            query: req
+                .messages
+                .last()
+                .map(|m| m.content.clone())
+                .unwrap_or_default(),
+            detail: req.law_detail,
+            full_confirmed: req.full_text_confirmed,
+        }
+    }
+}
+
+/// A provision an answer was given, for the app's "Laws used" list.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct LawRef {
+    id: String,
+    citation: String,
+    /// The official page.
+    url: String,
+    /// Whether the model saw the whole provision or passages of it.
+    complete: bool,
+}
+
+/// Add the provisions a tool result served to `laws`, once each.
+fn collect_laws(result: &serde_json::Value, laws: &mut Vec<LawRef>) {
+    for key in ["provisions", "cited_law"] {
+        for p in result[key].as_array().into_iter().flatten() {
+            let id = p["id"].as_str().unwrap_or("");
+            if id.is_empty() || laws.iter().any(|l| l.id == id) {
+                continue;
+            }
+            laws.push(LawRef {
+                id: id.to_string(),
+                citation: p["citation"].as_str().unwrap_or("").to_string(),
+                url: p["url"].as_str().unwrap_or("").to_string(),
+                complete: p["complete"].as_bool().unwrap_or(true),
+            });
+        }
+    }
+}
+
+/// Cut law to the reader's detail level. Returns what to serve and, when Full was asked for but
+/// held back to a preview, the size of the full text.
+///
+/// Law that fits the budget is served whole: cutting it would only lose context.
+fn serve_law(
+    conn: &rusqlite::Connection,
+    provisions: Vec<model::law::ServedProvision>,
+    facts: &[model::law::ServedFact],
+    query: &str,
+    ctx: &ToolCtx,
+) -> anyhow::Result<(Vec<model::law::ServedProvision>, Option<usize>)> {
+    let full: usize = provisions.iter().map(|p| p.full_chars).sum();
+    let (budget, withheld) = match ctx.detail.budget() {
+        Some(b) if full > b => (b, None),
+        Some(_) => return Ok((provisions, None)),
+        None if full <= FULL_TEXT_PREVIEW_CHARS || ctx.full_confirmed => {
+            return Ok((provisions, None))
+        }
+        None => (FULL_TEXT_PREVIEW_CHARS, Some(full)),
+    };
+    Ok((
+        store::select_passages(conn, provisions, facts, query, budget)?,
+        withheld,
+    ))
 }
 
 /// Progress lines a reader sees while a tool runs, keyed by tool name.
@@ -2709,6 +2867,8 @@ async fn run_agent_stream(
     }
 
     let mut citations = citations_for(&card, tract_median);
+    let ctx = ToolCtx::new(&req);
+    let mut laws: Vec<LawRef> = Vec::new();
     let tools = tool_schemas();
     let deadline =
         std::time::Instant::now() + std::time::Duration::from_secs(AGENT_TOTAL_BUDGET_SECS);
@@ -2814,7 +2974,8 @@ async fn run_agent_stream(
             }
             citations.dedup();
             send(Event::default().event("done").data(
-                serde_json::json!({ "bbl": card.building.bbl, "citations": citations }).to_string(),
+                serde_json::json!({ "bbl": card.building.bbl, "citations": citations, "laws": laws })
+                    .to_string(),
             ))
             .await;
             return;
@@ -2844,7 +3005,8 @@ async fn run_agent_stream(
             .await;
 
             tracing::info!(tool = %name, iteration, "agent stream tool call");
-            let (result, citation) = dispatch_tool(&state, &api_key, name, &args).await;
+            let (result, citation) = dispatch_tool_in(&state, &api_key, name, &args, &ctx).await;
+            collect_laws(&result, &mut laws);
             if let Some(c) = citation {
                 if !citations.contains(&c) {
                     citations.push(c);
@@ -2981,6 +3143,8 @@ async fn agent_chat_handler(
     // Citations accumulate as tools actually run, so the response claims only sources that
     // genuinely fed the answer.
     let mut citations = citations_for(&card, tract_median);
+    let ctx = ToolCtx::new(&req);
+    let mut laws: Vec<LawRef> = Vec::new();
     let tools = tool_schemas();
 
     // Tool-calling loop. The model may ask for data; *we* execute the call and hand back the
@@ -3070,6 +3234,7 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
                 bbl: card.building.bbl.clone(),
                 answer,
                 citations,
+                laws,
             })
             .into_response();
         }
@@ -3093,7 +3258,8 @@ _(This answer was cut short by a length limit. Ask a narrower follow-up question
                 .unwrap_or_else(|| serde_json::json!({}));
 
             tracing::info!(tool = %name, iteration, "agent tool call");
-            let (result, citation) = dispatch_tool(&state, api_key, name, &args).await;
+            let (result, citation) = dispatch_tool_in(&state, api_key, name, &args, &ctx).await;
+            collect_laws(&result, &mut laws);
             if let Some(c) = citation {
                 if !citations.contains(&c) {
                     citations.push(c);
@@ -4088,6 +4254,74 @@ mod tests {
         );
     }
 
+    /// The reader's toggle sets how much law a lookup sends. Eviction is the big topic: over
+    /// 40,000 characters whole. Full holds back to a preview until the reader confirms.
+    #[tokio::test]
+    async fn law_detail_levels_bound_what_a_lookup_sends() {
+        let state = AppState::in_memory_fixture().expect("fixture");
+        let sent = |out: &serde_json::Value| -> usize {
+            out["provisions"]
+                .as_array()
+                .expect("provisions")
+                .iter()
+                .map(|p| p["text"].as_str().unwrap().chars().count())
+                .sum()
+        };
+        let lookup = |detail, confirmed| {
+            let state = state.clone();
+            async move {
+                let ctx = ToolCtx {
+                    query: "my landlord wants to raise my rent and not renew my lease".into(),
+                    detail,
+                    full_confirmed: confirmed,
+                };
+                let args = serde_json::json!({ "topic": "eviction", "about": "rent increase" });
+                dispatch_tool_in(&state, "test-key", "lookup_law", &args, &ctx)
+                    .await
+                    .0
+            }
+        };
+        let brief = lookup(LawDetail::Brief, false).await;
+        let more = lookup(LawDetail::More, false).await;
+        let preview = lookup(LawDetail::Full, false).await;
+        let full = lookup(LawDetail::Full, true).await;
+        let whole: usize = full["provisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["full_chars"].as_u64().unwrap() as usize)
+            .sum();
+        assert!(whole > FULL_TEXT_PREVIEW_CHARS, "{whole}");
+        // Gap lines ("\n…\n") are three characters each beyond the budget at most.
+        assert!(sent(&brief) <= 6_000 + 60, "brief {}", sent(&brief));
+        assert!(sent(&more) <= 10_000 + 60 && sent(&more) > sent(&brief));
+        assert!(sent(&preview) <= FULL_TEXT_PREVIEW_CHARS + 60);
+        assert_eq!(preview["full_text_withheld"]["full_chars"], whole);
+        assert!(brief.get("full_text_withheld").is_none());
+        assert_eq!(sent(&full), whole, "confirmed Full sends every word");
+        assert!(full.get("full_text_withheld").is_none());
+        for out in [&brief, &more, &preview, &full] {
+            assert_eq!(out["answer_format"], ANSWER_FORMAT);
+        }
+        assert!(brief["passages_note"].is_string());
+
+        let mut laws = Vec::new();
+        collect_laws(&brief, &mut laws);
+        collect_laws(&brief, &mut laws);
+        let ids: Vec<&str> = brief["provisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            laws.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(),
+            ids,
+            "once each"
+        );
+        assert!(laws.iter().any(|l| !l.complete));
+    }
+
     /// The rule the live eval got wrong: at night the minimum is 62°F at all times, and the
     /// 55°F outdoor condition belongs to the daytime rule only.
     #[tokio::test]
@@ -4182,7 +4416,8 @@ mod tests {
             store::migrate(&conn)?;
             store::insert_fixture(&conn)?;
             conn.execute_batch(
-                "DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_provision;",
+                "DELETE FROM law_fact; DELETE FROM law_topic; DELETE FROM law_passage_fts;
+                 DELETE FROM law_passage; DELETE FROM law_provision;",
             )?;
         }
         let err = AppState::from_path(path).err().expect("no law, no start");

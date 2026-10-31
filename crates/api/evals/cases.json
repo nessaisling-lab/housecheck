@@ -480,7 +480,7 @@
       "status": 200,
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["find_legal_help"],
-      "citations_include": ["NYC Administrative Code § 27-2104 · NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Office of Rent Administration (ORA) · NYS HCR, Tenant Resources: NYS Rent Connect"]
+      "citations_include": ["NYC Administrative Code § 27-2104 · NYS HCR, Most Common Rent Regulation Issues for Tenants · NYS HCR, Tenant Resources: NYS Rent Connect"]
     }
   },
   {

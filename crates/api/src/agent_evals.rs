@@ -340,6 +340,8 @@ struct Outcome {
     done: bool,
     /// Stream only: an `error` event arrived.
     stream_error: Option<String>,
+    /// The urgency the server returned with the answer; `null` when none.
+    urgency: Value,
     tape: Tape,
 }
 
@@ -386,6 +388,7 @@ async fn run(case: &Case, endpoint: &str, live: Option<(&str, &str)>) -> Outcome
         citations: Vec::new(),
         done: false,
         stream_error: None,
+        urgency: Value::Null,
         tape: std::mem::take(&mut *up.tape.lock().unwrap()),
     };
     if status != 200 {
@@ -410,6 +413,7 @@ async fn run(case: &Case, endpoint: &str, live: Option<(&str, &str)>) -> Outcome
                     let v: Value = serde_json::from_str(&data).unwrap_or_default();
                     out.citations =
                         serde_json::from_value(v["citations"].clone()).unwrap_or_default();
+                    out.urgency = v["urgency"].clone();
                 }
                 "error" => out.stream_error = Some(data),
                 _ => {}
@@ -419,6 +423,7 @@ async fn run(case: &Case, endpoint: &str, live: Option<(&str, &str)>) -> Outcome
         let v: Value = serde_json::from_str(&body).unwrap_or_default();
         out.answer = v["answer"].as_str().unwrap_or("").to_string();
         out.citations = serde_json::from_value(v["citations"].clone()).unwrap_or_default();
+        out.urgency = v["urgency"].clone();
     }
     out
 }
@@ -541,6 +546,97 @@ fn strip_non_claims(answer: &str) -> String {
 }
 
 /// Digit runs in `s`, with thousands separators dropped: `$2,500` → `2500`, `120°F` → `120`.
+/// Numbers written as words, as digits: "twenty-one" is 21, "one hundred twenty" 120,
+/// "nineteen hundred seventy-eight" 1978. Each run of number words is one number.
+///
+/// ponytail: cardinals only. "Fifth" is not 5; add ordinals if a faithful answer trips on one.
+fn number_words(s: &str) -> Vec<String> {
+    const UNITS: [&str; 20] = [
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+    ];
+    const TENS: [&str; 8] = [
+        "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    ];
+    let lower = s.to_lowercase();
+    // Each word, and whether punctuation follows it: a run of number words ends there, and
+    // where a units word follows a units word ("eight one").
+    let mut words: Vec<(&str, bool)> = Vec::new();
+    let mut start = None;
+    for (i, c) in lower
+        .char_indices()
+        .chain(std::iter::once((lower.len(), '.')))
+    {
+        let joins = c == ' ' || c == '-';
+        match (c.is_ascii_alphabetic(), start) {
+            (true, None) => start = Some(i),
+            (true, Some(_)) => {}
+            (false, Some(a)) => {
+                words.push((&lower[a..i], !joins));
+                start = None;
+            }
+            (false, None) => {
+                if let Some(last) = words.last_mut().filter(|_| !joins) {
+                    last.1 = true;
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let (mut total, mut current, mut any, mut last_unit) = (0u64, 0u64, false, false);
+    let mut flush = |total: &mut u64, current: &mut u64, any: &mut bool| {
+        if *any {
+            out.push((*total + *current).to_string());
+        }
+        (*total, *current, *any) = (0, 0, false);
+    };
+    for (w, breaks) in words {
+        let unit = UNITS.iter().position(|x| *x == w);
+        if unit.is_some() && last_unit {
+            flush(&mut total, &mut current, &mut any);
+        }
+        last_unit = unit.is_some();
+        if let Some(u) = unit {
+            current += u as u64;
+        } else if let Some(t) = TENS.iter().position(|x| *x == w) {
+            current += 20 + 10 * t as u64;
+        } else if w == "hundred" && any {
+            current = current.max(1) * 100;
+        } else if w == "thousand" && any {
+            total += current.max(1) * 1000;
+            current = 0;
+        } else if !(w == "and" && any) {
+            flush(&mut total, &mut current, &mut any);
+            continue;
+        }
+        any = true;
+        if breaks {
+            flush(&mut total, &mut current, &mut any);
+            last_unit = false;
+        }
+    }
+    flush(&mut total, &mut current, &mut any);
+    out
+}
+
 fn numbers(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
@@ -881,7 +977,12 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
         .map(|m| m["content"].as_str().unwrap_or("").to_string())
         .collect::<Vec<_>>()
         .join("\n");
-    let evidence = format!(" {} ", numbers(&shown).join(" "));
+    // Statutes write numbers as words ("twenty-one days"), so those count as shown too.
+    let evidence = format!(
+        " {} {} ",
+        numbers(&shown).join(" "),
+        number_words(&shown).join(" ")
+    );
     for n in numbers(&strip_non_claims(&out.answer)) {
         r.check(ctx, evidence.contains(&format!(" {n} ")), || {
             format!("number {n} in the answer appears in no fact, tool result or user turn")
@@ -952,7 +1053,48 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
     // Law served means the four-part answer. The record part is required only when a building
     // tool ran; a plain question about the law may not touch this building at all. An answer
     // the token cap cut short is exempt: the server already says it is incomplete.
-    if !provisions.is_empty() && !out.answer.contains("cut short by a length limit") {
+    // Time-sensitive answers (docs/design/law-passages.md §7), against the urgency the server
+    // counted and returned with the answer.
+    let u = &out.urgency;
+    let opening = out
+        .answer
+        .trim_start_matches(|c: char| c == '*' || c == '#' || c.is_whitespace())
+        .to_lowercase();
+    let asks_for_date = u["needs_date"] == true && u["level"].is_null();
+    if u["danger"] == true {
+        r.check(ctx, opening.starts_with("call 911 now"), || {
+            "danger was reported, and the answer does not open with \"Call 911 now\"".into()
+        });
+    } else if let Some(level) = u["level"].as_str() {
+        let word = match level {
+            "urgent" => "urgent",
+            "time_sensitive" => "time-sensitive",
+            _ => "coming up",
+        };
+        let head: String = opening.chars().take(300).collect();
+        r.check(ctx, head.contains(word), || {
+            format!("the answer does not open by naming the level ({word})")
+        });
+        if let Some(days) = u["days_left"].as_i64().filter(|d| *d > 0) {
+            r.check(
+                ctx,
+                numbers(&out.answer).contains(&days.to_string()),
+                || format!("the answer never states the {days} days left"),
+            );
+        }
+    }
+    if asks_for_date {
+        r.check(
+            ctx,
+            answer.contains("date") && out.answer.contains('?'),
+            || "a deadline came with no date, and the answer does not ask for it".into(),
+        );
+    }
+
+    if !provisions.is_empty()
+        && !asks_for_date
+        && !out.answer.contains("cut short by a length limit")
+    {
         let lower = out.answer.to_lowercase();
         let at: Vec<Option<usize>> = ANSWER_PARTS
             .iter()
@@ -1144,6 +1286,51 @@ fn links_and_referrals_are_read_from_the_text() {
     assert!(names_free_help("Call (212) 979-0611 on Monday."));
     assert!(!names_free_help("File a complaint with 311."));
     assert!(!names_free_help("Legal Aid can help."));
+}
+
+#[test]
+fn number_words_read_as_digits() {
+    let s = "within twenty-one days; nineteen hundred seventy-eight; one hundred twenty degrees; \
+             fifty square feet in the aggregate; the fifth day";
+    assert_eq!(number_words(s), ["21", "1978", "120", "50"]);
+    assert!(number_words("no numbers here, none at all").is_empty());
+}
+
+/// The urgency checks fire on the defects they name.
+#[tokio::test]
+async fn urgency_checks_fail_on_their_defects() {
+    let cases = load_cases();
+    let fires = |case: &Case, out: &Outcome, needle: &str| {
+        let mut r = Report::default();
+        check(case, "/agent/chat", out, Mode::Replay, &mut r);
+        assert!(
+            r.failures.iter().any(|f| f.contains(needle)),
+            "expected a failure containing {needle:?}, got {:?}",
+            r.failures
+        );
+    };
+    for (id, bad, needle) in [
+        (
+            "gas-smell-danger",
+            "The landlord must repair gas lines.",
+            "Call 911 now",
+        ),
+        (
+            "court-date-no-date",
+            "Bring your lease and rent receipts.",
+            "does not ask for it",
+        ),
+        (
+            "urgent-court-date-tomorrow",
+            "**What the law says**\nSection 732 sets a ten-day answer period.",
+            "naming the level",
+        ),
+    ] {
+        let mut case = cases.iter().find(|c| c.id == id).expect(id).clone();
+        let at = case.upstream.len() - 1;
+        case.upstream[at] = json!({ "answer": bad });
+        fires(&case, &run(&case, "/agent/chat", None).await, needle);
+    }
 }
 
 /// The checks are code too. Break a passing conversation in each way a check claims to

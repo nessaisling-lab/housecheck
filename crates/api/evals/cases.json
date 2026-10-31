@@ -79,7 +79,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "heat" }], ["find_legal_help", {}]] },
-      { "answer": "**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNYC311 (KA-01036): from October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nNo heat in heat season may fall below those minimums, and the open class-C violation suggests HPD has already found a serious condition here; whether either bears on your apartment is for a legal professional to confirm. HouseCheck's own checklist of what to keep: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number.\n\n**A question to ask a legal professional**\n\"My apartment has had no heat, and my building has an open class-C HPD violation. How does Real Property Law § 235-b apply to that?\" Housing Court Answers (212-962-4795) or the Met Council Tenants Rights Hotline (212-979-0611) can advise; add your own dates and readings before asking." }
+      { "answer": "Urgent: no heat in your apartment.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNYC311 (KA-01036): from October 1 through May 31, the inside must be at least 62°F between 10 PM and 6 AM at all times, and at least 68°F between 6 AM and 10 PM whenever it is below 55°F outside. HPD investigates maintenance complaints filed through 311, and NYC311 says that if the problem isn't fixed you can take legal action in Housing Court. NY Real Property Law § 235-b makes every residential lease carry a warranty that the premises are fit for human habitation.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nNo heat in heat season may fall below those minimums, and the open class-C violation suggests HPD has already found a serious condition here; whether either bears on your apartment is for a legal professional to confirm. HouseCheck's own checklist of what to keep: the dates and times the heat was out, indoor temperatures photographed with a timestamp, and every 311 complaint number.\n\n**A question to ask a legal professional**\n\"My apartment has had no heat, and my building has an open class-C HPD violation. How does Real Property Law § 235-b apply to that?\" Housing Court Answers (212-962-4795) or the Met Council Tenants Rights Hotline (212-979-0611) can advise; add your own dates and readings before asking." }
     ],
     "expect": {
       "status": 200,
@@ -590,7 +590,7 @@
     ] },
     "upstream": [
       { "tools": [["lookup_law", { "topic": "lead_paint" }], ["find_legal_help", {}]] },
-      { "answer": "**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC Administrative Code § 27-2056.6 says lead-based paint in a dwelling unit in a multiple dwelling where a child of applicable age resides is a class C immediately hazardous violation if the paint is peeling or is on a deteriorated subsurface. § 27-2056.4 makes the owner of such a building investigate for peeling paint and other lead-paint conditions at least once a year, and more often when an occupant complains or asks for an inspection.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nPeeling paint where a young child lives may be treated as the most serious class of violation; whether these sections apply to a given apartment depends on facts a legal professional should confirm.\n\n**A question to ask a legal professional**\n\"There's peeling paint in my apartment and a young child lives here. How do Administrative Code §§ 27-2056.4 and 27-2056.6 apply?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
+      { "answer": "Urgent: peeling paint where a young child lives.\n\n**What the record shows**\nThis question is about the law, not this building's record.\n\n**What the law says**\nNYC Administrative Code § 27-2056.6 says lead-based paint in a dwelling unit in a multiple dwelling where a child of applicable age resides is a class C immediately hazardous violation if the paint is peeling or is on a deteriorated subsurface. § 27-2056.4 makes the owner of such a building investigate for peeling paint and other lead-paint conditions at least once a year, and more often when an occupant complains or asks for an inspection.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nPeeling paint where a young child lives may be treated as the most serious class of violation; whether these sections apply to a given apartment depends on facts a legal professional should confirm.\n\n**A question to ask a legal professional**\n\"There's peeling paint in my apartment and a young child lives here. How do Administrative Code §§ 27-2056.4 and 27-2056.6 apply?\" Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking." }
     ],
     "expect": {
       "status": 200,
@@ -616,6 +616,59 @@
       "tools": ["lookup_law", "find_legal_help"],
       "must_call": ["lookup_law", "find_legal_help"],
       "answer_contains": ["27-2017.3", "thirty square feet"]
+    }
+  },
+  {
+    "id": "urgent-court-date-tomorrow",
+    "kind": "synthetic",
+    "why": "A court date tomorrow is Urgent: the answer names the level and the days left that the server counted, puts them in the lawyer question, lists what to bring and who to call today (docs/design/law-passages.md §7).",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "My nonpayment court date is tomorrow and I haven't answered the petition. What does the law say?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", {"topic": "eviction", "about": "answer the petition"}], ["find_legal_help", {}]] },
+      { "answer": "Urgent: your court date is tomorrow, 1 day left.\n\n**What the record shows**\nThis building has 1 open class-C violation on record (HPD), a class HPD calls immediately hazardous.\n\n**What the law says**\nNY Real Property Actions and Proceedings Law § 732 says that in a nonpayment proceeding, in a court whose rules apply that section, if the respondent fails to answer within ten days from the date of service, the judge shall render judgment in favor of the petitioner.\n\n**What this might mean (HouseCheck's inference, not legal advice)**\nIf that section applies in your court and the answer period has run, the time to act may be very short; a legal professional can say where your case stands.\n\n**A question to ask a legal professional**\n\"My nonpayment court date is tomorrow, 1 day from now, and I haven't answered the petition. How does Real Property Actions and Proceedings Law § 732 apply to me?\" Add your own facts before asking.\n\nWhat to bring: every notice or court paper you receive and the date it arrived, your lease and any renewals, and rent receipts or bank records for each payment.\n\nCall Housing Court Answers today at 212-962-4795." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["Urgent", "1 day", "§ 732", "212-962-4795"]
+    }
+  },
+  {
+    "id": "court-date-no-date",
+    "kind": "synthetic",
+    "why": "A deadline with no date: ask for the date and the paper first, and say why, before any answer (Aisling, 2026-10-31: nothing vague, and free services are stretched thin).",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "My court date is soon. What should I bring?" }
+    ] },
+    "upstream": [
+      { "answer": "What is the exact date of your court date, and what paper did you receive? With the date, a free legal service can act fastest on a complete, dated request, and those services are stretched thin, so a dated request gets you help sooner." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [],
+      "answer_contains": ["exact date"]
+    }
+  },
+  {
+    "id": "gas-smell-danger",
+    "kind": "synthetic",
+    "why": "Danger comes first: the answer opens with \"Call 911 now.\" before anything else.",
+    "live": true,
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "I smell gas in my apartment. Is the landlord responsible for fixing it?" }
+    ] },
+    "upstream": [
+      { "answer": "Call 911 now. Once everyone is safe, ask me again and I'll look up what the law says and who can help for free." }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [],
+      "answer_contains": ["Call 911 now"]
     }
   }
 ]

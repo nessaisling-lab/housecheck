@@ -4673,6 +4673,25 @@ mod tests {
         assert_eq!(card2.building.rent_stab_units, None);
     }
 
+    /// Building 1: 12 of 40 apartments stabilized. Building 2: 8 apartments, no record.
+    /// Neither is ever "covered"; the wire strings are what `HealthCard.tsx` matches on.
+    #[tokio::test]
+    async fn building_card_states_good_cause_without_scoring_it() {
+        let server = test_server();
+        let one: serde_json::Value = server.get("/building/3000010001").await.json();
+        assert_eq!(one["good_cause"]["status"], "partly_stabilized");
+        let two: serde_json::Value = server.get("/building/3000020002").await.json();
+        assert_eq!(two["good_cause"]["status"], "might_be_covered");
+        assert!(two["good_cause"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("10 or fewer"));
+        assert_eq!(
+            two["building"]["good_cause_exemption"],
+            serde_json::Value::Null
+        );
+    }
+
     #[tokio::test]
     async fn buildings_list_returns_scored_items() {
         let server = test_server();

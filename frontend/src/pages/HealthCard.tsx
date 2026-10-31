@@ -336,6 +336,17 @@ export default function HealthCard() {
     building.stabilization === "likely" ? "Yes" : building.stabilization === "unverified" ? "Unverified" : "No";
   const stabColor =
     building.stabilization === "likely" ? "var(--hc-strong)" : building.stabilization === "unverified" ? "var(--hc-unverified)" : "var(--hc-ink)";
+  // Never "Yes": public records can rule Good Cause out, not in (coverage is per apartment).
+  const gc = building.good_cause;
+  const goodCauseLabel = !gc
+    ? "Unverified"
+    : gc.status === "likely_not_covered"
+      ? "Likely not covered"
+      : gc.status === "partly_stabilized"
+        ? "Not for stabilized units"
+        : gc.status === "might_be_covered"
+          ? "Might be covered"
+          : "No exemption found";
   const rentPct = rentResult?.pct_vs_median ?? building.rent?.pct_vs_median ?? null;
   const rentColor = rentPct == null ? "var(--hc-unverified)" : rentPct > 10 ? "var(--hc-concern)" : rentPct >= -10 ? "var(--hc-strong)" : "var(--hc-solid)";
   const fmr = rentResult?.hud_fmr ?? building.rent?.hud_fmr ?? null;
@@ -510,14 +521,15 @@ export default function HealthCard() {
             rent-history request takes minutes.
           </p>
           <p className="mt-3 text-[0.9375rem] leading-relaxed" style={{ color: "var(--hc-ink-2)" }}>
-            Public records can't show whether Good Cause covers your apartment. Your landlord must
+            {gc ? `${gc.message} ` : ""}
+            Public records can't confirm whether Good Cause covers your apartment. Your landlord must
             tell you in writing with your lease or renewal. Not sure? Call 311 and ask for the
             Tenant Helpline.
           </p>
           <dl className="mt-4 space-y-2.5">
             {[
               ["Rent stabilized", stabLabel],
-              ["Good Cause covered", "Unverified"],
+              ["Good Cause Eviction", goodCauseLabel],
             ].map(([l, val]) => (
               <div key={l as string} className="flex justify-between">
                 <dt className="hc-row-label">{l}</dt>
@@ -793,8 +805,8 @@ export default function HealthCard() {
             rows={[
               { label: "Rent stabilized", value: <span style={{ color: stabColor }}>{stabLabel}</span> },
               {
-                label: "Good Cause covered",
-                value: "Unverified",
+                label: "Good Cause Eviction",
+                value: goodCauseLabel,
               },
             ]}
             sentence={

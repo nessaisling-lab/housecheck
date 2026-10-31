@@ -17,6 +17,12 @@ pub struct Building {
     /// (JustFix nyc-doffer, latest year 2024). `Some(n>0)` pairs with `rent_stabilized =
     /// Some(true)`; `Some(0)` with `Some(false)`; `None` when the building has no DOF record.
     pub rent_stab_units: Option<i32>,
+    /// A Good Cause Eviction exemption public records show for the whole building, chosen at
+    /// ingest. `None` means none was found, which is not the same as covered.
+    pub good_cause_exemption: Option<GoodCauseExemption>,
+    /// What backs `good_cause_exemption`: the certificate of occupancy's date (YYYY-MM-DD) or
+    /// the housing program's name. `None` for the exemptions read from the building class.
+    pub good_cause_detail: Option<String>,
     pub has_elevator: bool,
     pub near_ada_subway_m: Option<i32>,
     /// ZIP code (PLUTO `zipcode`): the area the neighborhood figures below are counted over.
@@ -307,6 +313,195 @@ impl Stabilization {
     }
 }
 
+/// A Good Cause Eviction exemption (RPL § 214) that public records show for a whole building.
+///
+/// The building-class ones follow JustFix's Good Cause screener (PLUTO `bldgclass`), as
+/// Aisling decided on 2026-10-31, as does counting condo rentals (RR) as condos and counting a
+/// certificate of occupancy of any type. A renovation's certificate is kept apart from a new
+/// building's so the card can say it is the less certain case.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GoodCauseExemption {
+    /// § 214(7). PLUTO class R*.
+    Condo,
+    /// § 214(7). PLUTO C6, C8, CC, D0, DC, D4.
+    Coop,
+    /// § 214(12). PLUTO H* except H8.
+    Hotel,
+    /// § 214(13). PLUTO H8.
+    Dormitory,
+    /// § 214(10). PLUTO I*.
+    CareFacility,
+    /// § 214(14). PLUTO M*.
+    Religious,
+    /// PLUTO W*: school and college buildings, which JustFix treats as exempt.
+    School,
+    /// § 214(11). PLUTO CM.
+    ManufacturedHomes,
+    /// § 214(5)/(6): public or subsidized housing, from a DOF tax exemption.
+    Subsidized,
+    /// § 214(8): a new building's certificate of occupancy dated 2009-01-01 or later.
+    NewBuilding,
+    /// § 214(8), the less certain case: a certificate after a renovation (DOB alteration job).
+    Renovation,
+}
+
+impl GoodCauseExemption {
+    pub const ALL: [Self; 11] = [
+        Self::Condo,
+        Self::Coop,
+        Self::Hotel,
+        Self::Dormitory,
+        Self::CareFacility,
+        Self::Religious,
+        Self::School,
+        Self::ManufacturedHomes,
+        Self::Subsidized,
+        Self::NewBuilding,
+        Self::Renovation,
+    ];
+
+    /// The stored and wire string. `wire_form_matches_serde` pins it against serde.
+    pub fn as_wire(self) -> &'static str {
+        match self {
+            Self::Condo => "condo",
+            Self::Coop => "coop",
+            Self::Hotel => "hotel",
+            Self::Dormitory => "dormitory",
+            Self::CareFacility => "care_facility",
+            Self::Religious => "religious",
+            Self::School => "school",
+            Self::ManufacturedHomes => "manufactured_homes",
+            Self::Subsidized => "subsidized",
+            Self::NewBuilding => "new_building",
+            Self::Renovation => "renovation",
+        }
+    }
+
+    pub fn from_wire(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|e| e.as_wire() == s)
+    }
+}
+
+/// How the Health Card states Good Cause coverage. Never "covered": coverage is per apartment
+/// and turns on facts no public record holds (the landlord's units statewide, whether they live
+/// there, the rent), so the most public data can say is that no exemption showed up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GoodCauseStatus {
+    /// A whole-building exemption, or every apartment stabilized.
+    LikelyNotCovered,
+    /// Some apartments stabilized (those are exempt, § 214(5)), the others unknown.
+    PartlyStabilized,
+    /// 10 or fewer apartments: the small-landlord and owner-occupied exemptions can't be seen.
+    MightBeCovered,
+    /// 11 or more apartments and nothing in the records.
+    NoExemptionFound,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GoodCause {
+    pub status: GoodCauseStatus,
+    /// Human wording shown to tenants.
+    pub message: String,
+}
+
+impl GoodCause {
+    /// Whole-building exemptions first, then stabilization, then the unit count.
+    ///
+    /// ponytail: one reason per building. A building with a renovation certificate and some
+    /// stabilized apartments shows the certificate; the stabilization section still shows the
+    /// apartments.
+    pub fn from_building(b: &Building) -> Self {
+        use GoodCauseStatus::*;
+        let detail = b.good_cause_detail.as_deref().unwrap_or("");
+        let (status, message) = match b.good_cause_exemption {
+            Some(e) => (
+                LikelyNotCovered,
+                match e {
+                    GoodCauseExemption::Condo => {
+                        "Likely not covered: this is a condo building. Good Cause doesn't cover \
+                         condos or co-ops."
+                            .to_string()
+                    }
+                    GoodCauseExemption::Coop => {
+                        "Likely not covered: this is a co-op building. Good Cause doesn't cover \
+                         condos or co-ops."
+                            .to_string()
+                    }
+                    GoodCauseExemption::Hotel => {
+                        "Likely not covered: city tax records list this as a hotel or rooming \
+                         house."
+                            .to_string()
+                    }
+                    GoodCauseExemption::Dormitory => {
+                        "Likely not covered: city tax records list this as a dormitory.".to_string()
+                    }
+                    GoodCauseExemption::CareFacility => {
+                        "Likely not covered: city tax records list this as a hospital, nursing \
+                         home or care facility."
+                            .to_string()
+                    }
+                    GoodCauseExemption::Religious => {
+                        "Likely not covered: city tax records list this as a religious building."
+                            .to_string()
+                    }
+                    GoodCauseExemption::School => {
+                        "Likely not covered: city tax records list this as a school or college \
+                         building."
+                            .to_string()
+                    }
+                    GoodCauseExemption::ManufacturedHomes => {
+                        "Likely not covered: this is a manufactured home park.".to_string()
+                    }
+                    GoodCauseExemption::Subsidized => format!(
+                        "Likely not covered: public or subsidized housing ({detail}). Rents here \
+                         are set under a government program."
+                    ),
+                    GoodCauseExemption::NewBuilding => format!(
+                        "Likely not covered: newer building. Its certificate of occupancy was \
+                         issued {detail}, and Good Cause doesn't cover buildings with one from \
+                         2009 or later."
+                    ),
+                    GoodCauseExemption::Renovation => format!(
+                        "Likely not covered: the building got a certificate of occupancy after a \
+                         renovation, issued {detail}. Whether a renovation certificate counts is \
+                         less certain, so check the Good Cause notice on your lease."
+                    ),
+                },
+            ),
+            None => match (b.rent_stab_units, b.units_res) {
+                (Some(stab), units) if stab > 0 && stab >= units => (
+                    LikelyNotCovered,
+                    "Likely not covered: rent-stabilized. Stabilized apartments have their own, \
+                     stronger protection."
+                        .to_string(),
+                ),
+                (Some(stab), _) if stab > 0 => (
+                    PartlyStabilized,
+                    "Rent-stabilized apartments here are not covered (they have stronger \
+                     protection). Other apartments might be."
+                        .to_string(),
+                ),
+                (_, units) if units <= 10 => (
+                    MightBeCovered,
+                    "Might be covered: it depends on your landlord. Good Cause doesn't cover \
+                     landlords who own 10 or fewer apartments in New York State, or who live in \
+                     a building with 10 or fewer apartments."
+                        .to_string(),
+                ),
+                _ => (
+                    NoExemptionFound,
+                    "No exemption found in public records. Good Cause may cover apartments \
+                     here; your rent and your lease's Good Cause notice decide."
+                        .to_string(),
+                ),
+            },
+        };
+        GoodCause { status, message }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HealthCard {
     pub building: Building,
@@ -324,6 +519,8 @@ pub struct HealthCard {
     pub open_violation_total: u32,
     pub access_likelihood: String, // "Higher" | "Mixed" | "Lower"
     pub stabilization: Stabilization,
+    /// What public records suggest about Good Cause Eviction. Not part of any score.
+    pub good_cause: GoodCause,
     /// How long this building's violations actually take to get fixed. `None` when the
     /// record cannot support the claim — see [`RepairSpeed`].
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -647,6 +844,70 @@ mod tests {
             Stabilization::from_units(None, None).status,
             StabilizationStatus::Unverified
         );
+    }
+
+    #[test]
+    fn good_cause_wire_form_matches_serde() {
+        for e in GoodCauseExemption::ALL {
+            assert_eq!(
+                serde_json::to_string(&e).unwrap(),
+                format!("\"{}\"", e.as_wire())
+            );
+            assert_eq!(GoodCauseExemption::from_wire(e.as_wire()), Some(e));
+        }
+        assert_eq!(GoodCauseExemption::from_wire("covered"), None);
+        assert_eq!(
+            serde_json::to_string(&GoodCauseStatus::PartlyStabilized).unwrap(),
+            "\"partly_stabilized\""
+        );
+    }
+
+    /// One building per branch, in the order `from_building` tries them.
+    #[test]
+    fn good_cause_never_says_covered() {
+        let b = |units: i32, stab: Option<i32>, e: Option<GoodCauseExemption>, d: Option<&str>| {
+            GoodCause::from_building(&Building {
+                bbl: "3000010001".into(),
+                address: String::new(),
+                year_built: 1920,
+                num_floors: 4,
+                units_res: units,
+                tract_geoid: String::new(),
+                rent_stabilized: stab.map(|n| n > 0),
+                rent_stab_units: stab,
+                good_cause_exemption: e,
+                good_cause_detail: d.map(str::to_string),
+                has_elevator: false,
+                near_ada_subway_m: None,
+                zip: None,
+                neighborhood: None,
+                complaints_311_per_1k_homes: None,
+                latitude: None,
+                longitude: None,
+            })
+        };
+        use GoodCauseExemption as E;
+        use GoodCauseStatus as S;
+
+        // A whole-building exemption wins over stabilization and the unit count.
+        let new = b(40, Some(12), Some(E::NewBuilding), Some("2015-03-02"));
+        assert_eq!(new.status, S::LikelyNotCovered);
+        assert!(new.message.contains("2015-03-02"), "{}", new.message);
+        let reno = b(40, None, Some(E::Renovation), Some("2019-06-01"));
+        assert!(reno.message.contains("less certain"), "{}", reno.message);
+        let ml = b(200, None, Some(E::Subsidized), Some("Mitchell-Lama"));
+        assert!(ml.message.contains("Mitchell-Lama"), "{}", ml.message);
+
+        assert_eq!(b(12, Some(12), None, None).status, S::LikelyNotCovered);
+        assert_eq!(b(40, Some(12), None, None).status, S::PartlyStabilized);
+        assert_eq!(b(8, Some(0), None, None).status, S::MightBeCovered);
+        assert_eq!(b(10, None, None, None).status, S::MightBeCovered);
+        assert_eq!(b(11, None, None, None).status, S::NoExemptionFound);
+
+        for e in E::ALL {
+            let m = b(40, None, Some(e), Some("x")).message;
+            assert!(m.starts_with("Likely not covered"), "{e:?}: {m}");
+        }
     }
 
     /// `days_open` decides how old a violation looks, so its failure modes matter more

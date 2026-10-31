@@ -12,7 +12,7 @@
 // it). The parsers below normalize all of that.
 
 use anyhow::{Context, Result};
-use model::{Building, Violation, ViolationClass};
+use model::{Building, GoodCauseExemption, Violation, ViolationClass};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, BufReader};
@@ -113,7 +113,10 @@ pub fn parse_pluto(v: &Value) -> Option<Building> {
         tract_geoid,
         rent_stabilized: None, // filled later from the JustFix nyc-doffer CSV; None = unknown
         rent_stab_units: None, // filled later from the JustFix nyc-doffer CSV
-        has_elevator: false,   // filled from DOB
+        // From the building class here; the CO and DOF exemptions are added in run_real.
+        good_cause_exemption: s(v, "bldgclass").as_deref().and_then(good_cause_class),
+        good_cause_detail: None,
+        has_elevator: false,     // filled from DOB
         near_ada_subway_m: None, // filled from MTA
         zip: s(v, "zipcode").as_deref().and_then(zip5),
         neighborhood: None, // filled from the tract-to-NTA table in run_real
@@ -121,6 +124,186 @@ pub fn parse_pluto(v: &Value) -> Option<Building> {
         latitude: None,     // filled from the PLUTO coords map in run_real
         longitude: None,    // filled from the PLUTO coords map in run_real
     })
+}
+
+/// The Good Cause exemption a PLUTO building class shows, by JustFix's screener rule
+/// (`^[RIMHW]|C8|C6|CC|D0|DC|D4`) plus CM, the one manufactured home park.
+pub fn good_cause_class(bldgclass: &str) -> Option<GoodCauseExemption> {
+    use GoodCauseExemption::*;
+    let c = bldgclass.trim();
+    match c {
+        "C6" | "C8" | "CC" | "D0" | "DC" | "D4" => Some(Coop),
+        "H8" => Some(Dormitory),
+        "CM" => Some(ManufacturedHomes),
+        _ => match c.chars().next()? {
+            'R' => Some(Condo),
+            'H' => Some(Hotel),
+            'I' => Some(CareFacility),
+            'M' => Some(Religious),
+            'W' => Some(School),
+            _ => None,
+        },
+    }
+}
+
+/// DOF exemption codes (`muvi-b6kx`, decoded by `myn9-hwsy`) for whole-building public or
+/// subsidized housing, named for tenants. 421-a, 467-m, 485-x and J-51 are left out: they mean
+/// stabilized apartments, which the stabilization counts already show apartment by apartment.
+pub const DOF_SUBSIDY_CODES: [(&str, &str); 18] = [
+    ("5101", "NYCHA public housing"),
+    ("5102", "state public housing"),
+    ("5105", "state-assisted housing"),
+    ("5105SR", "state-assisted housing"),
+    ("5106", "HDFC or shelter-rent housing"),
+    ("5107", "limited-dividend housing"),
+    ("5108", "redevelopment-company housing"),
+    ("5109", "Mitchell-Lama"),
+    ("5112", "UDAAP affordable housing"),
+    ("5112-1", "UDAAP affordable housing"),
+    ("5112-2", "UDAAP affordable housing"),
+    ("5112-3", "UDAAP affordable housing"),
+    ("5130", "Article XI affordable housing"),
+    ("5130SR", "Article XI affordable housing"),
+    ("1301", "low-income housing tax credit"),
+    ("1301SR", "low-income housing tax credit"),
+    ("1506", "HDFC low-income housing"),
+    ("1507", "HDFC shelter housing"),
+];
+
+/// The newest certificates of occupancy dated 2009-01-01 or later on one BBL, as YYYY-MM-DD.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct LatestCo {
+    pub new_building: Option<String>,
+    pub renovation: Option<String>,
+}
+
+/// § 214(8) reaches certificates issued on or after 2009-01-01 "for thirty years". Every such
+/// date is still inside its thirty years until 2039, and Article 6-A ends in 2034, so no upper
+/// age is checked. `until` (YYYY-MM-DD) drops typo dates in the future: `bs8b-p36w` has a 2105.
+pub fn note_co(
+    cos: &mut HashMap<String, LatestCo>,
+    bbl: &str,
+    new_building: bool,
+    date: &str,
+    until: &str,
+) {
+    if date < "2009-01-01" || date > until {
+        return;
+    }
+    let co = cos.entry(bbl.to_string()).or_default();
+    let slot = if new_building {
+        &mut co.new_building
+    } else {
+        &mut co.renovation
+    };
+    if slot.as_deref().is_none_or(|d| d < date) {
+        *slot = Some(date.to_string());
+    }
+}
+
+/// DOB job types: BIS says `NB`/`A1`; DOB NOW says "NEW BUILDING", "New Building",
+/// "CO - New Building with Existing Elements to Remain", "ALTERATION TYPE 1", "Alteration CO".
+pub fn is_new_building_job(job_type: &str) -> bool {
+    let j = job_type.trim();
+    j.eq_ignore_ascii_case("NB") || j.to_ascii_lowercase().contains("new building")
+}
+
+/// `2021-04-08T00:00:00.000` (Socrata floating timestamp) to `2021-04-08`.
+pub fn soda_date(raw: &str) -> Option<String> {
+    let d = raw.get(0..10)?;
+    let ok = d.bytes().enumerate().all(|(i, b)| {
+        if i == 4 || i == 7 {
+            b == b'-'
+        } else {
+            b.is_ascii_digit()
+        }
+    });
+    ok.then(|| d.to_string())
+}
+
+/// DOB NOW's `c_of_o_issuance_date` is text, `02/15/22 11:08:46 AM`, so it is parsed here. The
+/// dataset starts in 2021, so a two-digit year is 20YY.
+pub fn dobnow_date(raw: &str) -> Option<String> {
+    let mut parts = raw.split_whitespace().next()?.split('/');
+    let (m, d, y) = (parts.next()?, parts.next()?, parts.next()?);
+    let all_digits = |s: &str, n: usize| s.len() == n && s.bytes().all(|b| b.is_ascii_digit());
+    (all_digits(m, 2) && all_digits(d, 2) && all_digits(y, 2) && parts.next().is_none())
+        .then(|| format!("20{y}-{m}-{d}"))
+}
+
+/// The FOIL list's `AP_A_ISSUE_DATE`, `20060119`, to `2006-01-19`.
+pub fn foil_date(raw: &str) -> Option<String> {
+    let r = raw.trim();
+    (r.len() == 8 && r.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| format!("{}-{}-{}", &r[0..4], &r[4..6], &r[6..8]))
+}
+
+/// DOB's certificates of occupancy from 2000 to 2012-07-11, obtained by JustFix under FOIL
+/// request 2024-810-4230. NYC Open Data's `bs8b-p36w` starts on 2012-07-12, so this is the only
+/// public copy of the 2009-to-mid-2012 certificates. A one-time file: it does not change.
+/// Aisling chose to use it (2026-10-31); it states no licence, so it is credited in the sources.
+pub const FOIL_CO_URL: &str =
+    "https://justfix-data.s3.amazonaws.com/FOIL_2024-810-4230_COList_2000-2012.csv";
+
+/// Stream the FOIL list into `cos` for the BBLs in `bbl_set`; returns the rows read. Columns are
+/// found by header name. The file has no quoted fields (27 on every row, checked 2026-10-31).
+pub fn fetch_foil_cos(
+    client: &reqwest::blocking::Client,
+    bbl_set: &HashSet<String>,
+    until: &str,
+    cos: &mut HashMap<String, LatestCo>,
+) -> Result<usize> {
+    let resp = client
+        .get(FOIL_CO_URL)
+        .send()
+        .with_context(|| format!("GET {FOIL_CO_URL}"))?
+        .error_for_status()
+        .with_context(|| format!("bad status for {FOIL_CO_URL}"))?;
+    let mut lines = BufReader::new(resp).lines();
+    let header = lines.next().context("FOIL CO list is empty")??;
+    let col = |name: &str| {
+        header
+            .split(',')
+            .position(|h| h.trim() == name)
+            .with_context(|| format!("FOIL CO list has no {name} column"))
+    };
+    let (job, date, bbl) = (col("J_JOB_TYPE")?, col("AP_A_ISSUE_DATE")?, col("GIS_BBL")?);
+    let mut n = 0;
+    for line in lines {
+        let line = line.context("read FOIL CO line")?;
+        let cols: Vec<&str> = line.split(',').collect();
+        n += 1;
+        let (Some(j), Some(d), Some(b)) = (cols.get(job), cols.get(date), cols.get(bbl)) else {
+            continue;
+        };
+        if let (Some(d), true) = (foil_date(d), bbl_set.contains(b.trim())) {
+            note_co(cos, b.trim(), is_new_building_job(j), &d, until);
+        }
+    }
+    Ok(n)
+}
+
+/// The exemption shown when the building class shows none: subsidized housing, then a new
+/// building's certificate, then a renovation's (the less certain case, last).
+pub fn later_exemption(
+    program: Option<&str>,
+    co: Option<&LatestCo>,
+) -> (Option<GoodCauseExemption>, Option<String>) {
+    use GoodCauseExemption::*;
+    if let Some(p) = program {
+        return (Some(Subsidized), Some(p.to_string()));
+    }
+    match co {
+        Some(LatestCo {
+            new_building: Some(d),
+            ..
+        }) => (Some(NewBuilding), Some(d.clone())),
+        Some(LatestCo {
+            renovation: Some(d),
+            ..
+        }) => (Some(Renovation), Some(d.clone())),
+        _ => (None, None),
+    }
 }
 
 /// Normalized BBL + coordinates for a PLUTO row, for geo joins keyed by the same BBL the
@@ -801,5 +984,84 @@ mod tests {
         assert_eq!(parse_rentstab_row("3018420001,5"), None);
         // Non-10-digit BBL.
         assert_eq!(parse_rentstab_row("999,1,,2,,3,,4,,5,,6,,7,"), None);
+    }
+
+    /// Building classes, the three date formats, and which exemption wins.
+    #[test]
+    fn good_cause_exemptions_from_public_records() {
+        use GoodCauseExemption::*;
+        // Classes from the 250-building pilot (2026-10-31) plus JustFix's rule.
+        for (class, want) in [
+            ("D4", Some(Coop)),
+            ("C6", Some(Coop)),
+            ("RR", Some(Condo)),
+            ("R4", Some(Condo)),
+            ("H8", Some(Dormitory)),
+            ("H3", Some(Hotel)),
+            ("I9", Some(CareFacility)),
+            ("M1", Some(Religious)),
+            ("W6", Some(School)),
+            ("CM", Some(ManufacturedHomes)),
+            ("D1", None),
+            ("C0", None),
+            ("B3", None),
+            ("", None),
+        ] {
+            assert_eq!(good_cause_class(class), want, "{class}");
+        }
+
+        assert_eq!(
+            soda_date("2021-04-08T00:00:00.000").as_deref(),
+            Some("2021-04-08")
+        );
+        assert_eq!(soda_date("04/08/2021"), None);
+        assert_eq!(
+            dobnow_date("02/15/22 11:08:46 AM").as_deref(),
+            Some("2022-02-15")
+        );
+        assert_eq!(dobnow_date("2/15/22 11:08:46 AM"), None);
+        assert_eq!(foil_date("20100119").as_deref(), Some("2010-01-19"));
+        assert_eq!(foil_date("        "), None);
+        assert!(is_new_building_job("NB"));
+        assert!(is_new_building_job(
+            "CO - New Building with Existing Elements to Remain"
+        ));
+        assert!(!is_new_building_job("A1"));
+        assert!(!is_new_building_job("Alteration CO"));
+
+        let mut cos = HashMap::new();
+        let until = "2026-12-31";
+        note_co(&mut cos, "1", false, "2008-12-31", until); // before 2009: not an exemption
+        note_co(&mut cos, "1", false, "2105-11-05", until); // a typo in bs8b-p36w
+        assert!(cos.is_empty());
+        note_co(&mut cos, "1", false, "2015-01-01", until);
+        note_co(&mut cos, "1", false, "2012-01-01", until); // older: kept out
+        note_co(&mut cos, "1", true, "2009-01-01", until);
+        assert_eq!(
+            cos["1"],
+            LatestCo {
+                new_building: Some("2009-01-01".into()),
+                renovation: Some("2015-01-01".into()),
+            }
+        );
+
+        // Subsidy first, then a new building's certificate, then a renovation's.
+        assert_eq!(
+            later_exemption(Some("Mitchell-Lama"), cos.get("1")),
+            (Some(Subsidized), Some("Mitchell-Lama".into()))
+        );
+        assert_eq!(
+            later_exemption(None, cos.get("1")),
+            (Some(NewBuilding), Some("2009-01-01".into()))
+        );
+        let reno = LatestCo {
+            new_building: None,
+            renovation: Some("2015-01-01".into()),
+        };
+        assert_eq!(
+            later_exemption(None, Some(&reno)),
+            (Some(Renovation), Some("2015-01-01".into()))
+        );
+        assert_eq!(later_exemption(None, None), (None, None));
     }
 }

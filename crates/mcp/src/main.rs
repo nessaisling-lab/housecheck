@@ -633,6 +633,8 @@ mod tests {
             tract_geoid: "36047024900".into(),
             rent_stabilized: None,
             rent_stab_units: None,
+            good_cause_exemption: None,
+            good_cause_detail: None,
             has_elevator: false,
             near_ada_subway_m: Some(897),
             zip: None,

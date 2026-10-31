@@ -134,7 +134,7 @@ free `GET /api/v1/key`, so a rejected key costs nothing.
 
 ## What the live runs found
 
-Six billed runs, $0.6758 in all:
+Seven billed runs, $0.9037 in all:
 - **Run 1** (2026-10-29): old prompt, $0.1129, 10 of 17 passed.
 - **Re-run of the 7 failures:** $0.0451, 3 passed.
 - **Run 3:** new prompt (`db3fee8a55844c3e`), $0.1197, 14 of 17 passed.

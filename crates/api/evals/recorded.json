@@ -3399,5 +3399,150 @@
       ],
       "upstream_calls": 2
     }
+  },
+  {
+    "id": "violations-for-unheld-bbl",
+    "kind": "recorded",
+    "why": "Violations for a building HouseCheck does not hold are an error, not a sourced count of zero. Live, the model may ask get_building instead; either lookup must come back as the curated-set error.",
+    "agent_version": "a68e7833294c0fc1",
+    "model": "anthropic/claude-haiku-4.5",
+    "live": true,
+    "request": {
+      "bbl": "3000010001",
+      "messages": [
+        {
+          "content": "Does BBL 1013920038 have any open violations?",
+          "role": "user"
+        }
+      ]
+    },
+    "upstream": [
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": null,
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"bbl\": \"1013920038\"}",
+                      "name": "get_building"
+                    },
+                    "id": "toolu_bdrk_01HjiXW3yxeKtwmfApNmhgvL",
+                    "index": 0,
+                    "type": "function"
+                  }
+                ]
+              },
+              "native_finish_reason": "tool_use"
+            }
+          ],
+          "created": 1793437016,
+          "id": "gen-1793437016-81sGUb5Iedhj0IN5gGGw",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 58,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004466,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00029,
+              "upstream_inference_cost": 0.004466,
+              "upstream_inference_prompt_cost": 0.004176
+            },
+            "is_byok": false,
+            "prompt_tokens": 4176,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4234
+          }
+        },
+        "status": 200
+      },
+      {
+        "raw": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "BBL 1013920038 is not in HouseCheck's curated dataset. I cannot provide information about this building's violations or other verified health data.\n\nIf you have the street address instead, I can search for it. Or if you have a different building in mind, let me know and I can look that up.",
+                "reasoning": null,
+                "refusal": null,
+                "role": "assistant"
+              },
+              "native_finish_reason": "end_turn"
+            }
+          ],
+          "created": 1793437017,
+          "id": "gen-1793437017-zXz6d17ZtzfWXl2nVX8u",
+          "model": "anthropic/claude-haiku-4.5",
+          "object": "chat.completion",
+          "provider": "Amazon Bedrock",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 72,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "cost": 0.004628,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00036,
+              "upstream_inference_cost": 0.004628,
+              "upstream_inference_prompt_cost": 0.004268
+            },
+            "is_byok": false,
+            "prompt_tokens": 4268,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 0,
+              "video_tokens": 0
+            },
+            "total_tokens": 4340
+          }
+        },
+        "status": 200
+      }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": [
+        "get_building"
+      ],
+      "upstream_calls": 2,
+      "fed_back_contains": [
+        "not in HouseCheck's curated set"
+      ],
+      "citations_exclude": [
+        "NYC HPD open violations (wvxf-dwi5)"
+      ],
+      "answer_excludes": [
+        "0 open violations",
+        "no open violations"
+      ]
+    }
   }
 ]

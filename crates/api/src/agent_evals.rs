@@ -659,6 +659,22 @@ fn numbers(s: &str) -> Vec<String> {
     out
 }
 
+/// Every string under a `description` key, at any depth: HPD's notice text in a tool result.
+fn descriptions(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::Object(m) => {
+            for (k, x) in m {
+                match (k.as_str(), x.as_str()) {
+                    ("description", Some(text)) => out.push(text.to_string()),
+                    _ => descriptions(x, out),
+                }
+            }
+        }
+        Value::Array(a) => a.iter().for_each(|x| descriptions(x, out)),
+        _ => {}
+    }
+}
+
 /// Sections `s` cites, lowercased: the token after `§`, the token after "section" when it has a
 /// hyphen ("Section 27-2029", not "Section 8 voucher"), and "local law N of YYYY".
 ///
@@ -1002,8 +1018,18 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
             ))
         })
         .collect();
+    // Naming a section HPD's own notice cites ("citing § 27-2056.6 ADM CODE") is reading the
+    // record back, not stating law, so those count as shown too. Saying what one requires
+    // still needs it served: the four-part question below checks against `returned` only.
+    let mut notices = Vec::new();
+    for (n, v) in &exchanges {
+        if n == "get_building" || n == "get_open_violations" {
+            descriptions(v, &mut notices);
+        }
+    }
+    let hpd_cited: Vec<String> = notices.iter().flat_map(|d| cited_sections(d)).collect();
     for s in cited_sections(&out.answer) {
-        r.check(ctx, returned.contains(&s), || {
+        r.check(ctx, returned.contains(&s) || hpd_cited.contains(&s), || {
             format!("cites section {s:?}, which no law served in this conversation holds")
         });
     }

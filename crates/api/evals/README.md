@@ -14,7 +14,7 @@ Measured on this branch (Windows, debug build):
 
 | | |
 |---|---|
-| Conversations | 38 synthetic, plus the recordings of the latest live run (none current: see below) |
+| Conversations | 48: 38 synthetic, 10 recorded from live run 7 |
 | Replays per run | 75 for the synthetic set: each conversation on both endpoints, except one the stream skips by design |
 | Checks per run | 2,908 for the synthetic set, all passing (2026-10-31) |
 | Time | 1.9 s for the eval tests, no network |
@@ -48,9 +48,8 @@ live runs found" below.
 
 **Stale since law Phase B (2026-10-31).** Phase B added the `lead_paint` and `housing_court`
 topics, the four-part answer, the statute-over-guidance rule, law passages (`lookup_law`'s
-`about`), the urgency rules and `mark_urgent`. The agent is now `e0f659682b7d9161`, so every
-recording fails replay on `agent_version` until the next live run records it again. Live run 6
-(on `45bece92e581405d`, below) recorded 8, which are stale too.
+`about`), the urgency rules and `mark_urgent`. The agent is now `e0f659682b7d9161`; live run 7
+recorded 10 of its 24 live conversations, and those are the recordings CI replays.
 
 ## Checks
 
@@ -134,7 +133,7 @@ free `GET /api/v1/key`, so a rejected key costs nothing.
 
 ## What the live runs found
 
-Seven billed runs, $0.9037 in all:
+Eight billed runs, $1.1622 in all:
 - **Run 1** (2026-10-29): old prompt, $0.1129, 10 of 17 passed.
 - **Re-run of the 7 failures:** $0.0451, 3 passed.
 - **Run 3:** new prompt (`db3fee8a55844c3e`), $0.1197, 14 of 17 passed.
@@ -149,6 +148,14 @@ Seven billed runs, $0.9037 in all:
   check reading "twenty-one" as no number. Fixed by serving passages, repeating the headings in
   each tool result that serves law, and reading number words. The rest were real: a link from
   memory (`violations-for-unheld-bbl`), "children under six" and § 214 stated from memory.
+- **Run 7** (2026-10-31): passages, urgency and the headings in each tool result
+  (`e0f659682b7d9161`), $0.2585, 10 of 24 passed. The number-word, link and § 214 failures
+  are gone. Still failing: the four-part format (only 4 of 13 answers that served law had all
+  four parts in order, though none was cut short); the ask-for-the-date rule applied to "should I
+  stop paying rent" with no deadline in it, with a claim from memory that this is
+  "time-sensitive under New York law"; example dates invented in the ask-for-the-date reply. One
+  failure was the check: an answer quoting HPD's own notice ("citing § 27-2056.6 ADM CODE") was
+  held to have invented the section; sections in HPD's notice text now count as shown.
 
 A fourth attempt sent a key OpenRouter rejected and cost nothing. That is why the key is now
 checked first.

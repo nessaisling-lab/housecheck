@@ -1064,7 +1064,7 @@ async fn rent_fairness_handler(
         verdict,
         // Second comparator: embedded HUD FMRs by bedroom for the NYC metro area, so the
         // frontend can show "vs HUD FMR" next to the Census tract median.
-        hud_fmr: model::HudFmr::ny_metro_fy2026(),
+        hud_fmr: model::HudFmr::ny_metro_fy2027(),
     };
     (StatusCode::OK, Json(body)).into_response()
 }
@@ -2876,7 +2876,7 @@ async fn dispatch_tool_in(
                                 // number nobody handed it; arithmetic belongs here.
                                 "dollars_vs_median": rent - median,
                                 "verdict": verdict,
-                                "hud_fmr": model::HudFmr::ny_metro_fy2026(),
+                                "hud_fmr": model::HudFmr::ny_metro_fy2027(),
                             }))
                         }
                         _ => None,
@@ -4649,9 +4649,9 @@ mod tests {
             .await;
         res.assert_status_ok();
         let rf: RentFairness = res.json();
-        // The embedded FY2026 NYC-metro HUD FMRs travel alongside the tract-median comparison.
-        assert_eq!(rf.hud_fmr.fiscal_year, 2026);
-        assert_eq!(rf.hud_fmr.two_br, 2910);
+        // The embedded FY2027 NYC-metro HUD FMRs travel alongside the tract-median comparison.
+        assert_eq!(rf.hud_fmr.fiscal_year, 2027);
+        assert_eq!(rf.hud_fmr.two_br, 2971);
         assert!(rf.hud_fmr.area.contains("HUD Metro FMR Area"));
     }
 

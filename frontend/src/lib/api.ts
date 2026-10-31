@@ -89,7 +89,8 @@ function asArray<T>(v: T | T[]): T[] {
  * Normalize the backend's building payload into our BuildingCard shape.
  * Live shape (verified against https://housecheck-nessa.fly.dev):
  *   { building: { bbl, address, year_built, num_floors, units_res, has_elevator,
- *                 near_ada_subway_m, complaints_311, latitude, longitude, ... },
+ *                 near_ada_subway_m, zip, neighborhood, complaints_311_per_1k_homes,
+ *                 latitude, longitude, ... },
  *     score: { total, condition, legal, neighborhood, accessibility },
  *     open_violations: { a, b, c },
  *     access_likelihood: "Higher"|"Mixed"|"Lower",
@@ -142,7 +143,8 @@ function normalizeBuilding(raw: any): BuildingCard {
     units_res: facts.units_res ?? null,
     has_elevator: facts.has_elevator ?? null,
     near_ada_subway_m: facts.near_ada_subway_m ?? null,
-    complaints_311: facts.complaints_311 ?? null,
+    zip: facts.zip ?? null,
+    complaints_311_per_1k_homes: numOrNull(facts.complaints_311_per_1k_homes),
     lat: facts.latitude ?? facts.lat ?? null,
     long: facts.longitude ?? facts.long ?? null,
     score: score.total ?? raw.score_total ?? (typeof raw.score === "number" ? raw.score : null),

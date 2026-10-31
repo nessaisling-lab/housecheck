@@ -7,10 +7,9 @@ no longer matches its source, without letting a script decide what the law says?
 **Answer: a weekly GitHub Actions job that re-reads each source, compares, and opens an issue
 for Aisling to verify. It reports. It never changes served law.**
 
-**Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status:** reviewed by Aisling on
-2026-10-30. The shape is approved. The parts she sent back are revised from research under
-"Revised after review", which ends with what is still hers to decide. Awaiting her final
-approval. Nothing here is built.
+**Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status: approved by Aisling on
+2026-10-31**, with her answers recorded at the end. Nothing here is built; building starts after
+law Phase B lands.
 
 ---
 
@@ -257,14 +256,14 @@ House rule: every fix ships with a check that fails without it.
 
 ## Rollout steps
 
-1. Aisling approves the revised doc (her first answers are below).
+1. ~~Aisling approves the revised doc.~~ Approved 2026-10-31.
 2. Build `--law-check` and its tests. One PR, CI green, no workflow yet.
 3. Aisling runs it locally once, free, with the key read the way she reads her other keys. On
    today's seed the expected result is no `changed` rows. Anything else is an extractor bug,
    fixed before step 5.
 4. Check `robots.txt` on each fetched host. On the first keyed call, confirm `activeDate`
-   matches the revision dates in the captures. Compare the bulk XML's 12 Admin Code sections
-   with the captured texts (open item 5 below).
+   matches the revision dates in the captures. (The bulk XML's 12 Admin Code sections were
+   already compared with the captures on 2026-10-31: identical; answer 5 below.)
 5. She adds `NYSENATE_API_KEY` (and the Legistar token, if she requests one). Merge the workflow
    with `workflow_dispatch` only, run it once with `dry_run: true`, and confirm the log shows ids
    and hosts only, the `timezone` key is accepted, and the measured traffic. Then turn on the
@@ -369,8 +368,8 @@ rows whose source reports a change are fetched and compared.
 
 The amlegal entries embed a per-build token, so an entry's CRC may change on every rebuild with
 no text change. The CRC therefore only says "look"; the decision is the section's `version` and
-text. Whether `version` is a true per-section change counter is unverified until two builds can
-be compared.
+text. `version` is set per paragraph record, so a section carries several; whether a record's
+`version` rises only when its text changes is confirmed once two builds can be compared.
 
 **The safety net.** On the first Monday of each month the job compares every fetchable row,
 whatever the cursors say. A test plants a change that the cursor path misses, and requires the
@@ -455,23 +454,15 @@ donations, and verbatim excerpts fit "NoDerivatives". Questions:
    licence notice?
 4. amlegal's history notes are privately written. Can they be stored, or only the code text?
 
-### Still open for Aisling
+### Her answers to the research items (2026-10-31)
 
-1. **A "may have changed" warning in answers.** While a row is `pending` or `imminent`, the agent
-   says "this may have changed on <date> (<bill>); confirm with Legal Aid" instead of stating the
-   old rule flatly. This changes the prompt, so it changes `agent_version` and needs a billed
-   re-record, batched with other prompt changes.
-2. **A free Legistar token**, requested with a name and email at
-   [council.nyc.gov/legislation/api](https://council.nyc.gov/legislation/api). Without it the
-   Council watch can only use an unofficial mirror, as a lead.
-3. **Her turnaround.** The numbers above assume she verifies within 3 days, and same day for a
-   law effective on signing.
-4. **More tracked sections.** The tightest tenant clocks are in sections not stored yet: RPAPL
-   §§ 711, 732 and 749, and RPL §§ 226-c and 231-c (Good Cause notices). Add them to Phase B's
-   list?
-5. **Which "current through" line is right.** The capture on 2026-10-30 read Local Law 2026/153;
-   the bulk XML, rebuilt that day, reads 2026/160 (both enacted 2026-10-24). The first build
-   compares the XML's 12 sections with the captured texts, which settles it and checks the
-   captures at the same time.
-6. **Hot water hours.** § 27-2031 says hot water is required between 6 a.m. and midnight; the 311
-   row says 365 days a year with no hours. For her or a lawyer to reconcile before either is served.
+| # | Item | Answer |
+|---|---|---|
+| 1 | "May have changed" warning in answers | **Yes.** While a row is `pending` or `imminent`, the agent says "this may have changed on <date> (<bill>); confirm with Legal Aid" instead of stating the old rule flatly. It changes the prompt and `agent_version`, so its billed re-record is batched with Phase B's prompt changes |
+| 2 | Legistar token | **Yes**, she requests it; the Council watch uses the official API |
+| 3 | Her turnaround | **Within 3 days, the same day for a law effective on signing.** The issue lists those first, marked urgent |
+| 4 | More tracked sections | **Add all five** to Phase B: RPAPL §§ 711, 732, 749 and RPL §§ 226-c, 231-c. All are state statutes, so the Senate API checks them |
+| 5 | Which "current through" line | **Settled 2026-10-31.** The 12 captured sections were compared with the Housing Maintenance Code entry of the bulk XML (built 2026-10-30, "Current through Local Law 2026/160"), fetched by byte range: 443 KB of the 65.5 MB file. All 12 are identical once whitespace is normalized, a TAB read as a space, and amlegal's `[ALP S-nnn]` supplement markers (editorial, not shown on the reader page) dropped. The reader page's "2026/153" line was older than the bulk file; the job records the bulk file's line. `version` is per paragraph record, so a section has several (27-2045 has six); a section's signature is its set of record versions plus its text |
+| 6 | Hot water hours | **Serve both, labelled.** § 27-2031's text is the rule (120°F "at all times between the hours of six a.m. and midnight"; 110°F with mixing valves). The 311 line ("365 days per year") is labelled city guidance. The agent never states round-the-clock hot water as law, and adds a question for Legal Aid about hours |
+| — | `verified_by` for the captured texts | **"Aisling"**, set as she reads each one against its source |
+| — | The design | **Approved** 2026-10-31. Building starts after Phase B lands |

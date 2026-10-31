@@ -166,7 +166,7 @@ For an excerpt row, a word diff of one passage against a whole page is noise. So
 a missing passage to its sentences that are not on the page, and points at the fetched text. A
 body over GitHub's size limit is truncated with a pointer to the artifact.
 
-**Dead links.** On 2026-10-31 the NY Courts HP Actions URL
+**Dead links.** On 2026-10-30 (New York time; 2026-10-31 UTC) the NY Courts HP Actions URL
 `https://www.nycourts.gov/courts/nyc/housing/hpactions.shtml` had become a `404` (moved under
 `/new-york-city-housing-court/`). A person found it: the row isn't seeded yet and nycourts.gov is
 manual. The job reports `404`s and redirects on fetched hosts; on protected hosts the re-check

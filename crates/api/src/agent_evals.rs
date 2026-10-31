@@ -843,6 +843,20 @@ fn check(case: &Case, endpoint: &str, out: &Outcome, mode: Mode, r: &mut Report)
                 .is_some_and(|m| m["content"] == AGENT_SYSTEM_PROMPT),
             || format!("round {i}: first turn is not AGENT_SYSTEM_PROMPT"),
         );
+        // Once a tool result has handed the model law, every later round must require a
+        // tool, so the answer can only come back through write_answer.
+        let law_before = req["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|m| m["role"] == "tool")
+            .filter_map(|m| serde_json::from_str::<Value>(m["content"].as_str()?).ok())
+            .any(|v| serves_law(&v));
+        if law_before {
+            r.check(ctx, req["tool_choice"] == "required", || {
+                format!("round {i}: law was served earlier and tool_choice is not \"required\"")
+            });
+        }
         r.check(ctx, req["max_tokens"] == json!(AGENT_MAX_TOKENS), || {
             format!("round {i}: max_tokens {}", req["max_tokens"])
         });

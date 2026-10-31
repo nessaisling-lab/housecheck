@@ -91,6 +91,10 @@ Applied to every conversation, on both endpoints:
   result.
 - **Law comes with a referral.** If `lookup_law` served law, the answer names an organisation
   from the legal-help directory, by name or by phone number. NYC 311 doesn't count.
+- **Answers that use law come through `write_answer`.** Once a tool result has served law,
+  every later round must send `tool_choice: "required"`, so the model can only finish through
+  `write_answer`, whose fields the server writes out under the four headings. A call missing a
+  part goes back to the model as an error (`structured-answer-retries-a-missing-part`).
 - **Numbers written as words count as shown.** Statutes say "twenty-one days"; a faithful
   "21 days" passes, an invented "22" still fails.
 - **Urgency** (`docs/design/law-passages.md` §7), against what the server counted and returned:

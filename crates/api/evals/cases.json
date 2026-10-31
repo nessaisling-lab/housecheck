@@ -670,5 +670,42 @@
       "tools": [],
       "answer_contains": ["Call 911 now"]
     }
+  },
+  {
+    "id": "structured-answer",
+    "kind": "synthetic",
+    "why": "Law served, the answer arrives through write_answer, and the server writes the four headings around its fields (live run 7: only 4 of 13 prose answers kept all four parts).",
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "How warm does my apartment have to be at night?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", {"topic": "heat"}], ["find_legal_help", {}]] },
+      { "tools": [["write_answer", {"record": "This question is about the law, not this building's record.", "law": "NYC Administrative Code § 27-2029 and NYC311 (KA-01036): from October 1 through May 31, between 6 AM and 10 PM the inside must be at least 68°F when it is below 55°F outside, and between 10 PM and 6 AM at least 62°F at all times.", "inference": "The sources above do not say how these minimums apply to a particular apartment; that is something to confirm.", "question": "\"If my apartment is below 62°F at night between October 1 and May 31, how does Administrative Code § 27-2029 apply?\"", "help": "Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking."}]] }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["**What the record shows**", "**A question to ask a legal professional**", "62°F"]
+    }
+  },
+  {
+    "id": "structured-answer-retries-a-missing-part",
+    "kind": "synthetic",
+    "why": "A write_answer call missing a part goes back to the model as an error, never to the reader; the second call is complete.",
+    "request": { "bbl": "3000020002", "messages": [
+      { "role": "user", "content": "How warm does my apartment have to be at night?" }
+    ] },
+    "upstream": [
+      { "tools": [["lookup_law", {"topic": "heat"}], ["find_legal_help", {}]] },
+      { "tools": [["write_answer", {"record": "This question is about the law, not this building's record.", "law": "NYC Administrative Code § 27-2029 and NYC311 (KA-01036): from October 1 through May 31, between 6 AM and 10 PM the inside must be at least 68°F when it is below 55°F outside, and between 10 PM and 6 AM at least 62°F at all times.", "question": "\"If my apartment is below 62°F at night between October 1 and May 31, how does Administrative Code § 27-2029 apply?\"", "help": "Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking."}]] },
+      { "tools": [["write_answer", {"record": "This question is about the law, not this building's record.", "law": "NYC Administrative Code § 27-2029 and NYC311 (KA-01036): from October 1 through May 31, between 6 AM and 10 PM the inside must be at least 68°F when it is below 55°F outside, and between 10 PM and 6 AM at least 62°F at all times.", "inference": "The sources above do not say how these minimums apply to a particular apartment; that is something to confirm.", "question": "\"If my apartment is below 62°F at night between October 1 and May 31, how does Administrative Code § 27-2029 apply?\"", "help": "Housing Court Answers (212-962-4795) can answer questions like this; add your own facts before asking."}]] }
+    ],
+    "expect": {
+      "status": 200,
+      "tools": ["lookup_law", "find_legal_help", "write_answer"],
+      "must_call": ["lookup_law", "find_legal_help"],
+      "answer_contains": ["**What this might mean (HouseCheck's inference, not legal advice)**"]
+    }
   }
 ]

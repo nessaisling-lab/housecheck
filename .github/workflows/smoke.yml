@@ -27,6 +27,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # smoke, stability and law-check build the same api and ingest crates: one cache per
+          # OS, not one per job, keeps the repo under GitHub's 10 GB so none is evicted, and
+          # stability (which needs smoke) restores the cache smoke has just saved.
+          shared-key: api-ingest-${{ runner.os }}
 
       - name: Build, serve, and assert
         shell: bash
@@ -65,6 +70,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # smoke, stability and law-check build the same api and ingest crates: one cache per
+          # OS, not one per job, keeps the repo under GitHub's 10 GB so none is evicted, and
+          # stability (which needs smoke) restores the cache smoke has just saved.
+          shared-key: api-ingest-${{ runner.os }}
 
       - name: Serve and hammer the endpoint 50x
         shell: bash

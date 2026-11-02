@@ -7,9 +7,9 @@ no longer matches its source, without letting a script decide what the law says?
 **Answer: a weekly GitHub Actions job that re-reads each source, compares, and opens an issue
 for Aisling to verify. It reports. It never changes served law.**
 
-**Dated:** 2026-10-30, revised 2026-10-31 (New York time). **Status: approved by Aisling on
-2026-10-31**, with her answers recorded at the end. **Rollout steps 2 to 4 are done:** the weekly
-text check, `ingest --law-check`, and its workflow, dispatch-only until a dry run passes (see
+**Dated:** 2026-10-30, revised 2026-11-01 (New York time). **Status: approved by Aisling on
+2026-10-31**, with her answers recorded at the end. **Rollout steps 2 to 5 are done:** the weekly
+text check, `ingest --law-check`, and its workflow, run every Monday at 07:17 New York time (see
 "Built" at the end). Still to build: the daily bill and Council watches with the
 `pending`/`imminent` states and the "may have changed" warning, and the supersede and changelog
 rules.
@@ -271,10 +271,16 @@ House rule: every fix ships with a check that fails without it.
    so no rules). Each statute's API text matches its capture, so the API holds the captured
    revision; `activeDate` is printed only on a change. (The bulk XML's 12 Admin Code sections
    were already compared with the captures on 2026-10-31: identical; answer 5 below.)
-5. She adds `NYSENATE_API_KEY` (and the Legistar token, if she requests one). Merge the workflow
-   with `workflow_dispatch` only, run it once with `dry_run: true`, and confirm the log shows ids
-   and hosts only, the `timezone` key is accepted, and the measured traffic. Then turn on the
-   schedules.
+5. ~~She adds `NYSENATE_API_KEY` (and the Legistar token, if she requests one). Merge the
+   workflow with `workflow_dispatch` only, run it once with `dry_run: true`, and confirm the log
+   shows ids and hosts only, the `timezone` key is accepted, and the measured traffic. Then turn
+   on the schedules.~~ 2026-10-31: the key was added, PR #14 merged the workflow, and two dry
+   runs passed. The first had no saved state, so it was a full pass: 35 sources unchanged, the 2
+   manual pages not due, 26 requests, 2,088 KB. The second started from the first one's state:
+   all quiet, 17 requests, 662 KB. The log shows the key only as `***`, in the step's list of
+   environment variables. The weekly schedule is on after them; the daily one waits for the bill
+   and Council watches. No Legistar token yet. A dispatch run cannot show that GitHub honours
+   `timezone`: the first Monday run should start soon after 07:17 New York time, not UTC.
 6. After four weekly runs, review false positives and adjust the extractor, not the comparison.
 
 ## Aisling's answers (2026-10-30)
@@ -515,9 +521,9 @@ changed. The two `…` lines are added in `data/law.json`; no word changed.
 - **Dead pages.** The Wayback CDX API gives the last good copy and the last redirect recorded
   after it; a same-site redirect target is fetched and scored by the passage check.
 
-**The workflow** (`.github/workflows/law-check.yml`, rollout step 5) runs the job above on
-`workflow_dispatch` only, `dry_run` on by default, until one dry run has passed; the Monday
-schedule is a commented block to switch on after it. It downloads the last good run's
+**The workflow** (`.github/workflows/law-check.yml`, rollout step 5) runs the job above every
+Monday at 07:17 New York time, and from the Actions tab (`workflow_dispatch`, `dry_run` on by
+default). Scheduled runs are never dry runs. It downloads the last good run's
 `law-check-state` artifact (none means a full pass), installs `pdftotext`, runs the check with
 the key in the environment only, writes the report to the run summary, and uploads `law-check`
 (report, texts, diffs) and `law-check-state`. Not a dry run and at least one finding: it edits

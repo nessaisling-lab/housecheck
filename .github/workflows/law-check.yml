@@ -5,10 +5,10 @@
 name: law-check
 
 on:
-  # Dispatch only until one dry run has passed (rollout step 5). Then add:
-  #   schedule:
-  #     - cron: "17 7 * * 1"   # Monday 07:17 New York, after the Senate's Friday batch
-  #       timezone: "America/New_York"
+  # Scheduled runs are never dry runs: `inputs` is empty, so findings go to the issue.
+  schedule:
+    - cron: "17 7 * * 1"   # Monday 07:17 New York, after the Senate's Friday batch
+      timezone: "America/New_York"
   workflow_dispatch:
     inputs:
       dry_run:

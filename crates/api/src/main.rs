@@ -251,6 +251,23 @@ const MONTHS: [&str; 12] = [
 /// Read here rather than inside `days_open` so the model stays a pure function of the
 /// record and can be tested without freezing the clock.
 fn today_iso() -> String {
+    #[cfg(test)]
+    {
+        TEST_TODAY.to_string()
+    }
+    #[cfg(not(test))]
+    clock_today_iso()
+}
+
+/// The day every test runs on. A recorded agent conversation replays the model's words as they
+/// were, and those words carry dates the server counted on the day of recording ("tomorrow
+/// (2026-11-01)"). Counting from the real day instead made the replay disagree with itself the
+/// next morning. A live re-record counts from this day too.
+#[cfg(test)]
+const TEST_TODAY: &str = "2026-10-31";
+
+/// Today as `YYYY-MM-DD` in New York, from the system clock.
+fn clock_today_iso() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -4697,7 +4714,7 @@ mod tests {
         assert_eq!(civil_ymd(19_782), (2024, 2, 29)); // a real leap day
         assert_eq!(civil_ymd(20_674), (2026, 8, 9));
 
-        let today = today_iso();
+        let today = clock_today_iso();
         assert_eq!(today.len(), 10, "expected YYYY-MM-DD, got {today}");
         let month: u32 = today[5..7].parse().expect("month parses");
         let day: u32 = today[8..10].parse().expect("day parses");

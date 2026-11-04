@@ -113,6 +113,10 @@ Applied to every conversation, on both endpoints:
   danger opens with "Call 911 now"; a deadline with no date gets the date asked for, and is then
   exempt from the four parts; otherwise the answer opens by naming the level and states the
   days left.
+- **Every test runs on 2026-10-31** (`TEST_TODAY` in `main.rs`), the day the conversations were
+  recorded. A recorded answer keeps the dates the server counted then ("tomorrow (2026-11-01)"),
+  so a replay must count from the same day. Live runs are tests too, so a re-record counts from
+  it as well.
 
 Per conversation, in `expect`: `tools` (exact order of tool results fed back, replay only),
 `must_call`, `fed_back_contains`, `citations_include` / `_exclude`, `answer_contains` (replay

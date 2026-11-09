@@ -11,6 +11,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # No debug info: with it, DuckDB's C++ filled the runner's disk. Keep this line the same in
+  # smoke.yml and law-check.yml: rust-cache hashes it into the key of the cache they share.
+  CARGO_PROFILE_DEV_DEBUG: "0"
   HOUSECHECK_DB: data/housecheck.test.db
   API_PORT: "8787"
   KNOWN_BBL: "3000010001"   # exists in the fixture DB
